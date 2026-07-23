@@ -1,5 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import type { MenuCategory } from '@/lib/types'
+import type { MenuCategory, Ingredient } from '@/lib/types'
 import MenuManagerClient from './MenuManagerClient'
 
 const DEMO_CAFE_ID = '11111111-1111-1111-1111-111111111111'
@@ -16,5 +16,12 @@ export default async function MenuManagerPage() {
     .eq('is_active', true)
     .order('sort_order', { ascending: true })
 
-  return <MenuManagerClient categories={(categories ?? []) as MenuCategory[]} />
+  const { data: ingredients } = await supabase.from('ingredients').select('*').order('name', { ascending: true })
+
+  return (
+    <MenuManagerClient
+      categories={(categories ?? []) as MenuCategory[]}
+      ingredients={(ingredients ?? []) as Ingredient[]}
+    />
+  )
 }

@@ -1,15 +1,21 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff } from 'lucide-react'
-import type { MenuCategory, MenuItem } from '@/lib/types'
+import { Eye, EyeOff, ChefHat } from 'lucide-react'
+import type { MenuCategory, MenuItem, Ingredient } from '@/lib/types'
+import { formatPaisa, rupeesToPaisa } from '@/lib/money'
 import toast from 'react-hot-toast'
+import RecipeModal from './RecipeModal'
 
-interface Props { categories: MenuCategory[] }
+interface Props {
+  categories: MenuCategory[]
+  ingredients: Ingredient[]
+}
 
-export default function MenuManagerClient({ categories }: Props) {
+export default function MenuManagerClient({ categories, ingredients }: Props) {
   const router = useRouter()
   const [toggling, setToggling] = useState<string | null>(null)
+  const [recipeFor, setRecipeFor] = useState<MenuItem | null>(null)
 
   const totalItems = categories.reduce((s, c) => s + (c.items?.length ?? 0), 0)
   const unavailable = categories.reduce(
@@ -59,49 +65,91 @@ export default function MenuManagerClient({ categories }: Props) {
             <div className="divide-y divide-ink/5">
               {(cat.items ?? [])
                 .sort((a, b) => a.sort_order - b.sort_order)
-                .map(item => (
-                  <div
-                    key={item.id}
-                    className={`flex items-center gap-4 px-5 py-3.5 transition-opacity ${
-                      !item.is_available ? 'opacity-50' : ''
-                    }`}
-                  >
-                    {/* Veg dot */}
-                    <span
-                      className="w-3 h-3 rounded-sm border-2 flex-shrink-0"
-                      style={{ borderColor: item.is_veg ? '#22C55E' : '#EF4444' }}
-                    />
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-ink leading-tight">{item.name}</p>
-                      {item.description && (
-                        <p className="text-xs text-ink-faint mt-0.5 truncate">{item.description}</p>
-                      )}
-                    </div>
-
-                    <span className="text-sm font-semibold text-ink shrink-0">₹{item.price}</span>
-
-                    <button
-                      onClick={() => toggleAvailability(item)}
-                      disabled={toggling === item.id}
-                      title={item.is_available ? 'Mark unavailable' : 'Mark available'}
-                      className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${
-                        item.is_available
-                          ? 'hover:bg-red-50 text-ink-muted hover:text-red-600'
-                          : 'hover:bg-green-50 text-ink-faint hover:text-green-600'
+                .map(item => {
+                  const sellingPricePaisa = rupeesToPaisa(item.price)
+                  const hasRecipe = item.cost_price_paisa > 0
+                  const profitPaisa = sellingPricePaisa - item.cost_price_paisa
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-center gap-4 px-5 py-3.5 transition-opacity ${
+                        !item.is_available ? 'opacity-50' : ''
                       }`}
                     >
-                      {item.is_available
-                        ? <Eye size={16} />
-                        : <EyeOff size={16} />
-                      }
-                    </button>
-                  </div>
-                ))}
+                      {/* Veg dot */}
+                      <span
+                        className="w-3 h-3 rounded-sm border-2 flex-shrink-0"
+                        style={{ borderColor: item.is_veg ? '#22C55E' : '#EF4444' }}
+                      />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-ink leading-tight">{item.name}</p>
+                          <span className="text-[10px] uppercase tracking-wide text-ink-faint bg-surface-overlay px-1.5 py-0.5 rounded">
+                            {item.category}
+                          </span>
+                        </div>
+                        {item.description && (
+                          <p className="text-xs text-ink-faint mt-0.5 truncate">{item.description}</p>
+                        )}
+                        <p className="text-xs mt-1">
+                          {hasRecipe ? (
+                            <>
+                              <span className="text-ink-muted">Cost {formatPaisa(item.cost_price_paisa)}</span>
+                              <span className={`ml-2 font-medium ${profitPaisa < 0 ? 'text-status-overdue' : 'text-green-600'}`}>
+                                Profit {formatPaisa(profitPaisa)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-ink-faint">No recipe set</span>
+                          )}
+                        </p>
+                      </div>
+
+                      <span className="text-sm font-semibold text-ink shrink-0">₹{item.price}</span>
+
+                      <button
+                        onClick={() => setRecipeFor(item)}
+                        title="Recipe & costing"
+                        className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink"
+                      >
+                        <ChefHat size={16} />
+                      </button>
+
+                      <button
+                        onClick={() => toggleAvailability(item)}
+                        disabled={toggling === item.id}
+                        title={item.is_available ? 'Mark unavailable' : 'Mark available'}
+                        className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${
+                          item.is_available
+                            ? 'hover:bg-red-50 text-ink-muted hover:text-red-600'
+                            : 'hover:bg-green-50 text-ink-faint hover:text-green-600'
+                        }`}
+                      >
+                        {item.is_available
+                          ? <Eye size={16} />
+                          : <EyeOff size={16} />
+                        }
+                      </button>
+                    </div>
+                  )
+                })}
             </div>
           </div>
         ))}
       </div>
+
+      {recipeFor && (
+        <RecipeModal
+          menuItem={recipeFor}
+          ingredients={ingredients}
+          onClose={() => setRecipeFor(null)}
+          onSaved={() => {
+            setRecipeFor(null)
+            router.refresh()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -102,7 +102,31 @@ Seeded credentials (**change before any real deployment**):
   - Validation: zero quantity, negative purchase amount, and an invalid `type` are all rejected with `400`.
 - `npm run build` — clean.
 
-## M2 — Recipes & dynamic costing ⬜ NOT STARTED
+## M2 — Recipes & dynamic costing ✅ DONE
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 1 | `GET /api/recipes?menuItemId=` | ✅ | Returns the recipe + ingredient lines (embedded join) for a menu item, or `null` if it doesn't have one yet |
+| 2 | `POST /api/recipes` | ✅ | Create a recipe (`menu_item_id` + ingredient/quantity lines) — cost recompute is entirely DB-trigger-driven (built in M0), not application logic |
+| 3 | `PATCH /api/recipes/[id]` | ✅ | Replaces the ingredient lines wholesale (delete + reinsert) |
+| 4 | `DELETE /api/recipes/[id]` | ✅ | Removes the recipe; explicitly zeroes `cost_price_paisa` as a defensive backstop regardless of cascade-trigger timing |
+| 5 | `RecipeModal.tsx` | ✅ | Ingredient-line editor with a live client-side cost/profit preview before saving |
+| 6 | Menu Manager UI: cost/profit display, food/beverage badge, "Recipe" button | ✅ | Extends the existing `MenuManagerClient.tsx` rather than a new page |
+
+**Note:** menu item `category` (food/beverage) is now *displayed* per item (seeded in M0) but there's no edit UI for it yet — assigning/changing it is bundled into M3's full item CRUD, which is also where the menu-CRUD popup gate applies. Recipe editing itself is **not** gated behind the menu-CRUD credential — the SRS scopes that popup to menu item Add/Edit/Delete specifically, and a recipe isn't the menu item itself.
+
+### How it was tested (live, same local stack)
+- `npx tsc --noEmit` — clean.
+- `npm run build` — clean.
+- `npm run dev` + curl, logged in as `manager`:
+  - `GET /dashboard/menu-manager` → 200.
+  - Fetched the seed-created Cold Brew recipe → correct embedded ingredient lines (Milk/Coffee Powder/Sugar) with full ingredient detail joined in.
+  - `POST` a new recipe on Masala Chai (100ml milk + 5gm sugar) → `menu_items.cost_price_paisa` came back as `530` (= `100×5 + 5×6`, matches hand calc).
+  - `PATCH` replaced the lines (150ml milk + 10gm coffee) → cost recomputed to `870` (= `150×5 + 10×12`) — confirmed both in the PATCH response and by re-fetching `/api/menu` separately.
+  - `PATCH` with an empty `lines` array → clean `400`.
+  - `DELETE` the recipe → `cost_price_paisa` back to `0` on the menu item.
+  - No server errors in the dev log across any of the above.
+
 ## M3 — Menu CRUD + auth hardening ⬜ NOT STARTED
 ## M4 — Waiter POS: order, KOT, bill (mock payment) ⬜ NOT STARTED
 ## M5 — Dashboard + sales tiles ⬜ NOT STARTED
