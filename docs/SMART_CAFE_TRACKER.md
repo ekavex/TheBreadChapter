@@ -178,7 +178,30 @@ Seeded credentials (**change before any real deployment**):
 - **Guards**: resuming an already-occupied table returns the same order (no duplicate); paying before billing → `409`; adding an item after KOT was sent → `409` ("items are locked"); cancelling releases the table.
 - **Full regression**: re-ran M1 (ingredients/low-stock/expiring), M2 (recipe fetch), and M3 (dashboard pages, menu-CRUD token flow, legacy customer QR menu page) after the shared `server.ts` fetch-caching fix, since that file is used by every route in the app — all still pass.
 
-## M5 — Dashboard + sales tiles ⬜ NOT STARTED
+## M5 — Dashboard + sales tiles ✅ DONE
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 1 | `src/lib/dashboard.ts` — `getDashboardData()` | ✅ | Single shared function computing every Module 10 tile — today's sales/profit, top seller, most-visited area, peak hour, pending orders, low-stock items, inventory value, live table statuses. Used by both the page and the API route so they can't drift apart |
+| 2 | `GET /api/dashboard` | ✅ | Dashboard-session gated, `force-dynamic` |
+| 3 | `SmartCafeTiles.tsx` | ✅ | Today's profit, top seller, most-visited area, peak hour, inventory value, low-stock count |
+| 4 | `LowStockPreview.tsx` | ✅ | Reuses the same low-stock filter as M1's `/api/ingredients/low-stock`, links to the inventory page |
+| 5 | `LiveTableGrid.tsx` | ✅ | Read-only section/table status grid (manager view — waiters act on this from `/pos`) |
+| 6 | `DashboardLiveRefresher.tsx` | ✅ | Polls `router.refresh()` every 10s — the handover doc explicitly allows polling as a websocket-push fallback |
+| 7 | `/dashboard` overview page rewired | ✅ | Existing 4-tile `DashboardMetrics` kept (now fed `pendingOrders` for its "active orders" tile — unifies with the SRS's "Pending Orders" concept instead of a separately-computed today-scoped duplicate), everything else added below it |
+
+**Profit calculation:** `todaysProfit = todaysSales − Σ(menu_item.cost_price_paisa × order_item.quantity)` over today's *paid* orders — i.e. current recipe cost, not a historical snapshot at time of sale (matches the SRS's Module 3 model, where cost is always "current"). No Expense line yet — same open item as noted for M7.
+
+### How it was tested (live, against real data from M4's testing)
+- `npx tsc --noEmit` — clean. `npm run build` — clean.
+- `GET /api/dashboard`, logged in as `manager`, cross-checked against the actual orders created during M4 testing (hand-tallied independently, not just re-reading the code):
+  - `todaysSales: 420, todaysProfit: 379.9` — matches `(294 + 126) revenue − (26.10 + 14.00) ingredient cost` exactly.
+  - `ordersToday: 4` — matches the 4 orders actually created that day (1 cancelled debug order, 1 fully paid, 1 declined-then-paid-on-retry, 1 KOT'd-then-cancelled).
+  - `topSellerToday: Chocolate Croissant × 3` — correct (appeared in 3 of the 4 orders).
+  - `mostVisitedArea: Indoor × 2` — correct (2 of the orders were on Indoor tables, 1 on Outdoor).
+  - `pendingOrders: 0` — correct, all 4 test orders had reached a terminal state.
+- Fetched the actual rendered `/dashboard` HTML (not just the API) and confirmed the live table grid's React payload shows all 8 tables, correctly grouped by section (Indoor/Outdoor/Smoking), all `Free` after M4's test orders completed/cancelled.
+
 ## M6 — Pine Labs real integration ⬜ NOT STARTED
 ## M7 — P&L, area & customer analytics ⬜ NOT STARTED
 ## M8 — Reports & exports ⬜ NOT STARTED
