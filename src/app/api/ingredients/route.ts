@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import type { Ingredient } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/ingredients — list all ingredients, with low-stock/expiry flags
 // computed server-side so the UI stays presentational. Dashboard-only data —
 // not part of the public customer menu API, so it's session-gated.

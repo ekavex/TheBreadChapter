@@ -150,7 +150,34 @@ Seeded credentials (**change before any real deployment**):
   - Confirmed the availability-toggle endpoint (`PATCH /api/menu`) still works with **no** menu-crud token, as intended.
   - **Hardening regression**: every one of `/api/ingredients`, `/api/ingredients/[id]`, `/api/ingredients/[id]/stock`, `/api/ingredients/low-stock`, `/api/ingredients/expiring`, `/api/recipes`, `/api/recipes/[id]`, and the new menu routes now returns `401 "Dashboard session required"` with zero cookies — then re-ran the full M1/M2/M3 flows logged in as `manager` to confirm nothing broke.
 
-## M4 — Waiter POS: order, KOT, bill (mock payment) ⬜ NOT STARTED
+## M4 — Waiter POS: order, KOT, bill (mock payment) ✅ DONE
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 1 | `GET /api/pos/tables` | ✅ | Sections + tables with live status, for the table-select screen |
+| 2 | `POST /api/pos/orders` | ✅ | Opens a new order on a free table (→ `occupied`); resumes the existing open order if the table isn't free (no duplicate orders) |
+| 3 | `GET /api/pos/orders/[id]` | ✅ | Full order detail for the order-builder screen |
+| 4 | `POST /api/pos/orders/[id]/items`, `DELETE .../items/[itemId]` | ✅ | Merges repeat adds of the same (uncustomised) item into one line; items lock once KOT is sent |
+| 5 | `POST /api/pos/orders/[id]/kot` | ✅ | Splits by `menu_items.category`, prints one ticket per station via `PrinterService`, logs to `kot_tickets`, table → `kot_sent` |
+| 6 | `POST /api/pos/orders/[id]/bill` | ✅ | Computes subtotal/tax/service-charge/total from `cafes.settings`, table → `billed` |
+| 7 | `POST /api/pos/orders/[id]/pay` | ✅ | charge → status → idempotent finalize against `PaymentProvider`; on approval deducts stock per recipe and frees the table; on decline/cancel → `PAYMENT_FAILED`, table stays `billed` so the waiter can retry |
+| 8 | `POST /api/pos/orders/[id]/cancel` | ✅ | Releases the table from any non-terminal state; best-effort cancels an in-flight payment |
+| 9 | `/pos` (table select) + `/pos/order/[orderId]` (order builder) | ✅ | Waiter-facing UI — section/table grid, menu browser, order lines, and per-state action area (send to kitchen / generate bill / pay / receipt) |
+| 10 | Nav link to `/pos` from the dashboard sidebar | ✅ | |
+
+### Two real bugs found and fixed while testing this milestone
+
+1. **App-wide stale-GET bug (not POS-specific).** Testing table-status transitions turned up live, reproducible staleness: the DB had the correct value, but the API kept returning the old one. Root cause: Next.js's App Router patches the global `fetch` and caches GET requests by default — including the ones `@supabase/supabase-js` makes internally to PostgREST. `export const dynamic = 'force-dynamic'` on the route (which I tried first) did **not** reliably fix it. The actual fix: pass a custom `fetch` that forces `cache: 'no-store'` into both `createAdminClient()` and `createServerSupabaseClient()` in `src/lib/supabase/server.ts` — a single, central fix covering every route in the app, present and future. Verified by bypassing Next.js entirely (a standalone Node script hitting the same local Supabase instance) to confirm the DB and supabase-js were never the problem. Also added `export const dynamic = 'force-dynamic'` to every existing GET route as defense-in-depth (harmless, possibly redundant given the fetch-level fix, but cheap insurance).
+2. **Table-status-in-response ordering bug.** In `kot`/`bill`/`pay`/`cancel`, each route fetched the order (embedding `table:tables(*)`) *before* updating that same table's status, then returned that embed — so the response's `order.table.status` was always one step behind. Didn't surface in the current UI (which only reads `table.number`/`section.name`, never embedded `table.status`), but was a real API-correctness bug. Fixed by reordering: update the table first, then do the final order update+select.
+
+### How it was tested (live, against the real running stack — this is the SRS's own worked example)
+- `npx tsc --noEmit` — clean. `npm run build` — clean.
+- Ran the *exact* Module 5 worked example end to end: Table 4 → opened order → added 1 Chocolate Croissant (food) + 1 Cold Brew (beverage) → sent to kitchen → confirmed `kot_tickets` split correctly (Croissant → `kitchen`, Cold Brew → `beverage_counter`) and the mock printer logged both tickets separately → generated the bill (`subtotal 280, tax 14 (5%), total 294` — matches hand calc exactly) → paid via UPI → order `PAID`, `payment_method: upi`, `status: completed`, table released to `free`.
+- **Stock deduction verified against hand-calculated ingredient math**: Bread 200→198 (−2 for the croissant recipe), Butter 3000→2990 (−10), Milk 20000→19800 (−200 for Cold Brew), Coffee Powder 5000→4990 (−10), Sugar 8000→7985 (−15) — cross-checked against the `stock_transactions` audit rows.
+- **Decline + retry**: flipped `MOCK_PAYMENT_OUTCOME=declined`, ran a full order through to payment → `PAYMENT_FAILED`, table stayed `billed`, **no stock was deducted**. Flipped back to `approved` and retried payment on the *same* order → `PAID`, stock deducted correctly this time.
+- **Guards**: resuming an already-occupied table returns the same order (no duplicate); paying before billing → `409`; adding an item after KOT was sent → `409` ("items are locked"); cancelling releases the table.
+- **Full regression**: re-ran M1 (ingredients/low-stock/expiring), M2 (recipe fetch), and M3 (dashboard pages, menu-CRUD token flow, legacy customer QR menu page) after the shared `server.ts` fetch-caching fix, since that file is used by every route in the app — all still pass.
+
 ## M5 — Dashboard + sales tiles ⬜ NOT STARTED
 ## M6 — Pine Labs real integration ⬜ NOT STARTED
 ## M7 — P&L, area & customer analytics ⬜ NOT STARTED

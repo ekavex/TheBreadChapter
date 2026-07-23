@@ -10,10 +10,12 @@ import {
   ChevronRight,
   Package,
   LogOut,
+  Utensils,
 } from 'lucide-react'
 
 const NAV = [
   { href: '/dashboard',              label: 'Overview',     icon: LayoutDashboard },
+  { href: '/pos',                    label: 'Waiter POS',   icon: Utensils },
   { href: '/dashboard/orders',       label: 'Orders',       icon: ClipboardList },
   { href: '/dashboard/inventory',    label: 'Inventory',    icon: Package },
   { href: '/dashboard/menu-manager', label: 'Menu',         icon: UtensilsCrossed },

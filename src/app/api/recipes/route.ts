@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/recipes?menuItemId=xxx — fetch the recipe (with ingredient lines)
 // for a menu item, or { data: null } if it doesn't have one yet.
 export async function GET(req: NextRequest) {

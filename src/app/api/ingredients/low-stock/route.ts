@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import type { Ingredient } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/ingredients/low-stock — Module 1 "Low Stock Alert"
 // e.g. "Bread < 20 pieces" — notification generated.
 export async function GET(req: NextRequest) {

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 
+// Item availability/price changes must be visible immediately — don't let
+// Next.js's default GET route-handler caching serve a stale menu.
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   const cafeId = new URL(req.url).searchParams.get('cafeId')
   if (!cafeId) return NextResponse.json({ error: 'cafeId required' }, { status: 400 })

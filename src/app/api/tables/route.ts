@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/tables?cafeId=xxx — list all tables
 // POST /api/tables — generate QR codes for all tables of a cafe
 
