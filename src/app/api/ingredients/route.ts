@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import type { Ingredient } from '@/lib/types'
 
 // GET /api/ingredients — list all ingredients, with low-stock/expiry flags
-// computed server-side so the UI stays presentational.
-export async function GET() {
+// computed server-side so the UI stays presentational. Dashboard-only data —
+// not part of the public customer menu API, so it's session-gated.
+export async function GET(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('ingredients')
@@ -27,6 +32,9 @@ export async function GET() {
 
 // POST /api/ingredients — add a new ingredient (Module 1: "Add Ingredient")
 export async function POST(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   try {
     const body = await req.json()
     const { name, unit, low_stock_threshold, cost_per_unit_paisa, is_perishable, expiry_date, current_stock } = body

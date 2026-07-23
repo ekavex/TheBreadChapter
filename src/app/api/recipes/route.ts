@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 // GET /api/recipes?menuItemId=xxx — fetch the recipe (with ingredient lines)
 // for a menu item, or { data: null } if it doesn't have one yet.
 export async function GET(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   const menuItemId = new URL(req.url).searchParams.get('menuItemId')
   if (!menuItemId) {
     return NextResponse.json({ data: null, error: 'menuItemId is required' }, { status: 400 })
@@ -24,6 +28,9 @@ export async function GET(req: NextRequest) {
 // to a menu item. Recipe cost is never stored here — a DB trigger recomputes
 // menu_items.cost_price_paisa the moment the lines are inserted.
 export async function POST(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   try {
     const body = await req.json()
     const menuItemId: string = body.menu_item_id

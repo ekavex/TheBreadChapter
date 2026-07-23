@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 // GET /api/ingredients/expiring?days=3 — Module 1 "Expiry Tracking"
 // (Milk, Cheese, Vegetables, Cream, ... — generate expiry alerts).
 export async function GET(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   const days = Number(new URL(req.url).searchParams.get('days') ?? '3')
   const cutoff = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 

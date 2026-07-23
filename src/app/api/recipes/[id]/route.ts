@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 // PATCH /api/recipes/[id] — replace a recipe's ingredient lines wholesale
 // (simplest correct approach: delete then reinsert; the recompute trigger
 // fires on each step but converges to the right final cost).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   try {
     const body = await req.json()
     const lines: { ingredient_id: string; quantity: number }[] = body.lines ?? []
@@ -42,7 +46,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 // DELETE /api/recipes/[id] — remove the recipe entirely (recipe_ingredients
 // cascade; the menu item's cost_price_paisa recompute trigger only fires on
 // recipe_ingredients changes, so we zero the cost explicitly here too).
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   try {
     const supabase = createAdminClient()
     const { data: recipe } = await supabase.from('recipes').select('menu_item_id').eq('id', params.id).maybeSingle()

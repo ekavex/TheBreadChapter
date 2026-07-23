@@ -127,7 +127,29 @@ Seeded credentials (**change before any real deployment**):
   - `DELETE` the recipe → `cost_price_paisa` back to `0` on the menu item.
   - No server errors in the dev log across any of the above.
 
-## M3 — Menu CRUD + auth hardening ⬜ NOT STARTED
+## M3 — Menu CRUD + auth hardening ✅ DONE
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 1 | `POST /api/menu/categories`, `PATCH/DELETE /api/menu/categories/[id]` | ✅ | Menu-CRUD gated. DELETE blocks (409) if the category still has items — the DB's `ON DELETE CASCADE` would otherwise silently wipe them |
+| 2 | `POST /api/menu/items`, `PATCH/DELETE /api/menu/items/[id]` | ✅ | Menu-CRUD gated. `category` (food/beverage) required on create — drives KOT routing later. DELETE returns 409 if the item has prior orders (FK violation), suggesting "mark unavailable" instead |
+| 3 | `MenuCrudGateModal.tsx` | ✅ | The Module 9 popup — "click Add/Edit/Delete → enter menu credentials → verified → action proceeds." Re-verified per action (2min token), not a session |
+| 4 | `ItemModal.tsx`, `CategoryModal.tsx` | ✅ | Full add/edit forms, gated behind the popup above |
+| 5 | Existing `PATCH /api/menu` (availability toggle) left ungated | ✅ (deliberate) | SRS scopes the menu-CRUD popup to Add/Edit/Delete specifically; toggling sold-out is an operational action, not "editing the menu" |
+| 6 | **Auth hardening**: `requireDashboardSession` guard | ✅ | New — added to *every* dashboard-only API route (ingredients, recipes, and the new menu category/item routes) that had no auth check beyond the page-level middleware. Menu-CRUD routes now require **both** a dashboard session **and** the menu-crud token |
+
+**Gap found and fixed along the way:** testing revealed that `/api/ingredients*`, `/api/recipes*`, and the new menu category/item routes were callable directly with no session cookie at all — the middleware only protects the `/dashboard/*` *pages*, not these API routes independently. Since M3 is explicitly the auth-hardening milestone, closed this properly with `src/lib/auth/requireDashboardSession.ts` rather than leaving it as a known gap.
+
+### How it was tested (live, same local stack)
+- `npx tsc --noEmit` — clean. `npm run build` — clean.
+- Logged in as `manager`, verified as `admin`/`MenuCrud123!`, then against the running dev server + local Supabase:
+  - Category/item create without a menu-crud token → `401`. Wrong menu-crud password → `401`. Valid token → succeeds.
+  - Created a category + food item, edited price and switched it to `beverage`, rejected an invalid `category` value with `400`.
+  - Tried deleting a category that still had an item → `409` with a clear message; deleted the item, then the now-empty category deleted cleanly.
+  - **FK-protection regression**: manually inserted a real `order_items` row referencing the seeded "Vada Pav" item, then confirmed `DELETE /api/menu/items/[id]` correctly blocked with `409` ("mark unavailable instead") and left the item untouched; cleaned up the test order afterward.
+  - Confirmed the availability-toggle endpoint (`PATCH /api/menu`) still works with **no** menu-crud token, as intended.
+  - **Hardening regression**: every one of `/api/ingredients`, `/api/ingredients/[id]`, `/api/ingredients/[id]/stock`, `/api/ingredients/low-stock`, `/api/ingredients/expiring`, `/api/recipes`, `/api/recipes/[id]`, and the new menu routes now returns `401 "Dashboard session required"` with zero cookies — then re-ran the full M1/M2/M3 flows logged in as `manager` to confirm nothing broke.
+
 ## M4 — Waiter POS: order, KOT, bill (mock payment) ⬜ NOT STARTED
 ## M5 — Dashboard + sales tiles ⬜ NOT STARTED
 ## M6 — Pine Labs real integration ⬜ NOT STARTED

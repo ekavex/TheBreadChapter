@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import type { StockTxnType } from '@/lib/types'
 
 // POST /api/ingredients/[id]/stock — Module 1 "Update Stock":
@@ -7,6 +8,9 @@ import type { StockTxnType } from '@/lib/types'
 // goes through this ledger (stock_transactions) — a DB trigger applies it to
 // ingredients.current_stock, so this route never writes current_stock directly.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   try {
     const body = await req.json()
     const type = body.type as StockTxnType

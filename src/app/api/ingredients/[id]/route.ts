@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import type { Ingredient } from '@/lib/types'
 
 type IngredientPatch = Partial<
@@ -11,6 +12,9 @@ type IngredientPatch = Partial<
 // NOT editable here — it only ever changes through a stock_transactions entry
 // (see POST .../stock) so there's always an audit trail (Module 1).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   try {
     const body = await req.json()
     const updateData: IngredientPatch = {}
@@ -42,7 +46,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE /api/ingredients/[id]
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   const supabase = createAdminClient()
   const { error } = await supabase.from('ingredients').delete().eq('id', params.id)
 
