@@ -228,5 +228,27 @@ Blocked on real UAT credentials + endpoint paths (open item §6 in IMPLEMENTATIO
 - Customer: ran two full POS orders (open→items→KOT→bill→pay) with the same phone — `customer_id` resolved to the same row both times (no duplicate), customer analytics reports 1 repeat customer with the right most-ordered item (Chocolate Croissant ×5) and avg bill.
 - Fetched the rendered `/dashboard/analytics` HTML — all sections present (P&L with all 4 range pills, visitors/popular/peak-by-area, customer metrics).
 
-## M8 — Reports & exports ⬜ NOT STARTED
+## M8 — Reports & exports ✅ DONE
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 1 | `src/lib/reports.ts` — `getReportData(range)` | ✅ | Daily/weekly/monthly. SRS sections: revenue/profit, stock consumption (ingredient usage), top item, area performance, customer analytics, best/worst day. Reuses M7 analytics helpers |
+| 2 | `GET /api/reports/[range]` | ✅ | JSON report (daily\|weekly\|monthly) |
+| 3 | `GET /api/reports/[range]/export?format=csv\|excel\|pdf` | ✅ | All four Module 11 export options |
+| 4 | `src/lib/reports-export.ts` | ✅ | CSV (plain), Excel (.xlsx via SheetJS), PDF (via jsPDF) |
+| 5 | `/dashboard/reports` page + `ReportsClient` | ✅ | Range tabs, summary cards, top-items/area/ingredient/customer tables, CSV/Excel/PDF download buttons + Print (window.print with print-CSS that hides everything but `.print-area`) |
+| 6 | Reports nav link + print stylesheet | ✅ | |
+
+**Library choice — why jsPDF over pdfkit:** pdfkit loads font metrics (Helvetica.afm) from disk at `new PDFDocument()`. Next.js's webpack route-handler bundling relocates those chunks, so `new PDFDocument()` threw `ENOENT …/vendor-chunks/data/Helvetica.afm`. jsPDF embeds its fonts and has no fs dependency — works under the bundler unchanged.
+
+**Bug found and fixed while testing:** `xlsx` has no default export — `import XLSX from 'xlsx'` → `XLSX.utils` undefined at runtime. Changed to `import * as XLSX`.
+
+### How it was tested (live)
+- `npx tsc --noEmit` clean. `npm run build` clean.
+- JSON report: monthly/daily/weekly all return correct order counts + best/worst day (weekly: best 2026-07-23 ₹420, worst 2026-07-24 ₹378 — matches the real orders created).
+- CSV: ₹798 revenue / ₹82.10 cost / ₹715.90 profit / 89.7% margin, all section tables correct.
+- Excel: downloaded 22KB file, `file` reports "Microsoft Excel 2007+" (real .xlsx, not a renamed CSV).
+- PDF: 16KB file, `file` reports "PDF document, version 1.3", header `%PDF-1.3`.
+- Reports page HTML: summary + top-items + area-performance + ingredient-usage + customer sections all present, plus CSV/Excel/PDF/Print buttons.
+
 ## M9 — Hardening ⬜ NOT STARTED

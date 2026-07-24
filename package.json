@@ -17,6 +17,8 @@
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.378.0",
     "next": "14.2.0",
     "qrcode": "^1.5.3",
@@ -25,6 +27,7 @@
     "react-dom": "^18.3.0",
     "react-hot-toast": "^2.4.1",
     "tailwind-merge": "^2.3.0",
+    "xlsx": "^0.18.5",
     "zustand": "^4.5.2"
   },
   "devDependencies": {

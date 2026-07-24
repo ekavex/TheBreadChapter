@@ -11,6 +11,7 @@ import {
   Package,
   LogOut,
   Utensils,
+  FileBarChart,
 } from 'lucide-react'
 
 const NAV = [
@@ -20,6 +21,7 @@ const NAV = [
   { href: '/dashboard/inventory',    label: 'Inventory',    icon: Package },
   { href: '/dashboard/menu-manager', label: 'Menu',         icon: UtensilsCrossed },
   { href: '/dashboard/analytics',    label: 'Analytics',    icon: BarChart3 },
+  { href: '/dashboard/reports',      label: 'Reports',      icon: FileBarChart },
   { href: '/kitchen',                label: 'Kitchen view', icon: MonitorPlay },
 ]
 
