@@ -202,7 +202,31 @@ Seeded credentials (**change before any real deployment**):
   - `pendingOrders: 0` — correct, all 4 test orders had reached a terminal state.
 - Fetched the actual rendered `/dashboard` HTML (not just the API) and confirmed the live table grid's React payload shows all 8 tables, correctly grouped by section (Indoor/Outdoor/Smoking), all `Free` after M4's test orders completed/cancelled.
 
-## M6 — Pine Labs real integration ⬜ NOT STARTED
-## M7 — P&L, area & customer analytics ⬜ NOT STARTED
+## M6 — Pine Labs real integration ⬜ NOT STARTED (blocked)
+Blocked on real UAT credentials + endpoint paths (open item §6 in IMPLEMENTATION_PLAN.md). Mock `PaymentProvider` covers M4's whole flow meanwhile. M6 = implement `PineLabsCloudProvider` behind the existing interface once creds land.
+
+## M7 — P&L, area & customer analytics ✅ DONE
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 1 | `src/lib/analytics.ts` — `getPnLData`, `getAreaAnalytics`, `getCustomerAnalytics` | ✅ | |
+| 2 | `GET /api/analytics/profit-loss?range=` | ✅ | daily/weekly/monthly/yearly |
+| 3 | `GET /api/analytics/area?days=`, `GET /api/analytics/customers?days=` | ✅ | Module 7 + 8 |
+| 4 | `PnLClient.tsx` | ✅ | Client-side range switcher (all 4 ranges precomputed server-side, no refetch) |
+| 5 | `/dashboard/analytics` rewritten | ✅ | P&L + visitors-by-area + popular-items-by-area + peak-hour-by-area + customer metrics. Replaces the old 7-day-revenue-only page |
+| 6 | Customer identity capture | ✅ | Optional phone+name inputs in POS pay UI → `upsertCustomer` → `orders.customer_id` FK. Resolves repeat customers (same phone = same row). Walk-ins skip it |
+| 7 | `src/lib/customers.ts` | ✅ | Phone-normalizing upsert (strips +91/spaces, keeps last 10 digits) |
+
+**Two bugs found and fixed while testing:**
+1. **P&L bucketing dropped all orders.** `bucketEnd` was computed as `today − (offset + stepDays)` — i.e. the *previous* bucket's window, so the last bucket excluded today's orders and every bucket was shifted. Totals were 0. Fixed: `bucketEnd = endOfDay(addDays(bucketStart, stepDays − 1))`. Confirmed the 2 test orders' ₹420 now lands in the correct (Jun 26) bucket and totals match M5's dashboard exactly.
+2. **Customer new/repeat counts always 0.** Derived them from `customers.total_orders`, which is bumped by a stats trigger that was a Phase2 migration — not present in this project's schema, so the counter stays 0. Fixed by deriving new/repeat from actual `orders.customer_id` counts (source of truth anyway). Confirmed: 2 orders same phone → `totalCustomers:1, repeatCustomers:1, newCustomers:0`.
+
+### How it was tested (live)
+- `npx tsc --noEmit` clean. `npm run build` clean.
+- P&L: ₹420 revenue / ₹40.10 cost / ₹379.90 profit / 90.5% margin — matches M5's `todaysProfit` hand-calc, across daily + monthly ranges. Verified orders landed in correct period bucket after the bucketing fix.
+- Area: visitors split Indoor 1 / Outdoor 1; popular items per area correct; peak hour per area correct.
+- Customer: ran two full POS orders (open→items→KOT→bill→pay) with the same phone — `customer_id` resolved to the same row both times (no duplicate), customer analytics reports 1 repeat customer with the right most-ordered item (Chocolate Croissant ×5) and avg bill.
+- Fetched the rendered `/dashboard/analytics` HTML — all sections present (P&L with all 4 range pills, visitors/popular/peak-by-area, customer metrics).
+
 ## M8 — Reports & exports ⬜ NOT STARTED
 ## M9 — Hardening ⬜ NOT STARTED

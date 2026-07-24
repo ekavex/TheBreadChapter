@@ -37,6 +37,8 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   const [payment, setPayment] = useState<Payment | null>(null)
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? '')
   const [paymentMode, setPaymentMode] = useState<'upi' | 'card' | 'cash'>('upi')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [customerName, setCustomerName] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function refreshOrder() {
@@ -101,7 +103,11 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   async function pay() {
     setBusy(true)
     try {
-      const result = await api<{ order: Order; payment: Payment }>(`/api/pos/orders/${order.id}/pay`, 'POST', { mode: paymentMode })
+      const result = await api<{ order: Order; payment: Payment }>(`/api/pos/orders/${order.id}/pay`, 'POST', {
+        mode: paymentMode,
+        customer_phone: customerPhone.trim() || null,
+        customer_name: customerName.trim() || null,
+      })
       setOrder(result.order)
       setPayment(result.payment)
       if (result.order.pos_status === 'PAID') toast.success('Payment approved')
@@ -297,6 +303,21 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
                 {m}
               </button>
             ))}
+          </div>
+          <p className="text-xs text-ink-faint mb-1">Customer (optional — for CRM/analytics)</p>
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <input
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              placeholder="Phone (10-digit)"
+              className="rounded-xl border border-ink/10 px-3 py-2 text-sm"
+            />
+            <input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Name (optional)"
+              className="rounded-xl border border-ink/10 px-3 py-2 text-sm"
+            />
           </div>
           <button
             onClick={pay}

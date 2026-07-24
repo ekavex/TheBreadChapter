@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { paymentProvider } from '@/lib/payment/MockPaymentProvider'
 import { DEMO_STORE_ID } from '@/lib/constants'
+import { upsertCustomer } from '@/lib/customers'
 import type { PaymentMethod } from '@/lib/types'
 
 const ALLOWED_MODE_CODE: Record<'card' | 'cash' | 'upi', string> = { card: '1', cash: '2', upi: '10' }
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (sessionGuard) return sessionGuard
 
   try {
-    const { mode } = await req.json()
+    const { mode, customer_phone, customer_name } = await req.json()
     if (!['card', 'cash', 'upi'].includes(mode)) {
       return NextResponse.json({ data: null, error: 'mode must be "card", "cash" or "upi"' }, { status: 400 })
     }
@@ -129,6 +130,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
       await supabase.from('tables').update({ status: 'free' }).eq('id', order.table_id)
 
+      // Module 8: optional phone capture at payment (skippable for walk-ins).
+      // Resolves-or-creates a customer row; FK on the order only if resolved.
+      const customerId = await upsertCustomer(supabase, customer_phone, customer_name)
+
       const now = new Date().toISOString()
       const { data: paidOrder, error: paidError } = await supabase
         .from('orders')
@@ -138,6 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           payment_method: mapPaymentMethod(statusResult.mode ?? chargeResult.mode),
           status: 'completed',
           completed_at: now,
+          ...(customerId ? { customer_id: customerId } : {}),
         })
         .eq('id', params.id)
         .select('*, items:order_items(*), table:tables(*)')

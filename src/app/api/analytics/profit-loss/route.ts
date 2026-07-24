@@ -1,0 +1,18 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { getPnLData } from '@/lib/analytics'
+
+export const dynamic = 'force-dynamic'
+
+// GET /api/analytics/profit-loss?range=daily|weekly|monthly|yearly — Module 6.
+export async function GET(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
+  const range = (new URL(req.url).searchParams.get('range') ?? 'monthly') as
+    | 'daily' | 'weekly' | 'monthly' | 'yearly'
+  const supabase = createAdminClient()
+  const data = await getPnLData(supabase, range)
+  return NextResponse.json({ data, error: null })
+}
