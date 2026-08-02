@@ -4,7 +4,7 @@
 >
 > Legend: ✅ Done · 🔧 Partial · ⬜ Not started
 >
-> Last updated: 2026-07-23
+> Last updated: 2026-08-02
 
 ---
 
@@ -251,4 +251,30 @@ Blocked on real UAT credentials + endpoint paths (open item §6 in IMPLEMENTATIO
 - PDF: 16KB file, `file` reports "PDF document, version 1.3", header `%PDF-1.3`.
 - Reports page HTML: summary + top-items + area-performance + ingredient-usage + customer sections all present, plus CSV/Excel/PDF/Print buttons.
 
-## M9 — Hardening ⬜ NOT STARTED
+## M9 — Hardening ✅ DONE
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 1 | `src/lib/logger.ts` — structured logging | ✅ | One JSON line per event to stdout/stderr. Wired into every `PaymentProvider` call site (`payment.charge.*`, `payment.status.*`, `payment.reconcile.*`, `payment.finalize.*`, `payment.cancel.*`, `payment.declined`) and every KOT print (`kot.print.start/success/error`, `kot.print.skipped_duplicate`) |
+| 2 | Offline-payment behavior — `reconcileAwaitingPayment()` in `pay/route.ts` | ✅ | If an order is stuck `AWAITING_PAYMENT` (network/terminal dropped between charge and finalize), retrying `POST .../pay` no longer fires a second charge — it polls `GetStatus` on the existing `ptrid` and finalizes/fails from that. No pending payment found at all (charge itself never completed) self-heals to `PAYMENT_FAILED` so the waiter gets a clean retry instead of a permanently stuck order |
+| 3 | Atomic charge claim | ✅ | `pay/route.ts` claims `BILLED/PAYMENT_FAILED → AWAITING_PAYMENT` via a conditional `UPDATE ... WHERE pos_status IN (...)` before charging — a double-click or concurrent retry that loses the claim falls into the reconciliation path instead of firing a second charge |
+| 4 | Idempotent finalize — `stock_deducted_at` claim | ✅ | New nullable `orders.stock_deducted_at` column (migration `003_m9_hardening.sql`), claimed via `UPDATE ... WHERE stock_deducted_at IS NULL`. Gates the entire finalize side-effect block (stock deduction, payment approval, table release, PAID transition) so it runs exactly once even if two requests both resolve the same payment as approved concurrently |
+| 5 | KOT duplicate-print guard | ✅ | `kot/route.ts` checks `kot_tickets` for already-ticketed stations before printing, so a retry after a partial failure (station A ticketed, station B's insert threw) doesn't reprint station A |
+| 6 | `docs/PRODUCTION_CUTOVER_CHECKLIST.md` | ✅ | Manual sign-off checklist grouped by credentials, Pine Labs, printers, migrations, idempotency/offline verification, observability, general hardening, rollback |
+| 7 | POS UI: `AWAITING_PAYMENT` resume state | ✅ | `PosOrderClient.tsx` previously had no action button once an order reached `AWAITING_PAYMENT` (only transient before this milestone) — added a "Check payment status" action that calls the same `pay` endpoint, which now safely reconciles instead of erroring |
+
+### A real bug found and fixed via live testing, not just code review
+
+**Concurrent finalize double-deducted stock.** The first cut of the idempotency guard was a `SELECT ... WHERE reference_order_id = ? AND type = 'sale_deduction'` existence check before the deduction loop — "skip if already deducted." Live-tested by firing two concurrent `POST .../pay` requests at a `BILLED` order: request 1 won the charge claim and finalized via the normal path; request 2 lost the claim, fell into `reconcileAwaitingPayment`, polled the *same* `ptrid`, got `approved`, and called `finalizeApprovedPayment` too — **concurrently** with request 1. Both requests' existence-check SELECTs ran before either's INSERTs committed, so both deducted stock: confirmed via `stock_transactions` showing exactly 10 rows (every ingredient line duplicated) instead of 5 for a 1 Croissant + 1 Cold Brew order.
+
+Fixed by replacing the SELECT-then-INSERT check with the atomic `stock_deducted_at` column claim described above (task 4) — Postgres serializes concurrent `UPDATE`s to the same row, so only one request's claim can ever succeed. Re-ran the identical concurrent-request test after the fix: exactly 1 `payments` row, exactly 5 `stock_transactions` rows, order `PAID`.
+
+### How it was tested (live, against the real running stack — same local Supabase used since M0)
+- `npx tsc --noEmit` clean (both before and after adding `stock_deducted_at` — regenerated `database.generated.ts` via `supabase gen types typescript --local` after the migration). `npm run build` clean.
+- **Double-click / concurrent charge race**: fired two simultaneous `POST .../pay` on the same `BILLED` order — exactly one `payments` row created, both requests returned `PAID`. Confirmed via `payment.charge.start` appearing only once in the logs and `payment.reconcile.*` for the second request.
+- **Concurrent finalize race (the bug above)**: found by the same test — fixed, then re-verified clean (1 payment row, 5 correctly-quantitied stock deductions, `stock_deducted_at` set once).
+- **Crash before any payment row exists**: manually forced an order into `AWAITING_PAYMENT` via direct SQL (simulating a crash between the charge-claim and the charge call completing) with zero `payments` rows. Retried `POST .../pay` → self-healed to `PAYMENT_FAILED` (`payment.reconcile.no_pending_payment` logged) instead of staying stuck. Retried again from `PAYMENT_FAILED` → fresh charge → `PAID`, exactly 1 `payments` row total across both attempts.
+- **KOT logging**: confirmed `kot.print.start`/`kot.print.success` logged once per station on a normal 2-station order (Chocolate Croissant → kitchen, Cold Brew → beverage_counter), matching the `kot_tickets` rows written.
+- Full regression: re-ran the SRS worked example end to end (table → items → KOT → bill → pay) on a fresh table/order after all fixes — ₹280 subtotal / ₹14 tax / ₹294 total, matches M4's original numbers exactly.
+
+**Not covered live** (would need real Pine Labs UAT credentials, which M6 is still blocked on): the M6-scoped "reconciliation poll for orders abandoned entirely" (waiter never retries) is explicitly out of M9's scope — see `PRODUCTION_CUTOVER_CHECKLIST.md` §5's last item. Real printer failure modes are also untested since `MockPrinterService` never fails.

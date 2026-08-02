@@ -111,6 +111,7 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
       setOrder(result.order)
       setPayment(result.payment)
       if (result.order.pos_status === 'PAID') toast.success('Payment approved')
+      else if (result.order.pos_status === 'AWAITING_PAYMENT') toast('Still processing — check again shortly')
       else toast.error('Payment declined — you can retry')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Payment failed')
@@ -325,6 +326,22 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
           >
             <CreditCard size={16} /> {busy ? 'Processing…' : `Pay ₹${order.total_amount}`}
+          </button>
+        </div>
+      )}
+
+      {order.pos_status === 'AWAITING_PAYMENT' && (
+        <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5 text-center">
+          <p className="text-sm text-ink-muted mb-3">
+            Payment is being processed. If the network or terminal dropped mid-transaction, checking again is
+            safe — it will never charge twice.
+          </p>
+          <button
+            onClick={pay}
+            disabled={busy}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
+          >
+            <CreditCard size={16} /> {busy ? 'Checking…' : 'Check payment status'}
           </button>
         </div>
       )}

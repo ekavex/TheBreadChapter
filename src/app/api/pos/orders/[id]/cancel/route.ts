@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { paymentProvider } from '@/lib/payment/MockPaymentProvider'
 import { DEMO_STORE_ID } from '@/lib/constants'
+import { logger } from '@/lib/logger'
 
 // POST /api/pos/orders/[id]/cancel — releases the table. Best-effort cancels
 // any in-flight payment (per the state machine, only allowed before PIN entry
@@ -28,14 +29,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .maybeSingle()
 
     if (latestPayment?.plutus_ptrid && latestPayment.status === 'initiated') {
+      logger.info('payment.cancel.start', { orderId: params.id, ptrid: latestPayment.plutus_ptrid })
       try {
         await paymentProvider.cancel(latestPayment.plutus_ptrid, latestPayment.amount_paisa, {
           clientId: latestPayment.client_id ?? '',
           storeId: latestPayment.store_id ?? DEMO_STORE_ID,
         })
         await supabase.from('payments').update({ status: 'cancelled' }).eq('id', latestPayment.id)
-      } catch {
+        logger.info('payment.cancel.success', { orderId: params.id, ptrid: latestPayment.plutus_ptrid })
+      } catch (err) {
         // best-effort — proceed with cancelling the order regardless
+        logger.error('payment.cancel.error', {
+          orderId: params.id,
+          ptrid: latestPayment.plutus_ptrid,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 

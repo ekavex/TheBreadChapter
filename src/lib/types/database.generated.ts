@@ -1,6 +1,3 @@
-// AUTO-GENERATED — do not hand-edit.
-// Regenerate after any migration: `npx supabase gen types typescript --local > src/lib/types/database.generated.ts`
-// (requires `npx supabase start` running against the local DB with all migrations applied)
 export type Json =
   | string
   | number
@@ -453,6 +450,7 @@ export type Database = {
           served_at: string | null
           service_charge: number
           status: Database["public"]["Enums"]["order_status"]
+          stock_deducted_at: string | null
           subtotal: number
           table_id: string
           tax_amount: number
@@ -482,6 +480,7 @@ export type Database = {
           served_at?: string | null
           service_charge?: number
           status?: Database["public"]["Enums"]["order_status"]
+          stock_deducted_at?: string | null
           subtotal?: number
           table_id: string
           tax_amount?: number
@@ -511,6 +510,7 @@ export type Database = {
           served_at?: string | null
           service_charge?: number
           status?: Database["public"]["Enums"]["order_status"]
+          stock_deducted_at?: string | null
           subtotal?: number
           table_id?: string
           tax_amount?: number

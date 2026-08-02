@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { printerService } from '@/lib/printer/MockPrinterService'
+import { logger } from '@/lib/logger'
 import type { KotStation, MenuItemCategory } from '@/lib/types'
 
 const STATION_BY_CATEGORY: Record<MenuItemCategory, KotStation> = {
@@ -31,6 +32,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ data: null, error: 'Add at least one item before sending to the kitchen' }, { status: 400 })
     }
 
+    // A retry after a partial failure below (e.g. station A printed fine but
+    // station B's ticket insert threw) must not reprint a station that's
+    // already been ticketed — order stays OPEN until every station succeeds,
+    // so a naive retry would otherwise double-print station A.
+    const { data: existingTickets } = await supabase.from('kot_tickets').select('station').eq('order_id', order.id)
+    const alreadyTicketed = new Set((existingTickets ?? []).map((t) => t.station))
+
     const stations: KotStation[] = ['kitchen', 'beverage_counter']
     for (const station of stations) {
       const items = order.items
@@ -38,13 +46,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         .map((i) => ({ name: i.name, quantity: i.quantity }))
 
       if (items.length === 0) continue
+      if (alreadyTicketed.has(station)) {
+        logger.warn('kot.print.skipped_duplicate', { orderId: order.id, station })
+        continue
+      }
 
-      await printerService.printTicket({
-        tableNumber: order.table!.number,
-        orderId: order.id,
-        station,
-        items,
-      })
+      logger.info('kot.print.start', { orderId: order.id, station, itemCount: items.length })
+      try {
+        await printerService.printTicket({
+          tableNumber: order.table!.number,
+          orderId: order.id,
+          station,
+          items,
+        })
+      } catch (printErr) {
+        logger.error('kot.print.error', {
+          orderId: order.id,
+          station,
+          error: printErr instanceof Error ? printErr.message : String(printErr),
+        })
+        throw printErr
+      }
+      logger.info('kot.print.success', { orderId: order.id, station })
 
       const { error: ticketError } = await supabase.from('kot_tickets').insert({
         order_id: order.id,
