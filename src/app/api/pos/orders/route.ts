@@ -21,29 +21,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data: null, error: 'Table not found' }, { status: 404 })
     }
 
-    if (table.status !== 'free') {
-      const { data: existing, error: existingError } = await supabase
-        .from('orders')
-        .select('*, items:order_items(*), table:tables(*)')
-        .eq('table_id', tableId)
-        .not('pos_status', 'in', '(PAID,CANCELLED)')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+    // Resume any existing open order regardless of table status
+    const { data: existing, error: existingError } = await supabase
+      .from('orders')
+      .select('*, items:order_items(*), table:tables(*, section:sections(*))')
+      .eq('table_id', tableId)
+      .not('pos_status', 'in', '(PAID,CANCELLED)')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-      if (existingError) throw existingError
-      if (!existing) {
-        return NextResponse.json(
-          { data: null, error: `Table is marked ${table.status} but has no open order — data inconsistency, check manually` },
-          { status: 409 }
-        )
-      }
-      return NextResponse.json({ data: existing, error: null })
+    if (existingError) throw existingError
+    if (existing) return NextResponse.json({ data: existing, error: null })
+
+    // No open order — table must be free to create one
+    if (table.status !== 'free') {
+      return NextResponse.json(
+        { data: null, error: `Table is marked ${table.status} but has no open order — data inconsistency, check manually` },
+        { status: 409 }
+      )
     }
 
     const { data: orderNumber, error: numberError } = await supabase.rpc('generate_order_number', { cafe_id: DEMO_CAFE_ID })
     if (numberError) throw numberError
 
+    // Create the order — table stays 'free' until the first item is added
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
@@ -53,12 +55,9 @@ export async function POST(req: NextRequest) {
         status: 'pending',
         pos_status: 'OPEN',
       })
-      .select('*, items:order_items(*), table:tables(*)')
+      .select('*, items:order_items(*), table:tables(*, section:sections(*))')
       .single()
     if (orderError) throw orderError
-
-    const { error: tableUpdateError } = await supabase.from('tables').update({ status: 'occupied' }).eq('id', tableId)
-    if (tableUpdateError) throw tableUpdateError
 
     return NextResponse.json({ data: order, error: null })
   } catch (err) {

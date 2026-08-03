@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const supabase = createAdminClient()
-    const { data: order, error: orderError } = await supabase.from('orders').select('pos_status').eq('id', params.id).single()
+    const { data: order, error: orderError } = await supabase.from('orders').select('pos_status, table_id').eq('id', params.id).single()
     if (orderError || !order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
     if (order.pos_status !== 'OPEN') {
       return NextResponse.json({ data: null, error: `Items are locked — order is already ${order.pos_status}` }, { status: 409 })
@@ -66,9 +66,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (insertError) throw insertError
     }
 
+    // Mark table occupied on first item (no-op if already occupied)
+    if (order.table_id) {
+      await supabase.from('tables').update({ status: 'occupied' }).eq('id', order.table_id).eq('status', 'free')
+    }
+
     const { data: updatedOrder, error: fetchError } = await supabase
       .from('orders')
-      .select('*, items:order_items(*), table:tables(*)')
+      .select('*, items:order_items(*), table:tables(*, section:sections(*))')
       .eq('id', params.id)
       .single()
     if (fetchError) throw fetchError

@@ -1,9 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { formatDistanceToNow, differenceInMinutes } from 'date-fns'
+import { differenceInMinutes } from 'date-fns'
 import { useKitchenOrders } from '@/lib/hooks/useKitchenOrders'
 import type { Order, OrderStatus } from '@/lib/types'
 import toast from 'react-hot-toast'
+import { ArrowLeft, ChefHat, Clock, Wifi } from 'lucide-react'
+import Link from 'next/link'
 
 const STATUS_FLOW: Record<string, OrderStatus> = {
   pending:   'confirmed',
@@ -12,36 +14,81 @@ const STATUS_FLOW: Record<string, OrderStatus> = {
   ready:     'served',
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  pending:   'New',
-  confirmed: 'Confirm',
-  making:    'Preparing',
-  ready:     'Ready!',
-}
+const COLUMNS: {
+  key: string
+  label: string
+  accent: string
+  headerBg: string
+  cardBorder: string
+  btnClass: string
+  btnLabel: string
+  emptyText: string
+}[] = [
+  {
+    key: 'pending',
+    label: 'New Orders',
+    accent: 'bg-emerald-500',
+    headerBg: 'bg-emerald-500/10 border-emerald-500/20',
+    cardBorder: 'border-emerald-500/40',
+    btnClass: 'bg-emerald-600 hover:bg-emerald-500 text-white',
+    btnLabel: 'Accept',
+    emptyText: 'No new orders',
+  },
+  {
+    key: 'confirmed',
+    label: 'Confirmed',
+    accent: 'bg-sky-500',
+    headerBg: 'bg-sky-500/10 border-sky-500/20',
+    cardBorder: 'border-sky-500/30',
+    btnClass: 'bg-sky-600 hover:bg-sky-500 text-white',
+    btnLabel: 'Start Cooking',
+    emptyText: 'Nothing confirmed yet',
+  },
+  {
+    key: 'making',
+    label: 'Cooking',
+    accent: 'bg-amber-500',
+    headerBg: 'bg-amber-500/10 border-amber-500/20',
+    cardBorder: 'border-amber-500/40',
+    btnClass: 'bg-amber-500 hover:bg-amber-400 text-black font-bold',
+    btnLabel: 'Mark Ready',
+    emptyText: 'Nothing cooking',
+  },
+  {
+    key: 'ready',
+    label: 'Ready',
+    accent: 'bg-violet-500',
+    headerBg: 'bg-violet-500/10 border-violet-500/20',
+    cardBorder: 'border-violet-500/30',
+    btnClass: 'bg-violet-600 hover:bg-violet-500 text-white',
+    btnLabel: 'Mark Served',
+    emptyText: 'Nothing ready yet',
+  },
+]
 
-const STATUS_COLOUR: Record<string, string> = {
-  pending:   'bg-green-500',
-  confirmed: 'bg-blue-500',
-  making:    'bg-amber-500',
-  ready:     'bg-purple-500',
-}
-
-function getTimerClass(createdAt: string): string {
-  const mins = differenceInMinutes(new Date(), new Date(createdAt))
-  if (mins > 20) return 'text-red-500'
-  if (mins > 10) return 'text-amber-500'
-  return 'text-green-500'
+function LiveClock() {
+  const [time, setTime] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <span className="font-mono text-sm text-slate-400 tabular-nums">
+      {time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+    </span>
+  )
 }
 
 function Timer({ createdAt }: { createdAt: string }) {
-  const [, forceUpdate] = useState(0)
+  const [, tick] = useState(0)
   useEffect(() => {
-    const id = setInterval(() => forceUpdate(n => n + 1), 30_000)
+    const id = setInterval(() => tick(n => n + 1), 30_000)
     return () => clearInterval(id)
   }, [])
   const mins = differenceInMinutes(new Date(), new Date(createdAt))
+  const cls = mins > 20 ? 'text-red-400' : mins > 10 ? 'text-amber-400' : 'text-emerald-400'
   return (
-    <span className={`text-2xl font-mono font-bold tabular-nums ${getTimerClass(createdAt)}`}>
+    <span className={`font-mono font-bold text-xl tabular-nums ${cls}`}>
       {mins}m
     </span>
   )
@@ -66,126 +113,159 @@ export default function KitchenDisplay({ cafeId }: Props) {
     making:    orders.filter(o => o.status === 'making'),
     ready:     orders.filter(o => o.status === 'ready'),
   }
+  const total = orders.length
 
   async function advance(order: Order) {
     const next = STATUS_FLOW[order.status]
     if (!next) return
     await updateStatus(order.id, next)
-    toast.success(`${order.order_number} → ${next}`)
+    toast.success(`${order.order_number} → ${next}`, { style: { background: '#1e293b', color: '#f1f5f9' } })
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <p className="text-white text-lg animate-pulse">Loading kitchen display…</p>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center gap-3">
+        <ChefHat size={24} className="text-slate-500 animate-pulse" />
+        <p className="text-slate-400 text-lg">Loading kitchen display…</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-4 font-body">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-display font-bold">Kitchen Display</h1>
-        <div className="flex items-center gap-3">
-          <span className="flex h-2 w-2 relative">
-            <span className="animate-ping-slow absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-          </span>
-          <span className="text-sm text-gray-400">Live</span>
-          <span className="text-sm text-gray-500">{new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col font-body">
+
+      {/* ── Header ── */}
+      <header className="flex items-center gap-4 px-5 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={15} />
+          Dashboard
+        </Link>
+
+        <div className="h-4 w-px bg-slate-700" />
+
+        <div className="flex items-center gap-2">
+          <ChefHat size={18} className="text-amber-400" />
+          <span className="font-display font-bold text-white">Kitchen Display</span>
+          <span className="text-slate-600 text-sm">· The Bread Chapter</span>
         </div>
-      </div>
 
-      {/* Kanban columns */}
-      <div className="grid grid-cols-4 gap-4 h-[calc(100vh-100px)]">
-        {Object.entries(columns).map(([status, statusOrders]) => (
-          <div key={status} className="flex flex-col">
-            {/* Column header */}
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`w-2.5 h-2.5 rounded-full ${STATUS_COLOUR[status]}`} />
-              <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
-                {STATUS_LABEL[status]}
-              </h2>
-              <span className="ml-auto text-xs bg-gray-800 px-2 py-0.5 rounded-full text-gray-400">
-                {statusOrders.length}
-              </span>
-            </div>
+        <div className="ml-auto flex items-center gap-4">
+          {/* Active order count */}
+          <span className="text-xs text-slate-400">
+            <span className="text-white font-semibold">{total}</span> active
+          </span>
 
-            {/* Order cards */}
-            <div className="space-y-3 overflow-y-auto flex-1 pr-1 no-scrollbar">
-              {statusOrders.length === 0 && (
-                <div className="border-2 border-dashed border-gray-800 rounded-2xl p-6 text-center text-gray-700 text-sm">
-                  No orders
-                </div>
-              )}
-              {statusOrders.map(order => (
-                <div
-                  key={order.id}
-                  className={`bg-gray-900 rounded-2xl p-4 border ${
-                    status === 'pending' ? 'border-green-500/30' : 'border-gray-800'
-                  }`}
-                >
-                  {/* Order header */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <span className="text-xs text-gray-500 font-mono">{order.order_number}</span>
-                      <div className="text-white font-semibold mt-0.5">
-                        Table {(order.table as any)?.number}
-                        {(order.table as any)?.label && (
-                          <span className="text-gray-400 font-normal text-sm"> · {(order.table as any).label}</span>
-                        )}
-                      </div>
-                    </div>
-                    <Timer createdAt={order.created_at} />
-                  </div>
-
-                  {/* Items */}
-                  <div className="space-y-1 mb-3">
-                    {(order.items ?? []).map(item => (
-                      <div key={item.id} className="flex items-start gap-2 text-sm">
-                        <span className="text-gray-400 font-mono w-5 text-right flex-shrink-0">
-                          {item.quantity}×
-                        </span>
-                        <div>
-                          <span className="text-gray-200">{item.name}</span>
-                          {item.customisation && (
-                            <div className="text-xs text-amber-400 italic">{item.customisation}</div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Notes */}
-                  {order.notes && (
-                    <div className="text-xs text-amber-300 bg-amber-900/20 rounded-lg px-2 py-1.5 mb-3">
-                      {order.notes}
-                    </div>
-                  )}
-
-                  {/* Action button */}
-                  {STATUS_FLOW[order.status] && (
-                    <button
-                      onClick={() => advance(order)}
-                      className={`w-full py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 ${
-                        status === 'pending'   ? 'bg-green-600 hover:bg-green-500 text-white' :
-                        status === 'confirmed' ? 'bg-blue-600 hover:bg-blue-500 text-white' :
-                        status === 'making'    ? 'bg-amber-500 hover:bg-amber-400 text-black' :
-                        'bg-purple-600 hover:bg-purple-500 text-white'
-                      }`}
-                    >
-                      {status === 'pending'   ? 'Accept order' :
-                       status === 'confirmed' ? 'Start preparing' :
-                       status === 'making'    ? 'Mark ready' :
-                       'Mark served'}
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+          {/* Live indicator */}
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            <Wifi size={13} className="text-emerald-500" />
           </div>
-        ))}
+
+          <LiveClock />
+        </div>
+      </header>
+
+      {/* ── Kanban ── */}
+      <div className="flex-1 grid grid-cols-4 gap-3 p-4 overflow-hidden">
+        {COLUMNS.map((col) => {
+          const colOrders = columns[col.key] ?? []
+          return (
+            <div key={col.key} className="flex flex-col min-h-0">
+
+              {/* Column header */}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border mb-3 ${col.headerBg}`}>
+                <span className={`w-2 h-2 rounded-full ${col.accent}`} />
+                <span className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+                  {col.label}
+                </span>
+                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${
+                  colOrders.length > 0 ? 'bg-white/10 text-white' : 'text-slate-600'
+                }`}>
+                  {colOrders.length}
+                </span>
+              </div>
+
+              {/* Order cards */}
+              <div className="space-y-3 overflow-y-auto flex-1 pr-0.5" style={{ scrollbarWidth: 'none' }}>
+                {colOrders.length === 0 && (
+                  <div className="border border-dashed border-slate-800 rounded-2xl p-6 text-center text-slate-700 text-sm">
+                    {col.emptyText}
+                  </div>
+                )}
+
+                {colOrders.map(order => (
+                  <div
+                    key={order.id}
+                    className={`bg-slate-900 rounded-2xl border ${col.cardBorder} overflow-hidden`}
+                  >
+                    {/* KOT ticket top bar */}
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800">
+                      <div>
+                        <p className="text-xs text-slate-500 font-mono leading-none mb-0.5">
+                          {order.order_number}
+                        </p>
+                        <p className="text-white font-display font-bold text-base leading-tight">
+                          Table {(order.table as { number?: number })?.number ?? '—'}
+                          {(order.table as { label?: string })?.label && (
+                            <span className="text-slate-400 font-normal text-sm">
+                              {' '}· {(order.table as { label?: string }).label}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 text-slate-500">
+                        <Clock size={11} />
+                        <Timer createdAt={order.created_at} />
+                      </div>
+                    </div>
+
+                    {/* Items */}
+                    <div className="px-4 py-3 space-y-1.5">
+                      {(order.items ?? []).map(item => (
+                        <div key={item.id} className="flex items-start gap-2.5">
+                          <span className="font-mono text-sm font-bold text-slate-300 w-6 text-right shrink-0 mt-0.5">
+                            {item.quantity}×
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-slate-100 text-sm leading-tight">{item.name}</span>
+                            {item.customisation && (
+                              <p className="text-xs text-amber-400 italic mt-0.5">{item.customisation}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Notes */}
+                    {order.notes && (
+                      <div className="mx-3 mb-3 text-xs text-amber-300 bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-2">
+                        {order.notes}
+                      </div>
+                    )}
+
+                    {/* Action */}
+                    {STATUS_FLOW[order.status] && (
+                      <div className="px-3 pb-3">
+                        <button
+                          onClick={() => advance(order)}
+                          className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 ${col.btnClass}`}
+                        >
+                          {col.btnLabel}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

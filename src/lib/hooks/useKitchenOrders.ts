@@ -9,13 +9,14 @@ export function useKitchenOrders(cafeId: string) {
   const supabase = createClient()
 
   useEffect(() => {
-    // Initial fetch — active orders only
+    // Initial fetch — orders that have been sent to kitchen (KOT sent or beyond)
     const fetchOrders = async () => {
       const { data } = await supabase
         .from('orders')
         .select('*, items:order_items(*), table:tables(number, label)')
         .eq('cafe_id', cafeId)
         .in('status', ['pending', 'confirmed', 'making', 'ready'])
+        .not('pos_status', 'eq', 'OPEN')
         .order('created_at', { ascending: true })
       setOrders((data as Order[]) ?? [])
       setLoading(false)
@@ -31,7 +32,8 @@ export function useKitchenOrders(cafeId: string) {
         { event: '*', schema: 'public', table: 'orders', filter: `cafe_id=eq.${cafeId}` },
         async (payload) => {
           if (payload.eventType === 'INSERT') {
-            // Fetch the full order with items
+            // Only add to kitchen if KOT has been sent (not a fresh empty order)
+            if (payload.new.pos_status === 'OPEN') return
             const { data } = await supabase
               .from('orders')
               .select('*, items:order_items(*), table:tables(number, label)')
@@ -40,11 +42,27 @@ export function useKitchenOrders(cafeId: string) {
             if (data) setOrders(prev => [...prev, data as Order])
           } else if (payload.eventType === 'UPDATE') {
             const updated = payload.new as Order
-            // Remove from list if completed/cancelled
             if (['completed', 'cancelled', 'served'].includes(updated.status)) {
               setOrders(prev => prev.filter(o => o.id !== updated.id))
+            } else if (updated.pos_status === 'OPEN') {
+              // Still a draft — not for kitchen
             } else {
-              setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o))
+              // Order is already in the list → update it; if it just arrived
+              // (transitioned OPEN → KOT_SENT), fetch full row and append.
+              setOrders(prev => {
+                const exists = prev.some(o => o.id === updated.id)
+                if (exists) return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
+                // Newly kitchen-visible — fetch full order with items and add
+                supabase
+                  .from('orders')
+                  .select('*, items:order_items(*), table:tables(number, label)')
+                  .eq('id', updated.id)
+                  .single()
+                  .then(({ data }) => {
+                    if (data) setOrders(p => [...p, data as Order])
+                  })
+                return prev
+              })
             }
           }
         }
