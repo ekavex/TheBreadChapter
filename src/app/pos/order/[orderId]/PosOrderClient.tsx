@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2 } from 'lucide-react'
+import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus } from '@/lib/types'
 
 interface Props {
@@ -115,6 +115,19 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
       else toast.error('Payment declined — you can retry')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Payment failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function markOccupied() {
+    setBusy(true)
+    try {
+      const updated = await api<Order>(`/api/pos/orders/${order.id}/occupy`, 'POST')
+      setOrder(updated)
+      toast.success('Table marked as occupied')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to mark occupied')
     } finally {
       setBusy(false)
     }
@@ -267,13 +280,25 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
 
       {/* Action area, per state */}
       {order.pos_status === 'OPEN' && (
-        <button
-          onClick={sendToKitchen}
-          disabled={busy || items.length === 0}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
-        >
-          <Send size={16} /> Send to Kitchen
-        </button>
+        <div className="space-y-2">
+          {/* Mark as Occupied — visible only while table is still free (no items added yet) */}
+          {order.table?.status === 'free' && (
+            <button
+              onClick={markOccupied}
+              disabled={busy}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-700 py-3 font-medium hover:bg-amber-100 disabled:opacity-50 transition-colors"
+            >
+              <Users size={16} /> Mark as Occupied
+            </button>
+          )}
+          <button
+            onClick={sendToKitchen}
+            disabled={busy || items.length === 0}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
+          >
+            <Send size={16} /> Send to Kitchen
+          </button>
+        </div>
       )}
 
       {order.pos_status === 'KOT_SENT' && (

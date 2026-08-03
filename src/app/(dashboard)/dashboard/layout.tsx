@@ -6,7 +6,6 @@ import {
   ClipboardList,
   UtensilsCrossed,
   BarChart3,
-  MonitorPlay,
   ChevronRight,
   Package,
   LogOut,
@@ -15,14 +14,13 @@ import {
 } from 'lucide-react'
 
 const NAV = [
-  { href: '/dashboard',              label: 'Overview',     icon: LayoutDashboard },
-  { href: '/pos',                    label: 'Waiter POS',   icon: Utensils },
-  { href: '/dashboard/orders',       label: 'Orders',       icon: ClipboardList },
-  { href: '/dashboard/inventory',    label: 'Inventory',    icon: Package },
-  { href: '/dashboard/menu-manager', label: 'Menu',         icon: UtensilsCrossed },
-  { href: '/dashboard/analytics',    label: 'Analytics',    icon: BarChart3 },
-  { href: '/dashboard/reports',      label: 'Reports',      icon: FileBarChart },
-  { href: '/kitchen',                label: 'Kitchen view', icon: MonitorPlay },
+  { href: '/dashboard',              label: 'Overview',   icon: LayoutDashboard },
+  { href: '/pos',                    label: 'Waiter POS', icon: Utensils },
+  { href: '/dashboard/orders',       label: 'Orders',     icon: ClipboardList },
+  { href: '/dashboard/inventory',    label: 'Inventory',  icon: Package },
+  { href: '/dashboard/menu-manager', label: 'Menu',       icon: UtensilsCrossed },
+  { href: '/dashboard/analytics',    label: 'Analytics',  icon: BarChart3 },
+  { href: '/dashboard/reports',      label: 'Reports',    icon: FileBarChart },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -41,7 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="hidden md:flex flex-col w-56 bg-surface-raised border-r border-ink/5 shrink-0">
         {/* Brand */}
         <div className="px-5 py-5 border-b border-ink/5">
-          <span className="font-display text-lg font-bold text-ink">Sunrise Cafe</span>
+          <span className="font-display text-lg font-bold text-ink">The Bread Chapter</span>
           <p className="text-xs text-ink-faint mt-0.5">Owner dashboard</p>
         </div>
 
@@ -83,7 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
         <header className="md:hidden flex items-center gap-3 px-4 py-3 bg-surface-raised border-b border-ink/5">
-          <span className="font-display font-bold text-ink">Sunrise Cafe</span>
+          <span className="font-display font-bold text-ink">The Bread Chapter</span>
           <nav className="flex gap-1 ml-auto overflow-x-auto">
             {NAV.slice(0, 4).map(({ href, label, icon: Icon }) => {
               const active = pathname === href

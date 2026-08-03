@@ -3,9 +3,48 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 
-// Table status changes constantly (waiter actions) — never let Next.js's
-// default GET route-handler caching serve a stale snapshot.
 export const dynamic = 'force-dynamic'
+
+// POST /api/pos/tables — create a new table (manager only)
+export async function POST(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
+  try {
+    const { number, label, capacity, section_id } = await req.json()
+    if (!number || typeof number !== 'number') {
+      return NextResponse.json({ data: null, error: 'Table number is required' }, { status: 400 })
+    }
+    if (!section_id) {
+      return NextResponse.json({ data: null, error: 'Section is required' }, { status: 400 })
+    }
+
+    const supabase = createAdminClient()
+    const { data, error } = await supabase
+      .from('tables')
+      .insert({
+        cafe_id: DEMO_CAFE_ID,
+        number,
+        label: label?.trim() || null,
+        capacity: capacity ?? 4,
+        section_id,
+        is_active: true,
+        status: 'free',
+      })
+      .select()
+      .single()
+
+    if (error) {
+      if (error.code === '23505') {
+        return NextResponse.json({ data: null, error: `Table ${number} already exists` }, { status: 409 })
+      }
+      throw error
+    }
+    return NextResponse.json({ data, error: null }, { status: 201 })
+  } catch (err) {
+    return NextResponse.json({ data: null, error: err instanceof Error ? err.message : 'Failed to create table' }, { status: 500 })
+  }
+}
 
 // GET /api/pos/tables — sections + tables with live status (Module 5:
 // "Each table shows a live status — Free, Occupied, KOT Sent, or Billed").
