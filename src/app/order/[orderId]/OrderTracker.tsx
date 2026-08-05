@@ -134,7 +134,7 @@ export default function OrderTracker({ initialOrder }: Props) {
 
         {/* Back to menu */}
         <Link
-          href="/menu/1?cafe=sunrise-cafe"
+          href="/menu/1?cafe=the-bread-chapter"
           className="block w-full text-center text-sm text-ink-muted hover:text-ink py-3 transition-colors"
         >
           ← Back to menu

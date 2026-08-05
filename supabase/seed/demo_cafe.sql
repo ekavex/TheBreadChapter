@@ -1,11 +1,11 @@
 -- ============================================================
--- SEED: Sunrise Cafe (Demo client — Pune)
+-- SEED: The Bread Chapter (Demo client — Pune)
 -- Run: supabase db seed  OR paste in SQL Editor
 -- ============================================================
 
 INSERT INTO cafes (id, name, slug, address, phone, whatsapp) VALUES
   ('11111111-1111-1111-1111-111111111111',
-   'Sunrise Cafe', 'sunrise-cafe',
+   'The Bread Chapter', 'the-bread-chapter',
    'FC Road, Shivajinagar, Pune 411005',
    '+919876543210', '+919876543210');
 

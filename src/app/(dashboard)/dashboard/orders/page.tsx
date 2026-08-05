@@ -22,6 +22,7 @@ export default async function OrdersPage({ searchParams }: Props) {
     .eq('cafe_id', DEMO_CAFE_ID)
     .gte('created_at', startOfDay(day).toISOString())
     .lte('created_at', endOfDay(day).toISOString())
+    .neq('pos_status', 'OPEN')
     .order('created_at', { ascending: false })
 
   // Last 7 days for date picker

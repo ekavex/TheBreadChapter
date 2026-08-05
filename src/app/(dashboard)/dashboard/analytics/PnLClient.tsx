@@ -48,8 +48,8 @@ export default function PnLClient({ initial }: { initial: Record<Range, PnLData>
 
       {/* Per-period bars */}
       <div className="space-y-2">
-        {data.rows.map((r) => (
-          <div key={r.label} className="flex items-center gap-3">
+        {data.rows.map((r, i) => (
+          <div key={`${range}-${i}`} className="flex items-center gap-3">
             <span className="text-xs text-ink-muted w-16 shrink-0">{r.label}</span>
             <div className="flex-1 h-6 bg-surface-overlay rounded-lg overflow-hidden relative">
               <div
