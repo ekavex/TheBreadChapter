@@ -4,7 +4,7 @@
 // Reuses M7 analytics helpers + adds report-specific slices.
 import { startOfDay, endOfDay, subDays } from 'date-fns'
 import { DEMO_CAFE_ID } from '@/lib/constants'
-import { getPnLData, getAreaAnalytics, getCustomerAnalytics } from './analytics'
+import { getCustomerAnalytics, orderIngredientCost } from './analytics'
 import type { createAdminClient } from '@/lib/supabase/server'
 
 type Supabase = ReturnType<typeof createAdminClient>
@@ -40,14 +40,14 @@ async function getWindowOrders(
     id: string
     total_amount: number
     created_at: string
-    items?: { name: string; quantity: number; subtotal: number }[] | null
+    items?: { name: string; quantity: number; subtotal: number; menu_item?: { cost_price_paisa?: number } | null }[] | null
     table?: { section?: { name?: string } | null } | null
   }[]
 > {
   const { data } = await supabase
     .from('orders')
     .select(
-      'id, total_amount, created_at, items:order_items(name, quantity, subtotal), table:tables(section:sections(name))'
+      'id, total_amount, created_at, items:order_items(name, quantity, subtotal, menu_item:menu_items(cost_price_paisa)), table:tables(section:sections(name))'
     )
     .eq('cafe_id', DEMO_CAFE_ID)
     .eq('payment_status', 'paid')
@@ -122,13 +122,17 @@ export async function getReportData(supabase: Supabase, range: ReportRange): Pro
   })
   const ingredientUsage = Object.values(usageAgg).sort((a, b) => b.quantity - a.quantity)
 
-  // Cross-module reuse
-  const pnl = await getPnLData(supabase, range === 'monthly' ? 'monthly' : range === 'weekly' ? 'weekly' : 'daily')
-  const customer = await getCustomerAnalytics(supabase, days)
-
-  const revenue = pnl.totals.revenue
-  const ingredientCost = pnl.totals.ingredientCost
+  // Revenue/cost/profit computed from the same window-scoped `orders` used
+  // above — must not delegate to getPnLData, whose daily/weekly/monthly
+  // presets are trend-chart buckets (last 7/50/331 days) with a different
+  // window than this report claims to cover.
+  const revenue = orders.reduce((s, o) => s + o.total_amount, 0)
+  const ingredientCost = orders.reduce((s, o) => s + orderIngredientCost(o), 0)
+  const profit = revenue - ingredientCost
+  const marginPct = revenue > 0 ? (profit / revenue) * 100 : 0
   const orderCount = orders.length
+
+  const customer = await getCustomerAnalytics(supabase, days)
 
   return {
     range,
@@ -136,8 +140,8 @@ export async function getReportData(supabase: Supabase, range: ReportRange): Pro
     summary: {
       revenue,
       ingredientCost,
-      profit: pnl.totals.profit,
-      marginPct: pnl.totals.marginPct,
+      profit,
+      marginPct,
       orderCount,
       avgOrderValue: orderCount > 0 ? revenue / orderCount : 0,
       bestDay,

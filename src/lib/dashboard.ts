@@ -40,6 +40,7 @@ export async function getDashboardData(supabase: Supabase): Promise<DashboardDat
     .eq('cafe_id', DEMO_CAFE_ID)
     .gte('created_at', startISO)
     .lte('created_at', endISO)
+    .neq('pos_status', 'OPEN')
 
   const todaysOrders = todaysOrdersRaw ?? []
   const paidOrders = todaysOrders.filter((o) => o.payment_status === 'paid')
@@ -79,11 +80,17 @@ export async function getDashboardData(supabase: Supabase): Promise<DashboardDat
   const peakHourEntry = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
   const peakHour = peakHourEntry ? { hour: Number(peakHourEntry[0]), count: peakHourEntry[1] } : null
 
+  // Excludes pos_status 'OPEN' — a table that was tapped but never had an
+  // item added stays status='pending' forever with total_amount=0, which
+  // would otherwise inflate this count with orders nothing was ever placed
+  // for. "Active" here means actually sent to the kitchen (KOT_SENT and
+  // beyond), matching the "in kitchen now" label on the dashboard tile.
   const { count: pendingOrders } = await supabase
     .from('orders')
     .select('id', { count: 'exact', head: true })
     .eq('cafe_id', DEMO_CAFE_ID)
     .not('status', 'in', '(completed,cancelled)')
+    .neq('pos_status', 'OPEN')
 
   const { data: ingredientsRaw } = await supabase.from('ingredients').select('*').order('name', { ascending: true })
   const ingredients = (ingredientsRaw ?? []) as Ingredient[]

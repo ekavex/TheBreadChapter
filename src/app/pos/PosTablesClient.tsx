@@ -302,14 +302,21 @@ export default function PosTablesClient({ bySection }: Props) {
   async function selectTable(table: Table) {
     setOpening(table.id)
     try {
-      const res = await fetch('/api/pos/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tableId: table.id }),
-      })
-      const { data, error } = await res.json()
-      if (error) throw new Error(error)
-      router.push(`/pos/order/${data.id}`)
+      if (table.status === 'free') {
+        // Don't create a DB order yet — navigate to the new-order page so no
+        // empty order gets counted on the dashboard until items are added.
+        router.push(`/pos/order/new?tableId=${table.id}`)
+      } else {
+        // Table already has an active order — resume it
+        const res = await fetch('/api/pos/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tableId: table.id }),
+        })
+        const { data, error } = await res.json()
+        if (error) throw new Error(error)
+        router.push(`/pos/order/${data.id}`)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not open table')
       setOpening(null)

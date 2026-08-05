@@ -10,7 +10,7 @@ interface Props {
 
 export async function generateMetadata({ searchParams }: Props) {
   const supabase = createServerSupabaseClient()
-  const cafeSlug = searchParams.cafe ?? 'sunrise-cafe'
+  const cafeSlug = searchParams.cafe ?? 'the-bread-chapter'
   const { data: cafe } = await supabase
     .from('cafes').select('name').eq('slug', cafeSlug).single()
   return { title: cafe?.name ?? 'Menu' }
@@ -18,7 +18,7 @@ export async function generateMetadata({ searchParams }: Props) {
 
 export default async function MenuPage({ params, searchParams }: Props) {
   const supabase = createServerSupabaseClient()
-  const cafeSlug = searchParams.cafe ?? 'sunrise-cafe'
+  const cafeSlug = searchParams.cafe ?? 'the-bread-chapter'
   const tableNumber = parseInt(params.tableId, 10)
 
   // Fetch cafe

@@ -3,10 +3,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users } from 'lucide-react'
-import type { Order, MenuCategory, MenuItem, Payment, PosStatus } from '@/lib/types'
+import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
 
 interface Props {
-  initialOrder: Order
+  initialOrder: Order | null
+  tableId?: string       // present when initialOrder is null (new order)
+  initialTable?: Table   // present when initialOrder is null
   categories: MenuCategory[]
 }
 
@@ -31,9 +33,9 @@ async function api<T>(url: string, method: string, body?: unknown): Promise<T> {
   return json.data as T
 }
 
-export default function PosOrderClient({ initialOrder, categories }: Props) {
+export default function PosOrderClient({ initialOrder, tableId, initialTable, categories }: Props) {
   const router = useRouter()
-  const [order, setOrder] = useState<Order>(initialOrder)
+  const [order, setOrder] = useState<Order | null>(initialOrder)
   const [payment, setPayment] = useState<Payment | null>(null)
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? '')
   const [paymentMode, setPaymentMode] = useState<'upi' | 'card' | 'cash'>('upi')
@@ -41,7 +43,22 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   const [customerName, setCustomerName] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Table info — use joined order.table once order exists, fall back to initialTable prop
+  const tableNumber = order?.table?.number ?? initialTable?.number
+  const sectionName = (order?.table as (Table & { section?: { name: string } }) | undefined)?.section?.name
+    ?? (initialTable as (Table & { section?: { name: string } }) | undefined)?.section?.name
+
+  async function ensureOrder(): Promise<string> {
+    if (order) return order.id
+    const created = await api<Order>('/api/pos/orders', 'POST', { tableId })
+    setOrder(created)
+    // Update URL to the real order page so refreshing works correctly
+    router.replace(`/pos/order/${created.id}`)
+    return created.id
+  }
+
   async function refreshOrder() {
+    if (!order) return
     try {
       const fresh = await api<Order>(`/api/pos/orders/${order.id}`, 'GET')
       setOrder(fresh)
@@ -53,7 +70,8 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   async function addItem(item: MenuItem) {
     setBusy(true)
     try {
-      const updated = await api<Order>(`/api/pos/orders/${order.id}/items`, 'POST', { menu_item_id: item.id, quantity: 1 })
+      const orderId = await ensureOrder()
+      const updated = await api<Order>(`/api/pos/orders/${orderId}/items`, 'POST', { menu_item_id: item.id, quantity: 1 })
       setOrder(updated)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add item')
@@ -63,6 +81,7 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   }
 
   async function removeItem(orderItemId: string) {
+    if (!order) return
     setBusy(true)
     try {
       await api(`/api/pos/orders/${order.id}/items/${orderItemId}`, 'DELETE')
@@ -75,7 +94,7 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   }
 
   async function sendToKitchen() {
-    if ((order.items ?? []).length === 0) return toast.error('Add at least one item first')
+    if (!order || (order.items ?? []).length === 0) return toast.error('Add at least one item first')
     setBusy(true)
     try {
       const updated = await api<Order>(`/api/pos/orders/${order.id}/kot`, 'POST')
@@ -89,6 +108,7 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   }
 
   async function generateBill() {
+    if (!order) return
     setBusy(true)
     try {
       const updated = await api<Order>(`/api/pos/orders/${order.id}/bill`, 'POST')
@@ -101,6 +121,7 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   }
 
   async function pay() {
+    if (!order) return
     setBusy(true)
     try {
       const result = await api<{ order: Order; payment: Payment }>(`/api/pos/orders/${order.id}/pay`, 'POST', {
@@ -123,7 +144,8 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   async function markOccupied() {
     setBusy(true)
     try {
-      const updated = await api<Order>(`/api/pos/orders/${order.id}/occupy`, 'POST')
+      const orderId = await ensureOrder()
+      const updated = await api<Order>(`/api/pos/orders/${orderId}/occupy`, 'POST')
       setOrder(updated)
       toast.success('Table marked as occupied')
     } catch (err) {
@@ -134,6 +156,11 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
   }
 
   async function cancelOrder() {
+    if (!order) {
+      // No DB order created yet — just go back
+      router.push('/pos')
+      return
+    }
     if (!confirm('Cancel this order and release the table?')) return
     setBusy(true)
     try {
@@ -147,9 +174,12 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
     }
   }
 
-  const items = order.items ?? []
+  const items = order?.items ?? []
   const runningSubtotal = items.reduce((sum, i) => sum + i.subtotal, 0)
-  const canCancel = !['PAID', 'CANCELLED'].includes(order.pos_status)
+  const posStatus = order?.pos_status ?? 'OPEN'
+  const isOpen = posStatus === 'OPEN'
+  const canCancel = !['PAID', 'CANCELLED'].includes(posStatus)
+  const tableIsFree = !order || order.table?.status === 'free'
   const activeCategoryItems = categories.find((c) => c.id === activeCategory)?.items ?? []
 
   return (
@@ -161,19 +191,23 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
             ← Back to tables
           </button>
           <h1 className="font-display text-2xl font-bold text-ink">
-            Table {order.table?.number} · {order.table?.section?.name}
+            Table {tableNumber} · {sectionName}
           </h1>
-          <p className="text-ink-muted text-sm mt-0.5">Order {order.order_number}</p>
+          <p className="text-ink-muted text-sm mt-0.5">
+            {order ? `Order ${order.order_number}` : 'New order'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide bg-surface-overlay text-ink-muted px-3 py-1.5 rounded-full">
-            {STATUS_LABELS[order.pos_status]}
-          </span>
+          {order && (
+            <span className="text-xs font-medium uppercase tracking-wide bg-surface-overlay text-ink-muted px-3 py-1.5 rounded-full">
+              {STATUS_LABELS[posStatus]}
+            </span>
+          )}
           {canCancel && (
             <button
               onClick={cancelOrder}
               disabled={busy}
-              title="Cancel order"
+              title={order ? 'Cancel order' : 'Go back'}
               className="p-2 rounded-lg text-ink-faint hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
             >
               <XCircle size={18} />
@@ -182,8 +216,8 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
         </div>
       </div>
 
-      {/* Menu browser — only while items can still be added */}
-      {order.pos_status === 'OPEN' && (
+      {/* Menu browser — shown while order is open (or not yet created) */}
+      {isOpen && (
         <div className="mb-6">
           <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
             {categories.map((cat) => (
@@ -237,7 +271,7 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
                 {item.customisation && <p className="text-xs text-ink-faint">{item.customisation}</p>}
               </div>
               <span className="text-sm font-semibold text-ink shrink-0">₹{item.subtotal}</span>
-              {order.pos_status === 'OPEN' && (
+              {isOpen && (
                 <button
                   onClick={() => removeItem(item.id)}
                   disabled={busy}
@@ -252,14 +286,14 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
         {items.length > 0 && (
           <div className="px-5 py-3 border-t border-ink/5 flex justify-between text-sm">
             <span className="text-ink-muted">
-              {['BILLED', 'AWAITING_PAYMENT', 'PAID', 'PAYMENT_FAILED'].includes(order.pos_status) ? 'Subtotal' : 'Running total'}
+              {['BILLED', 'AWAITING_PAYMENT', 'PAID', 'PAYMENT_FAILED'].includes(posStatus) ? 'Subtotal' : 'Running total'}
             </span>
             <span className="font-semibold text-ink">
-              ₹{['BILLED', 'AWAITING_PAYMENT', 'PAID', 'PAYMENT_FAILED'].includes(order.pos_status) ? order.subtotal : runningSubtotal}
+              ₹{['BILLED', 'AWAITING_PAYMENT', 'PAID', 'PAYMENT_FAILED'].includes(posStatus) ? order?.subtotal : runningSubtotal}
             </span>
           </div>
         )}
-        {['BILLED', 'AWAITING_PAYMENT', 'PAID', 'PAYMENT_FAILED'].includes(order.pos_status) && (
+        {['BILLED', 'AWAITING_PAYMENT', 'PAID', 'PAYMENT_FAILED'].includes(posStatus) && order && (
           <div className="px-5 pb-3 space-y-1 text-sm">
             {order.tax_amount > 0 && (
               <div className="flex justify-between text-ink-muted">
@@ -278,11 +312,10 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
         )}
       </div>
 
-      {/* Action area, per state */}
-      {order.pos_status === 'OPEN' && (
+      {/* Action area */}
+      {isOpen && (
         <div className="space-y-2">
-          {/* Mark as Occupied — visible only while table is still free (no items added yet) */}
-          {order.table?.status === 'free' && (
+          {tableIsFree && (
             <button
               onClick={markOccupied}
               disabled={busy}
@@ -301,7 +334,7 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
         </div>
       )}
 
-      {order.pos_status === 'KOT_SENT' && (
+      {posStatus === 'KOT_SENT' && (
         <button
           onClick={generateBill}
           disabled={busy}
@@ -311,9 +344,9 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
         </button>
       )}
 
-      {(order.pos_status === 'BILLED' || order.pos_status === 'PAYMENT_FAILED') && (
+      {(posStatus === 'BILLED' || posStatus === 'PAYMENT_FAILED') && (
         <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
-          {order.pos_status === 'PAYMENT_FAILED' && (
+          {posStatus === 'PAYMENT_FAILED' && (
             <p className="text-sm text-status-overdue mb-3">Payment was declined or cancelled — try again.</p>
           )}
           <p className="text-sm font-medium text-ink-muted mb-2">Payment method</p>
@@ -350,12 +383,12 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
             disabled={busy}
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
           >
-            <CreditCard size={16} /> {busy ? 'Processing…' : `Pay ₹${order.total_amount}`}
+            <CreditCard size={16} /> {busy ? 'Processing…' : `Pay ₹${order?.total_amount}`}
           </button>
         </div>
       )}
 
-      {order.pos_status === 'AWAITING_PAYMENT' && (
+      {posStatus === 'AWAITING_PAYMENT' && (
         <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5 text-center">
           <p className="text-sm text-ink-muted mb-3">
             Payment is being processed. If the network or terminal dropped mid-transaction, checking again is
@@ -371,12 +404,12 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
         </div>
       )}
 
-      {order.pos_status === 'PAID' && (
+      {posStatus === 'PAID' && (
         <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
           <CheckCircle2 size={32} className="mx-auto text-green-600 mb-2" />
           <p className="font-display text-lg font-semibold text-ink">Payment received</p>
           <p className="text-sm text-ink-muted mt-1">
-            ₹{order.total_amount} paid via {payment?.mode ?? order.payment_method} · Table released
+            ₹{order?.total_amount} paid via {payment?.mode ?? order?.payment_method} · Table released
           </p>
           <button
             onClick={() => router.push('/pos')}
@@ -387,7 +420,7 @@ export default function PosOrderClient({ initialOrder, categories }: Props) {
         </div>
       )}
 
-      {order.pos_status === 'CANCELLED' && (
+      {posStatus === 'CANCELLED' && (
         <div className="bg-surface-overlay rounded-2xl p-5 text-center">
           <p className="text-ink-muted">This order was cancelled. Table released.</p>
           <button

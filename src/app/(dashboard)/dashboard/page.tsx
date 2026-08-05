@@ -24,6 +24,7 @@ export default async function DashboardPage() {
     .eq('cafe_id', DEMO_CAFE_ID)
     .gte('created_at', startOfDay(today).toISOString())
     .lte('created_at', endOfDay(today).toISOString())
+    .neq('pos_status', 'OPEN')
     .order('created_at', { ascending: false })
     .limit(10)
   const recentOrders = (recentOrdersRaw ?? []) as Order[]

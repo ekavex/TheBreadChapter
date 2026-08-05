@@ -1,7 +1,12 @@
 // Modules 6/7/8 — P&L, area analytics, customer analytics.
 // P&L = revenue − ingredient cost (no Expense line yet — open item in the plan,
 // explicitly removed from SRS scope unless re-requested).
-import { startOfDay, endOfDay, subDays, addDays } from 'date-fns'
+import {
+  startOfDay, endOfDay, subDays,
+  startOfWeek, endOfWeek, subWeeks,
+  startOfMonth, endOfMonth, subMonths,
+  startOfYear, endOfYear, subYears,
+} from 'date-fns'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { createAdminClient } from '@/lib/supabase/server'
 
@@ -45,7 +50,7 @@ async function fetchPaidOrdersWithCost(supabase: Supabase, fromISO: string, toIS
   return data ?? []
 }
 
-function orderIngredientCost(order: {
+export function orderIngredientCost(order: {
   items?: { quantity: number; menu_item?: { cost_price_paisa?: number } | null }[] | null
 }): number {
   return (order.items ?? []).reduce(
@@ -59,27 +64,66 @@ export async function getPnLData(
   range: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'monthly'
 ): Promise<PnLData> {
   const today = new Date()
-  const buckets: number = { daily: 7, weekly: 8, monthly: 12, yearly: 5 }[range]
-  const stepDays: number = { daily: 1, weekly: 7, monthly: 30, yearly: 365 }[range]
-  const fromISO = startOfDay(subDays(today, stepDays * (buckets - 1))).toISOString()
-  const toISO = endOfDay(today).toISOString()
 
+  // Build calendar-aligned buckets so labels are always unique and meaningful.
+  type Bucket = { start: Date; end: Date; label: string }
+  const buckets: Bucket[] = []
+
+  if (range === 'daily') {
+    // Last 7 days — "5 Aug", "4 Aug", …
+    for (let i = 6; i >= 0; i--) {
+      const d = subDays(today, i)
+      buckets.push({
+        start: startOfDay(d),
+        end: endOfDay(d),
+        label: d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+      })
+    }
+  } else if (range === 'weekly') {
+    // Last 8 calendar weeks (Mon–Sun) — "17 Jun", "24 Jun", "1 Jul", …
+    for (let i = 7; i >= 0; i--) {
+      const ref = subWeeks(today, i)
+      const ws = startOfWeek(ref, { weekStartsOn: 1 })
+      const we = endOfWeek(ref, { weekStartsOn: 1 })
+      buckets.push({
+        start: ws,
+        end: we,
+        label: ws.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+      })
+    }
+  } else if (range === 'monthly') {
+    // Last 12 calendar months — "Aug '25", "Sep '25", …, "Aug '26"
+    for (let i = 11; i >= 0; i--) {
+      const ref = subMonths(today, i)
+      buckets.push({
+        start: startOfMonth(ref),
+        end: endOfMonth(ref),
+        label: ref.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+      })
+    }
+  } else {
+    // Last 5 calendar years — "2022", "2023", …, "2026"
+    for (let i = 4; i >= 0; i--) {
+      const ref = subYears(today, i)
+      buckets.push({
+        start: startOfYear(ref),
+        end: endOfYear(ref),
+        label: ref.getFullYear().toString(),
+      })
+    }
+  }
+
+  const fromISO = buckets[0].start.toISOString()
+  const toISO = buckets[buckets.length - 1].end.toISOString()
   const orders = await fetchPaidOrdersWithCost(supabase, fromISO, toISO)
 
-  const rows: PnLRow[] = Array.from({ length: buckets }, (_, i) => {
-    const bucketStart = startOfDay(subDays(today, stepDays * (buckets - 1 - i)))
-    const bucketEnd = endOfDay(addDays(bucketStart, stepDays - 1))
+  const rows: PnLRow[] = buckets.map(({ start, end, label }) => {
     const bucketOrders = orders.filter((o: { created_at: string }) => {
       const t = new Date(o.created_at).getTime()
-      return t >= bucketStart.getTime() && t <= bucketEnd.getTime()
+      return t >= start.getTime() && t <= end.getTime()
     })
     const revenue = bucketOrders.reduce((s: number, o: { total_amount: number }) => s + o.total_amount, 0)
     const ingredientCost = bucketOrders.reduce((s: number, o) => s + orderIngredientCost(o), 0)
-    const label = bucketStart.toLocaleDateString('en-IN', {
-      day: range === 'daily' ? 'numeric' : undefined,
-      month: range === 'yearly' ? undefined : 'short',
-      year: range === 'yearly' ? 'numeric' : range === 'monthly' ? '2-digit' : undefined,
-    })
     return {
       label,
       revenue,
@@ -121,6 +165,7 @@ export async function getAreaAnalytics(supabase: Supabase, days = 30): Promise<A
     .select('created_at, table:tables(section:sections(name)), items:order_items(name, quantity)')
     .eq('cafe_id', DEMO_CAFE_ID)
     .neq('status', 'cancelled')
+    .neq('pos_status', 'OPEN')
     .gte('created_at', fromISO)
     .lte('created_at', toISO)
   const orders = data ?? []
