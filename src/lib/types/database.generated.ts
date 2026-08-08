@@ -737,6 +737,7 @@ export type Database = {
           number: number
           qr_code_url: string | null
           section_id: number | null
+          shape: string
           status: Database["public"]["Enums"]["table_status"]
         }
         Insert: {
@@ -749,6 +750,7 @@ export type Database = {
           number: number
           qr_code_url?: string | null
           section_id?: number | null
+          shape?: string
           status?: Database["public"]["Enums"]["table_status"]
         }
         Update: {
@@ -761,6 +763,7 @@ export type Database = {
           number?: number
           qr_code_url?: string | null
           section_id?: number | null
+          shape?: string
           status?: Database["public"]["Enums"]["table_status"]
         }
         Relationships: [

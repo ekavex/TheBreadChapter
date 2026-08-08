@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
+import { printKot } from '@/lib/printer/kotPrint'
 
 interface Props {
   initialOrder: Order | null
@@ -99,6 +100,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     try {
       const updated = await api<Order>(`/api/pos/orders/${order.id}/kot`, 'POST')
       setOrder(updated)
+      printKot(updated)
       toast.success('Sent to kitchen — KOT printed')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send KOT')

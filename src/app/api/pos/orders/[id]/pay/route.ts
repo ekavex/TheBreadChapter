@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { paymentProvider } from '@/lib/payment/MockPaymentProvider'
+import { finalizeApprovedPayment } from '@/lib/payment/finalize'
 import { DEMO_STORE_ID } from '@/lib/constants'
-import { upsertCustomer } from '@/lib/customers'
 import { logger } from '@/lib/logger'
-import type { Order, Payment, PaymentMethod, Terminal } from '@/lib/types'
+import type { Order, Payment, Terminal } from '@/lib/types'
 import type { PaymentResult } from '@/lib/payment/types'
 
 type Supabase = ReturnType<typeof createAdminClient>
@@ -13,20 +13,7 @@ type Supabase = ReturnType<typeof createAdminClient>
 const ALLOWED_MODE_CODE: Record<'card' | 'cash' | 'upi', string> = { card: '1', cash: '2', upi: '10' }
 const ORDER_WITH_ITEMS_AND_TABLE = '*, items:order_items(*), table:tables(*)'
 
-// PaymentResult has no index signature, so it isn't structurally a Json value —
-// round-trip through JSON to store it in the jsonb raw_response column.
-function toJson(value: unknown) {
-  return JSON.parse(JSON.stringify(value))
-}
-
-function mapPaymentMethod(pineLabsMode?: string): PaymentMethod {
-  if (!pineLabsMode) return 'unpaid'
-  const m = pineLabsMode.toUpperCase()
-  if (m.includes('UPI')) return 'upi'
-  if (m.includes('CARD')) return 'card'
-  if (m.includes('CASH')) return 'cash'
-  return 'unpaid'
-}
+function toJson(value: unknown) { return JSON.parse(JSON.stringify(value)) }
 
 async function latestPaymentFor(supabase: Supabase, orderId: string) {
   const { data } = await supabase
@@ -39,104 +26,6 @@ async function latestPaymentFor(supabase: Supabase, orderId: string) {
   return data as Payment | null
 }
 
-// Deduct stock + mark PAID. This can be reached twice for the same approved
-// payment — a fresh-charge response and a reconciliation poll of the same
-// ptrid can both resolve to "approved" concurrently — so the entire
-// side-effect block below is gated behind a single atomic claim:
-// `UPDATE orders SET stock_deducted_at = now() WHERE stock_deducted_at IS
-// NULL`. Postgres serializes concurrent UPDATEs to the same row, so exactly
-// one caller ever wins that claim; the loser just returns the current order.
-// (A SELECT-then-INSERT "already deducted?" check was tried first and is
-// NOT safe here — both concurrent requests can pass the SELECT before either
-// commits its INSERT, which live-tested as a real double stock deduction.)
-async function finalizeApprovedPayment(
-  supabase: Supabase,
-  order: Order,
-  payment: Payment,
-  statusResult: PaymentResult,
-  customerPhone: string | null | undefined,
-  customerName: string | null | undefined
-) {
-  const { data: freshOrder } = await supabase.from('orders').select('pos_status').eq('id', order.id).single()
-  if (freshOrder?.pos_status === 'PAID') {
-    const { data: alreadyPaid } = await supabase.from('orders').select(ORDER_WITH_ITEMS_AND_TABLE).eq('id', order.id).single()
-    return { order: alreadyPaid as Order, payment }
-  }
-
-  const { data: claim } = await supabase
-    .from('orders')
-    .update({ stock_deducted_at: new Date().toISOString() })
-    .eq('id', order.id)
-    .is('stock_deducted_at', null)
-    .select('id')
-    .maybeSingle()
-
-  if (!claim) {
-    // Lost the race — another concurrent request is (or already has)
-    // finalizing this exact payment. Report current state; it settles to
-    // PAID within the winner's request, not this one.
-    logger.warn('payment.finalize.lost_race', { orderId: order.id, paymentId: payment.id })
-    const { data: current } = await supabase.from('orders').select(ORDER_WITH_ITEMS_AND_TABLE).eq('id', order.id).single()
-    return { order: (current as Order) ?? order, payment }
-  }
-
-  for (const item of order.items ?? []) {
-    const { data: recipe } = await supabase
-      .from('recipes')
-      .select('*, ingredients:recipe_ingredients(*)')
-      .eq('menu_item_id', item.menu_item_id)
-      .maybeSingle()
-
-    if (!recipe) continue
-    for (const line of recipe.ingredients ?? []) {
-      await supabase.from('stock_transactions').insert({
-        ingredient_id: line.ingredient_id,
-        type: 'sale_deduction',
-        quantity: -(line.quantity * item.quantity),
-        reference_order_id: order.id,
-        note: `Order ${order.order_number} — ${item.name} x${item.quantity}`,
-      })
-    }
-  }
-
-  const { data: approvedPayment } = await supabase
-    .from('payments')
-    .update({
-      status: 'approved',
-      mode: statusResult.mode ?? payment.mode ?? null,
-      rrn: statusResult.rrn ?? null,
-      approval_code: statusResult.approvalCode ?? null,
-      txn_log_id: statusResult.txnLogId ?? null,
-      raw_response: toJson(statusResult),
-    })
-    .eq('id', payment.id)
-    .select()
-    .single()
-
-  await supabase.from('tables').update({ status: 'free' }).eq('id', order.table_id)
-
-  // Module 8: optional phone capture at payment (skippable for walk-ins).
-  const customerId = await upsertCustomer(supabase, customerPhone, customerName)
-
-  const now = new Date().toISOString()
-  const { data: paidOrder, error: paidError } = await supabase
-    .from('orders')
-    .update({
-      pos_status: 'PAID',
-      payment_status: 'paid',
-      payment_method: mapPaymentMethod(statusResult.mode ?? payment.mode ?? undefined),
-      status: 'completed',
-      completed_at: now,
-      ...(customerId ? { customer_id: customerId } : {}),
-    })
-    .eq('id', order.id)
-    .select(ORDER_WITH_ITEMS_AND_TABLE)
-    .single()
-  if (paidError) throw paidError
-
-  logger.info('payment.finalize.success', { orderId: order.id, paymentId: payment.id, ptrid: statusResult.ptrid })
-  return { order: paidOrder as Order, payment: (approvedPayment as Payment) ?? payment }
-}
 
 // Offline-payment behavior: an order can be left in AWAITING_PAYMENT if the
 // network/terminal drops between charge() and the PAID transition. Rather

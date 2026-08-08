@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (sessionGuard) return sessionGuard
 
   try {
-    const { number, label, capacity, section_id } = await req.json()
+    const { number, label, capacity, section_id, shape } = await req.json()
     if (!number || typeof number !== 'number') {
       return NextResponse.json({ data: null, error: 'Table number is required' }, { status: 400 })
     }
@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
         number,
         label: label?.trim() || null,
         capacity: capacity ?? 4,
+        shape: shape ?? 'square',
         section_id,
         is_active: true,
         status: 'free',

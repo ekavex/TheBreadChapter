@@ -16,11 +16,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       label?: string | null
       capacity?: number
       section_id?: number
+      shape?: string
     } = {}
     if ('number' in body) patch.number = body.number
     if ('label' in body) patch.label = body.label === '' ? null : body.label
     if ('capacity' in body) patch.capacity = body.capacity
     if ('section_id' in body) patch.section_id = body.section_id
+    if ('shape' in body) patch.shape = body.shape
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ data: null, error: 'No valid fields to update' }, { status: 400 })
     }
