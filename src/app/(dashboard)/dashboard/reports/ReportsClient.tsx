@@ -33,7 +33,7 @@ export default function ReportsClient({ initial, ranges }: Props) {
   const exportUrl = (format: 'csv' | 'excel' | 'pdf') => `/api/reports/${range}/export?format=${format}`
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6 print-area">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 print-area">
       <div className="flex items-center justify-between gap-3 flex-wrap no-print">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Reports</h1>
@@ -57,7 +57,7 @@ export default function ReportsClient({ initial, ranges }: Props) {
       </div>
 
       {/* Export bar */}
-      <div className="flex gap-2 no-print">
+      <div className="flex flex-wrap gap-2 no-print">
         <a href={exportUrl('csv')} className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay">
           <Download size={14} /> CSV
         </a>
@@ -135,24 +135,26 @@ function ReportTable({ title, headers, rows }: { title: string; headers: string[
       {rows.length === 0 ? (
         <p className="px-5 py-4 text-sm text-ink-muted">No data in this period.</p>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-surface-overlay text-left text-ink-faint">
-              {headers.map((h) => (
-                <th key={h} className="px-5 py-2 font-medium">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ink/5">
-            {rows.map((row, i) => (
-              <tr key={i}>
-                {row.map((cell, ci) => (
-                  <td key={ci} className="px-5 py-2 text-ink">{cell}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-surface-overlay text-left text-ink-faint">
+                {headers.map((h) => (
+                  <th key={h} className="px-5 py-2 font-medium whitespace-nowrap">{h}</th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-ink/5">
+              {rows.map((row, i) => (
+                <tr key={i}>
+                  {row.map((cell, ci) => (
+                    <td key={ci} className="px-5 py-2 text-ink">{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   )

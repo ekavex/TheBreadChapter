@@ -52,8 +52,8 @@ export default function InventoryClient({ ingredients }: Props) {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Inventory</h1>
           <p className="text-ink-muted text-sm mt-0.5">
@@ -70,7 +70,8 @@ export default function InventoryClient({ ingredients }: Props) {
         </button>
       </div>
 
-      <div className="bg-surface-raised rounded-2xl border border-ink/5 overflow-hidden">
+      {/* ── Desktop table (md+) ── */}
+      <div className="hidden md:block bg-surface-raised rounded-2xl border border-ink/5 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -124,26 +125,13 @@ export default function InventoryClient({ ingredients }: Props) {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => setStockFor(i)}
-                          title="Update stock"
-                          className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink"
-                        >
+                        <button onClick={() => setStockFor(i)} title="Update stock" className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink">
                           <PackagePlus size={16} />
                         </button>
-                        <button
-                          onClick={() => setEditing(i)}
-                          title="Edit"
-                          className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink"
-                        >
+                        <button onClick={() => setEditing(i)} title="Edit" className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink">
                           <Pencil size={16} />
                         </button>
-                        <button
-                          onClick={() => handleDelete(i)}
-                          disabled={deleting === i.id}
-                          title="Delete"
-                          className="p-2 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                        >
+                        <button onClick={() => handleDelete(i)} disabled={deleting === i.id} title="Delete" className="p-2 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -154,6 +142,78 @@ export default function InventoryClient({ ingredients }: Props) {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* ── Mobile cards (< md) ── */}
+      <div className="md:hidden space-y-3">
+        {ingredients.length === 0 && (
+          <div className="bg-surface-raised rounded-2xl border border-ink/5 p-8 text-center">
+            <p className="text-ink-faint text-sm">No ingredients yet — add your first one.</p>
+          </div>
+        )}
+        {ingredients.map((i) => {
+          const isLow = i.current_stock <= i.low_stock_threshold
+          const days = daysToExpiry(i.expiry_date)
+          const isExpiring = days !== null && days <= 3
+          return (
+            <div key={i.id} className={`bg-surface-raised rounded-2xl border p-4 ${isLow ? 'border-red-200 bg-red-50/30' : 'border-ink/5'}`}>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div>
+                  <p className="font-semibold text-ink">{i.name}</p>
+                  {i.is_perishable && <p className="text-xs text-ink-faint">Perishable</p>}
+                </div>
+                {isLow && (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-status-overdue bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                    <AlertTriangle size={11} /> Low stock
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-3">
+                <div>
+                  <p className="text-xs text-ink-faint mb-0.5">Stock</p>
+                  <p className={`font-medium ${isLow ? 'text-status-overdue' : 'text-ink'}`}>
+                    {i.current_stock} {i.unit}
+                    <span className="text-ink-faint font-normal text-xs ml-1">(min {i.low_stock_threshold})</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-ink-faint mb-0.5">Cost/unit</p>
+                  <p className="text-ink">{formatPaisa(i.cost_per_unit_paisa)}</p>
+                </div>
+                {i.expiry_date && (
+                  <div>
+                    <p className="text-xs text-ink-faint mb-0.5">Expiry</p>
+                    <p className={isExpiring ? 'text-amber-600 font-medium' : 'text-ink-muted'}>
+                      {isExpiring && <Clock size={11} className="inline mr-0.5" />}
+                      {i.expiry_date}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-ink/5">
+                <button
+                  onClick={() => setStockFor(i)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors border border-ink/8"
+                >
+                  <PackagePlus size={13} /> Update stock
+                </button>
+                <button
+                  onClick={() => setEditing(i)}
+                  className="p-2.5 rounded-xl text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors border border-ink/8"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => handleDelete(i)}
+                  disabled={deleting === i.id}
+                  className="p-2.5 rounded-xl text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors border border-ink/8"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {addOpen && <IngredientModal onClose={() => setAddOpen(false)} onSaved={refresh} />}

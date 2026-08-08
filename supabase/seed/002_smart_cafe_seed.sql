@@ -25,12 +25,15 @@ INSERT INTO tables (cafe_id, number, label, capacity, section_id) VALUES
 INSERT INTO terminals (client_id, label, section_id) VALUES
   ('UAT-TERMINAL-1', 'Front Counter A910S', 1);
 
--- Two flat auth credentials (Module 9 — no roles). CHANGE THESE PASSWORDS before any real use.
--- dashboard  → user_id: manager   password: ChangeMe123!
--- menu_crud  → user_id: admin     password: MenuCrud123!
-INSERT INTO auth_credentials (scope, user_id, password_hash) VALUES
-  ('dashboard', 'manager', crypt('ChangeMe123!', gen_salt('bf'))),
-  ('menu_crud',  'admin',   crypt('MenuCrud123!', gen_salt('bf')));
+-- Three role-based credentials (M10 RBAC). CHANGE THESE PASSWORDS before any real use.
+-- admin   → password: admin123
+-- manager → password: manager123
+-- staff   → password: staff123
+INSERT INTO auth_credentials (user_id, password_hash, role, display_name) VALUES
+  ('admin',   '$2b$10$H0E/iF000LPkWp/RseBDZO9hEEWHDdXsG7I8WKLYquuJfioC6agi6', 'admin',   'Administrator'),
+  ('manager', '$2b$10$CrQi97zTbx0yWOjhsBPCIe1Zk6y3LyLME6G2xpG0JdFwCIrSikfiq', 'manager', 'Manager'),
+  ('staff',   '$2b$10$UIaybUC3jrTD6u2Ntx9ejOBy6S4cVi/O58uuxVw0qa.svKJCEggw6', 'staff',   'Staff')
+ON CONFLICT (user_id) DO NOTHING;
 
 -- Sample ingredients + recipes so M1/M2 have something to show immediately.
 -- Milk seeded at 5 paisa/ml (= ₹50/L) to match the SRS's Module 3 "before" cost example.

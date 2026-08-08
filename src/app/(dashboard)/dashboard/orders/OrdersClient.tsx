@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ArrowRight } from 'lucide-react'
 import type { Order, OrderStatus } from '@/lib/types'
 import toast from 'react-hot-toast'
 
@@ -75,9 +75,10 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
     .reduce((s, o) => s + o.total_amount, 0)
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start sm:items-center justify-between gap-3 mb-6 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Orders</h1>
           <p className="text-ink-muted text-sm mt-0.5">
@@ -86,7 +87,7 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
         </div>
 
         {/* Date picker */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <select
             value={currentDate}
             onChange={e => setDate(e.target.value)}
@@ -104,12 +105,12 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
       </div>
 
       {/* Status filter pills */}
-      <div className="flex gap-2 flex-wrap mb-5">
+      <div className="flex gap-2 flex-wrap mb-5 overflow-x-auto pb-1">
         {(['all', ...STATUSES]).map(s => (
           <button
             key={s}
             onClick={() => setStatus(s)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+            className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
               activeStatus === s
                 ? 'bg-ink text-surface border-ink'
                 : 'bg-surface-raised text-ink-muted border-ink/10 hover:border-ink/25'
@@ -120,67 +121,109 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
         ))}
       </div>
 
-      {/* Orders table */}
       {filtered.length === 0 ? (
         <div className="bg-surface-raised rounded-2xl border border-ink/5 p-10 text-center">
           <p className="text-ink-muted text-sm">No orders for this filter</p>
         </div>
       ) : (
-        <div className="bg-surface-raised rounded-2xl border border-ink/5 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-ink/5 bg-surface-overlay">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Order</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Table</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Items</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Status</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Total</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink/5">
-              {filtered.map(order => {
-                const nextStatus = NEXT_STATUS[order.status]
-                const tableInfo = (order as any).table
-                return (
-                  <tr key={order.id} className="hover:bg-surface-overlay/50 transition-colors">
-                    <td className="px-5 py-3.5">
+        <>
+          {/* ── Desktop table (md+) ── */}
+          <div className="hidden md:block bg-surface-raised rounded-2xl border border-ink/5 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-ink/5 bg-surface-overlay">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Order</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Table</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Items</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Status</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-ink-faint uppercase tracking-wide">Total</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink/5">
+                  {filtered.map(order => {
+                    const nextStatus = NEXT_STATUS[order.status]
+                    const tableInfo = (order as any).table
+                    return (
+                      <tr key={order.id} className="hover:bg-surface-overlay/50 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <span className="font-semibold text-ink">{order.order_number}</span>
+                          <p className="text-xs text-ink-faint mt-0.5">{format(new Date(order.created_at), 'h:mm a')}</p>
+                        </td>
+                        <td className="px-4 py-3.5 text-ink-muted">
+                          {tableInfo ? `Table ${tableInfo.number}` : '—'}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="text-ink-muted">{(order.items ?? []).length} items</span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_STYLE[order.status]}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-semibold text-ink">
+                          ₹{Math.round(order.total_amount)}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {nextStatus && (
+                            <button
+                              onClick={() => advanceStatus(order)}
+                              disabled={updating === order.id}
+                              className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-40 whitespace-nowrap"
+                            >
+                              {updating === order.id ? '...' : `→ ${nextStatus}`}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Mobile cards (< md) ── */}
+          <div className="md:hidden space-y-3">
+            {filtered.map(order => {
+              const nextStatus = NEXT_STATUS[order.status]
+              const tableInfo = (order as any).table
+              return (
+                <div key={order.id} className="bg-surface-raised rounded-2xl border border-ink/5 p-4">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div>
                       <span className="font-semibold text-ink">{order.order_number}</span>
-                      <p className="text-xs text-ink-faint mt-0.5">
-                        {format(new Date(order.created_at), 'h:mm a')}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3.5 text-ink-muted">
-                      {tableInfo ? `Table ${tableInfo.number}` : '—'}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="text-ink-muted">{(order.items ?? []).length} items</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_STYLE[order.status]}`}>
+                      <p className="text-xs text-ink-faint mt-0.5">{format(new Date(order.created_at), 'h:mm a')} · {tableInfo ? `Table ${tableInfo.number}` : 'No table'}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_STYLE[order.status]}`}>
                         {order.status}
                       </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-ink">
-                      ₹{Math.round(order.total_amount)}
-                    </td>
-                    <td className="px-4 py-3.5">
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-ink-muted">{(order.items ?? []).length} items</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold text-ink">₹{Math.round(order.total_amount)}</span>
                       {nextStatus && (
                         <button
                           onClick={() => advanceStatus(order)}
                           disabled={updating === order.id}
-                          className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-40 whitespace-nowrap"
+                          className="flex items-center gap-1 text-xs font-medium text-white bg-brand-500 hover:bg-brand-600 px-3 py-1.5 rounded-xl disabled:opacity-40 transition-colors"
                         >
-                          {updating === order.id ? '...' : `→ ${nextStatus}`}
+                          {updating === order.id ? '…' : (
+                            <><ArrowRight size={11} /> {nextStatus}</>
+                          )}
                         </button>
                       )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )

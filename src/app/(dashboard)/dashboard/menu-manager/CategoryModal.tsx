@@ -6,12 +6,11 @@ import type { MenuCategory } from '@/lib/types'
 
 interface Props {
   category?: MenuCategory | null
-  token: string
   onClose: () => void
   onSaved: () => void
 }
 
-export default function CategoryModal({ category, token, onClose, onSaved }: Props) {
+export default function CategoryModal({ category, onClose, onSaved }: Props) {
   const isEdit = !!category
   const [name, setName] = useState(category?.name ?? '')
   const [nameHi, setNameHi] = useState(category?.name_hi ?? '')
@@ -26,15 +25,11 @@ export default function CategoryModal({ category, token, onClose, onSaved }: Pro
       const payload = { name: name.trim(), name_hi: nameHi.trim() || null, sort_order: Number(sortOrder) }
       const res = await fetch(isEdit ? `/api/menu/categories/${category!.id}` : '/api/menu/categories', {
         method: isEdit ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-menu-crud-token': token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       const { error } = await res.json()
-      if (error) {
-        if (res.status === 401) toast.error('Menu session expired — click again to re-verify')
-        else toast.error(error)
-        return
-      }
+      if (error) { toast.error(error); return }
 
       toast.success(isEdit ? 'Category updated' : 'Category added')
       onSaved()

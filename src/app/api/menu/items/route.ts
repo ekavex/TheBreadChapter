@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireMenuCrudToken } from '@/lib/auth/requireMenuCrud'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 
-// POST /api/menu/items — Module 9: menu-CRUD gated (Add Menu item).
-// `category` (food/beverage) is required here — it drives KOT routing (Module 5).
+async function recordStaffAction(userId: string, action: string, description: string) {
+  const supabase = createAdminClient()
+  await supabase.from('staff_notifications').insert({
+    cafe_id: DEMO_CAFE_ID,
+    action,
+    description,
+    created_by: userId,
+  })
+}
+
+// POST /api/menu/items — Add menu item (any authenticated role; staff action is logged)
 export async function POST(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
-  const guard = await requireMenuCrudToken(req)
-  if (guard) return guard
 
   try {
     const body = await req.json()
@@ -50,6 +56,12 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+
+    const user = await getSessionUser(req)
+    if (user?.role === 'staff') {
+      await recordStaffAction(user.userId, 'item_added', `Staff added menu item "${name}"`)
+    }
+
     return NextResponse.json({ data, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create menu item'

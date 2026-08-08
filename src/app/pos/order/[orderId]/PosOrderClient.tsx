@@ -185,7 +185,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const activeCategoryItems = categories.find((c) => c.id === activeCategory)?.items ?? []
 
   return (
-    <div className="p-6 max-w-4xl mx-auto pb-32">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-32">
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>

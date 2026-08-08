@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireMenuCrudToken } from '@/lib/auth/requireMenuCrud'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { MenuItem } from '@/lib/types'
 
 type ItemPatch = Partial<
@@ -13,15 +13,20 @@ type ItemPatch = Partial<
   >
 >
 
-// PATCH /api/menu/items/[id] — Module 9: menu-CRUD gated (Edit Menu item).
-// Separate from PATCH /api/menu, which only toggles availability and is
-// intentionally left ungated (an operational sold-out toggle, not "editing
-// the menu" in the SRS's structural sense).
+async function recordStaffAction(userId: string, action: string, description: string) {
+  const supabase = createAdminClient()
+  await supabase.from('staff_notifications').insert({
+    cafe_id: DEMO_CAFE_ID,
+    action,
+    description,
+    created_by: userId,
+  })
+}
+
+// PATCH /api/menu/items/[id] — Edit menu item (staff action logged)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
-  const guard = await requireMenuCrudToken(req)
-  if (guard) return guard
 
   try {
     const body = await req.json()
@@ -52,6 +57,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       .single()
 
     if (error) throw error
+
+    const user = await getSessionUser(req)
+    if (user?.role === 'staff') {
+      const itemName = (data as { name?: string })?.name ?? params.id
+      await recordStaffAction(user.userId, 'item_updated', `Staff updated menu item "${itemName}"`)
+    }
+
     return NextResponse.json({ data, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update menu item'
@@ -59,24 +71,30 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/menu/items/[id] — Module 9: menu-CRUD gated (Delete Menu item).
+// DELETE /api/menu/items/[id] — Delete menu item (staff action logged)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
-  const guard = await requireMenuCrudToken(req)
-  if (guard) return guard
 
+  // Fetch the name before deleting for the notification
   const supabase = createAdminClient()
+  const { data: existing } = await supabase.from('menu_items').select('name').eq('id', params.id).maybeSingle()
+
   const { error } = await supabase.from('menu_items').delete().eq('id', params.id)
 
   if (error) {
-    // FK violation — item has been ordered before (order_items references it)
     const status = error.code === '23503' ? 409 : 500
     const message =
       error.code === '23503'
         ? 'This item has previous orders on record — mark it unavailable instead of deleting it'
         : error.message
     return NextResponse.json({ data: null, error: message }, { status })
+  }
+
+  const user = await getSessionUser(req)
+  if (user?.role === 'staff') {
+    const itemName = (existing as { name?: string } | null)?.name ?? params.id
+    await recordStaffAction(user.userId, 'item_deleted', `Staff deleted menu item "${itemName}"`)
   }
 
   return NextResponse.json({ data: { ok: true }, error: null })

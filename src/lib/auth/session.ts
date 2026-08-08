@@ -1,20 +1,16 @@
-// ─── Flat two-credential auth (Module 9 — no roles) ───────────
-// Not Supabase Auth. A signed, stateless token: {scope, exp} + HMAC.
-// Uses Web Crypto (SubtleCrypto), not Node's `crypto` module, so the same
-// code runs in both the Edge middleware and Node API routes.
-// Used two ways:
-//   1. Dashboard session cookie (long TTL) — set on /login success.
-//   2. Menu-CRUD action token (short TTL) — set on a successful popup
-//      credential check, then required per mutating menu request.
-import type { AuthScope } from '@/lib/types'
+// ─── HMAC-signed stateless session (RBAC-aware) ─────────────
+// Payload: { userId, role, exp }
+// Uses Web Crypto (SubtleCrypto) — runs in both Edge middleware and Node routes.
+import type { UserRole } from '@/lib/types'
 
-const SESSION_COOKIE = 'sc_session'
-const DASHBOARD_TTL_SECONDS = 12 * 60 * 60 // 12h
-const MENU_CRUD_TTL_SECONDS = 2 * 60 // 2min — re-verified per action, not a session
+export const SESSION_COOKIE_NAME = 'sc_session'
+export const ROLE_COOKIE_NAME = 'sc_role'
+export const DASHBOARD_SESSION_TTL_SECONDS = 12 * 60 * 60 // 12h
 
 interface TokenPayload {
-  scope: AuthScope
-  exp: number // unix seconds
+  userId: string
+  role: UserRole
+  exp: number
 }
 
 function base64UrlEncode(bytes: Uint8Array | ArrayBuffer): string {
@@ -61,24 +57,21 @@ async function verify(token: string | undefined | null): Promise<TokenPayload | 
   try {
     const payload = JSON.parse(base64UrlDecodeToString(body)) as TokenPayload
     if (typeof payload.exp !== 'number' || payload.exp < Math.floor(Date.now() / 1000)) return null
+    if (!payload.userId || !payload.role) return null
     return payload
   } catch {
     return null
   }
 }
 
-export async function createDashboardSessionToken(): Promise<string> {
-  return sign({ scope: 'dashboard', exp: Math.floor(Date.now() / 1000) + DASHBOARD_TTL_SECONDS })
+export async function createSession(userId: string, role: UserRole): Promise<string> {
+  return sign({ userId, role, exp: Math.floor(Date.now() / 1000) + DASHBOARD_SESSION_TTL_SECONDS })
 }
 
-export async function createMenuCrudActionToken(): Promise<string> {
-  return sign({ scope: 'menu_crud', exp: Math.floor(Date.now() / 1000) + MENU_CRUD_TTL_SECONDS })
-}
-
-export async function verifyScope(token: string | undefined | null, scope: AuthScope): Promise<boolean> {
+export async function getSession(
+  token: string | undefined | null
+): Promise<{ userId: string; role: UserRole } | null> {
   const payload = await verify(token)
-  return payload?.scope === scope
+  if (!payload) return null
+  return { userId: payload.userId, role: payload.role }
 }
-
-export const SESSION_COOKIE_NAME = SESSION_COOKIE
-export const DASHBOARD_SESSION_TTL_SECONDS = DASHBOARD_TTL_SECONDS

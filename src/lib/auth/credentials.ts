@@ -1,17 +1,20 @@
 import bcrypt from 'bcryptjs'
 import { createAdminClient } from '@/lib/supabase/server'
-import type { AuthScope } from '@/lib/types'
+import type { UserRole } from '@/lib/types'
 
-// Exactly one row per scope (`dashboard`, `menu_crud`) — no user table, no roles.
-export async function verifyCredentials(scope: AuthScope, userId: string, password: string): Promise<boolean> {
+export async function verifyCredentials(
+  userId: string,
+  password: string
+): Promise<{ role: UserRole; displayName: string } | null> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('auth_credentials')
-    .select('user_id, password_hash')
-    .eq('scope', scope)
+    .select('password_hash, role, display_name')
+    .eq('user_id', userId)
     .maybeSingle()
 
-  if (error || !data) return false
-  if (data.user_id !== userId) return false
-  return bcrypt.compare(password, data.password_hash)
+  if (error || !data) return null
+  const match = await bcrypt.compare(password, data.password_hash)
+  if (!match) return null
+  return { role: data.role as UserRole, displayName: data.display_name }
 }

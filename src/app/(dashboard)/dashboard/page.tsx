@@ -32,7 +32,7 @@ export default async function DashboardPage() {
   const data = await getDashboardData(supabase)
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <DashboardLiveRefresher />
       <div className="mb-6">
         <h1 className="font-display text-3xl font-bold text-ink">Good morning</h1>
