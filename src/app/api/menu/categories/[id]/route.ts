@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireMenuCrudToken } from '@/lib/auth/requireMenuCrud'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { MenuCategory } from '@/lib/types'
 
 type CategoryPatch = Partial<Pick<MenuCategory, 'name' | 'name_hi' | 'description' | 'sort_order' | 'is_active'>>
 
-// PATCH /api/menu/categories/[id] — Module 9: menu-CRUD gated (Edit Menu Category)
+async function recordStaffAction(userId: string, action: string, description: string) {
+  const supabase = createAdminClient()
+  await supabase.from('staff_notifications').insert({
+    cafe_id: DEMO_CAFE_ID,
+    action,
+    description,
+    created_by: userId,
+  })
+}
+
+// PATCH /api/menu/categories/[id] — Edit menu category (staff action logged)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
-  const guard = await requireMenuCrudToken(req)
-  if (guard) return guard
 
   try {
     const body = await req.json()
@@ -35,6 +43,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       .single()
 
     if (error) throw error
+
+    const user = await getSessionUser(req)
+    if (user?.role === 'staff') {
+      const catName = (data as { name?: string })?.name ?? params.id
+      await recordStaffAction(user.userId, 'category_updated', `Staff updated menu category "${catName}"`)
+    }
+
     return NextResponse.json({ data, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update category'
@@ -42,16 +57,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/menu/categories/[id] — Module 9: menu-CRUD gated (Delete Menu Category)
-// Blocks deleting a category that still has items — the DB would otherwise
-// CASCADE-delete them, which is too destructive for a single click.
+// DELETE /api/menu/categories/[id] — Delete menu category (staff action logged)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
-  const guard = await requireMenuCrudToken(req)
-  if (guard) return guard
 
   const supabase = createAdminClient()
+  const { data: existing } = await supabase.from('menu_categories').select('name').eq('id', params.id).maybeSingle()
+
   const { count } = await supabase
     .from('menu_items')
     .select('id', { count: 'exact', head: true })
@@ -66,6 +79,12 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const { error } = await supabase.from('menu_categories').delete().eq('id', params.id)
   if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
+
+  const user = await getSessionUser(req)
+  if (user?.role === 'staff') {
+    const catName = (existing as { name?: string } | null)?.name ?? params.id
+    await recordStaffAction(user.userId, 'category_deleted', `Staff deleted menu category "${catName}"`)
+  }
 
   return NextResponse.json({ data: { ok: true }, error: null })
 }

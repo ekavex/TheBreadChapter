@@ -2,6 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import type { UserRole } from '@/lib/types'
+
+function defaultRedirect(role: UserRole): string {
+  if (role === 'staff') return '/pos'
+  return '/dashboard'
+}
 
 export default function LoginForm() {
   const router = useRouter()
@@ -26,7 +32,9 @@ export default function LoginForm() {
         setError(json.error ?? 'Login failed')
         return
       }
-      router.push(searchParams.get('next') ?? '/dashboard')
+      const role: UserRole = json.data?.role ?? 'manager'
+      const next = searchParams.get('next') ?? defaultRedirect(role)
+      router.push(next)
       router.refresh()
     } finally {
       setLoading(false)

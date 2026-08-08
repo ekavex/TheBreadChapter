@@ -1,12 +1,11 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChefHat, Plus, Pencil, Trash2, Eye, EyeOff, UtensilsCrossed, Coffee } from 'lucide-react'
+import { ChefHat, Plus, Pencil, Trash2, Eye, EyeOff, UtensilsCrossed, Coffee, Search, X } from 'lucide-react'
 import type { MenuCategory, MenuItem, Ingredient } from '@/lib/types'
 import { formatPaisa, rupeesToPaisa } from '@/lib/money'
 import toast from 'react-hot-toast'
 import RecipeModal from './RecipeModal'
-import MenuCrudGateModal from './MenuCrudGateModal'
 import ItemModal from './ItemModal'
 import CategoryModal from './CategoryModal'
 
@@ -15,22 +14,11 @@ interface Props {
   ingredients: Ingredient[]
 }
 
-type Gate =
+type ModalKind =
   | { kind: 'add-category' }
   | { kind: 'edit-category'; category: MenuCategory }
-  | { kind: 'delete-category'; category: MenuCategory }
   | { kind: 'add-item'; category: MenuCategory }
   | { kind: 'edit-item'; item: MenuItem }
-  | { kind: 'delete-item'; item: MenuItem }
-
-const GATE_LABELS: Record<Gate['kind'], string> = {
-  'add-category':    'Add Menu Category',
-  'edit-category':   'Edit Menu Category',
-  'delete-category': 'Delete Menu Category',
-  'add-item':        'Add Menu Item',
-  'edit-item':       'Edit Menu Item',
-  'delete-item':     'Delete Menu Item',
-}
 
 function ItemCard({
   item,
@@ -49,54 +37,40 @@ function ItemCard({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const sellingPricePaisa = rupeesToPaisa(item.price)
-  const hasRecipe = item.cost_price_paisa > 0
-  const profitPaisa = sellingPricePaisa - item.cost_price_paisa
-  const profitPct = hasRecipe && sellingPricePaisa > 0
-    ? Math.round((profitPaisa / sellingPricePaisa) * 100)
-    : null
+  const costPaisa = item.cost_price_paisa ?? 0
+  const hasRecipe = costPaisa > 0
+  const pricePaisa = rupeesToPaisa(item.price)
+  const profitPaisa = pricePaisa - costPaisa
+  const profitPct = hasRecipe ? Math.round((profitPaisa / pricePaisa) * 100) : null
 
   return (
-    <div className={`bg-white rounded-2xl border flex flex-col transition-all ${
-      item.is_available ? 'border-ink/8 shadow-sm' : 'border-ink/5 opacity-60'
-    }`}>
-      {/* Card top: veg dot + category + availability */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-3">
+    <div className="flex flex-col bg-surface-raised rounded-2xl border border-ink/8 overflow-hidden h-full">
+      {/* Availability toggle + category pill */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="flex items-center gap-2">
-          {/* Veg / non-veg indicator */}
-          <span className={`w-4 h-4 rounded-sm border-2 flex-shrink-0 ${
-            item.is_veg ? 'border-green-500' : 'border-red-500'
-          }`}>
-            <span className={`block w-2 h-2 rounded-full m-0.5 ${
-              item.is_veg ? 'bg-green-500' : 'bg-red-500'
-            }`} />
-          </span>
-          {/* Food / beverage badge */}
-          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-            item.category === 'beverage'
-              ? 'bg-sky-50 text-sky-600'
-              : 'bg-amber-50 text-amber-600'
-          }`}>
-            {item.category === 'beverage' ? <Coffee size={9} /> : <UtensilsCrossed size={9} />}
+          {item.category === 'beverage'
+            ? <Coffee size={13} className="text-ink-faint" />
+            : <UtensilsCrossed size={13} className="text-ink-faint" />}
+          <span className="text-[10px] font-medium text-ink-faint uppercase tracking-wide">
             {item.category}
           </span>
+          {item.is_veg && (
+            <span className="w-3.5 h-3.5 rounded-sm border-2 border-green-500 flex items-center justify-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            </span>
+          )}
         </div>
-
-        {/* Availability toggle */}
         <button
           onClick={onToggle}
           disabled={toggling}
           title={item.is_available ? 'Mark unavailable' : 'Mark available'}
-          className={`text-xs font-medium px-2.5 py-1 rounded-full transition-colors disabled:opacity-40 ${
+          className={`p-1.5 rounded-lg transition-colors ${
             item.is_available
-              ? 'bg-emerald-50 text-emerald-700 hover:bg-red-50 hover:text-red-600'
-              : 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'
-          }`}
+              ? 'text-green-600 hover:bg-red-50 hover:text-red-500'
+              : 'text-ink-faint hover:bg-green-50 hover:text-green-600'
+          } disabled:opacity-40`}
         >
-          {item.is_available
-            ? <span className="flex items-center gap-1"><Eye size={11} /> On</span>
-            : <span className="flex items-center gap-1"><EyeOff size={11} /> Off</span>
-          }
+          {item.is_available ? <Eye size={14} /> : <EyeOff size={14} />}
         </button>
       </div>
 
@@ -122,8 +96,6 @@ function ItemCard({
             </span>
           )}
         </div>
-
-        {/* Cost & profit row */}
         <div className="flex items-center gap-3 mt-1.5 text-xs">
           {hasRecipe ? (
             <>
@@ -174,9 +146,9 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
   const [activeCategory, setActiveCategory] = useState<string | 'all'>('all')
   const [toggling, setToggling] = useState<string | null>(null)
   const [recipeFor, setRecipeFor] = useState<MenuItem | null>(null)
-  const [pendingGate, setPendingGate] = useState<Gate | null>(null)
-  const [verifiedGate, setVerifiedGate] = useState<{ token: string; gate: Gate } | null>(null)
+  const [activeModal, setActiveModal] = useState<ModalKind | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [search, setSearch] = useState('')
 
   const totalItems = categories.reduce((s, c) => s + (c.items?.length ?? 0), 0)
   const unavailable = categories.reduce(
@@ -202,56 +174,41 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
     }
   }
 
-  function refresh() {
-    setVerifiedGate(null)
-    router.refresh()
+  async function deleteCategory(cat: MenuCategory) {
+    if (!confirm(`Delete category "${cat.name}"?`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/menu/categories/${cat.id}`, { method: 'DELETE' })
+      const { error } = await res.json()
+      if (error) throw new Error(error)
+      toast.success('Category deleted')
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeleting(false)
+    }
   }
 
-  async function handleGateVerified(token: string) {
-    const gate = pendingGate!
-    setPendingGate(null)
-
-    if (gate.kind === 'delete-category') {
-      if (!confirm(`Delete category "${gate.category.name}"?`)) return
-      setDeleting(true)
-      try {
-        const res = await fetch(`/api/menu/categories/${gate.category.id}`, {
-          method: 'DELETE',
-          headers: { 'x-menu-crud-token': token },
-        })
-        const { error } = await res.json()
-        if (error) throw new Error(error)
-        toast.success('Category deleted')
-        router.refresh()
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Delete failed')
-      } finally {
-        setDeleting(false)
-      }
-      return
+  async function deleteItem(item: MenuItem) {
+    if (!confirm(`Delete "${item.name}"?`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/menu/items/${item.id}`, { method: 'DELETE' })
+      const { error } = await res.json()
+      if (error) throw new Error(error)
+      toast.success('Item deleted')
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeleting(false)
     }
+  }
 
-    if (gate.kind === 'delete-item') {
-      if (!confirm(`Delete "${gate.item.name}"?`)) return
-      setDeleting(true)
-      try {
-        const res = await fetch(`/api/menu/items/${gate.item.id}`, {
-          method: 'DELETE',
-          headers: { 'x-menu-crud-token': token },
-        })
-        const { error } = await res.json()
-        if (error) throw new Error(error)
-        toast.success('Item deleted')
-        router.refresh()
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Delete failed')
-      } finally {
-        setDeleting(false)
-      }
-      return
-    }
-
-    setVerifiedGate({ token, gate })
+  function refresh() {
+    setActiveModal(null)
+    router.refresh()
   }
 
   // Which categories to show in the grid
@@ -259,26 +216,94 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
     ? categories
     : categories.filter(c => c.id === activeCategory)
 
-  const activeCat = categories.find(c => c.id === activeCategory)
+  // Search across all categories
+  const searchQuery = search.trim().toLowerCase()
+  const isSearching = searchQuery.length > 0
+  const searchResults: (MenuItem & { categoryName: string })[] = isSearching
+    ? categories.flatMap(cat =>
+        (cat.items ?? [])
+          .filter(item => {
+            const name = item.name.toLowerCase()
+            const desc = (item.description ?? '').toLowerCase()
+            return name.includes(searchQuery) || desc.includes(searchQuery)
+          })
+          .map(item => ({ ...item, categoryName: cat.name }))
+      )
+    : []
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
 
       {/* ── Page header ── */}
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Menu Manager</h1>
           <p className="text-ink-muted text-sm mt-0.5">
-            {totalItems} items across {categories.length} categories · {unavailable} unavailable
+            {totalItems} items · {categories.length} categories · {unavailable} unavailable
           </p>
         </div>
         <button
-          onClick={() => setPendingGate({ kind: 'add-category' })}
+          onClick={() => setActiveModal({ kind: 'add-category' })}
           className="flex items-center gap-1.5 rounded-xl bg-ink text-surface px-4 py-2.5 text-sm font-medium shrink-0"
         >
           <Plus size={15} /> Add Category
         </button>
       </div>
+
+      {/* ── Search bar ── */}
+      <div className="relative mb-5">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+        <input
+          type="search"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search items by name or description…"
+          className="w-full rounded-xl border border-ink/10 bg-white pl-9 pr-9 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-ink-muted hover:text-ink transition-colors"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* ── Search results ── */}
+      {isSearching ? (
+        <div>
+          <p className="text-xs text-ink-faint mb-4">
+            {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{search.trim()}&rdquo;
+          </p>
+          {searchResults.length === 0 ? (
+            <div className="border-2 border-dashed border-ink/8 rounded-2xl p-12 text-center">
+              <Search size={24} className="mx-auto text-ink-faint mb-3" />
+              <p className="text-ink-muted text-sm">No items match your search</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {searchResults.map(item => (
+                <div key={item.id} className="relative">
+                  <span className="absolute -top-2 left-3 z-10 text-[10px] font-semibold text-ink-faint bg-surface-overlay border border-ink/8 px-2 py-0.5 rounded-full">
+                    {item.categoryName}
+                  </span>
+                  <ItemCard
+                    item={item}
+                    toggling={toggling === item.id}
+                    deleting={deleting}
+                    onToggle={() => toggleAvailability(item)}
+                    onRecipe={() => setRecipeFor(item)}
+                    onEdit={() => setActiveModal({ kind: 'edit-item', item })}
+                    onDelete={() => deleteItem(item)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
 
       {/* ── Category tab bar ── */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-6">
@@ -334,20 +359,20 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
                 {/* Category actions */}
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setPendingGate({ kind: 'add-item', category: cat })}
+                    onClick={() => setActiveModal({ kind: 'add-item', category: cat })}
                     className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink px-2.5 py-1.5 rounded-lg hover:bg-surface-overlay transition-colors"
                   >
                     <Plus size={13} /> Add item
                   </button>
                   <button
-                    onClick={() => setPendingGate({ kind: 'edit-category', category: cat })}
+                    onClick={() => setActiveModal({ kind: 'edit-category', category: cat })}
                     title="Edit category"
                     className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors"
                   >
                     <Pencil size={14} />
                   </button>
                   <button
-                    onClick={() => setPendingGate({ kind: 'delete-category', category: cat })}
+                    onClick={() => deleteCategory(cat)}
                     disabled={deleting}
                     title="Delete category"
                     className="p-1.5 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
@@ -362,7 +387,7 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
                 <div className="border-2 border-dashed border-ink/8 rounded-2xl p-8 text-center">
                   <p className="text-ink-faint text-sm">No items in this category yet.</p>
                   <button
-                    onClick={() => setPendingGate({ kind: 'add-item', category: cat })}
+                    onClick={() => setActiveModal({ kind: 'add-item', category: cat })}
                     className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
                   >
                     + Add first item
@@ -378,8 +403,8 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
                       deleting={deleting}
                       onToggle={() => toggleAvailability(item)}
                       onRecipe={() => setRecipeFor(item)}
-                      onEdit={() => setPendingGate({ kind: 'edit-item', item })}
-                      onDelete={() => setPendingGate({ kind: 'delete-item', item })}
+                      onEdit={() => setActiveModal({ kind: 'edit-item', item })}
+                      onDelete={() => deleteItem(item)}
                     />
                   ))}
                 </div>
@@ -389,7 +414,10 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
         })}
       </div>
 
-      {/* ── Modals (unchanged) ── */}
+        </>
+      )}
+
+      {/* ── Modals ── */}
       {recipeFor && (
         <RecipeModal
           menuItem={recipeFor}
@@ -399,40 +427,25 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
         />
       )}
 
-      {pendingGate && (
-        <MenuCrudGateModal
-          actionLabel={GATE_LABELS[pendingGate.kind]}
-          onVerified={handleGateVerified}
-          onCancel={() => setPendingGate(null)}
-        />
+      {activeModal?.kind === 'add-category' && (
+        <CategoryModal onClose={() => setActiveModal(null)} onSaved={refresh} />
       )}
-
-      {verifiedGate?.gate.kind === 'add-category' && (
-        <CategoryModal token={verifiedGate.token} onClose={() => setVerifiedGate(null)} onSaved={refresh} />
+      {activeModal?.kind === 'edit-category' && (
+        <CategoryModal category={activeModal.category} onClose={() => setActiveModal(null)} onSaved={refresh} />
       )}
-      {verifiedGate?.gate.kind === 'edit-category' && (
-        <CategoryModal
-          category={verifiedGate.gate.category}
-          token={verifiedGate.token}
-          onClose={() => setVerifiedGate(null)}
+      {activeModal?.kind === 'add-item' && (
+        <ItemModal
+          categories={categories}
+          defaultCategoryId={activeModal.category.id}
+          onClose={() => setActiveModal(null)}
           onSaved={refresh}
         />
       )}
-      {verifiedGate?.gate.kind === 'add-item' && (
+      {activeModal?.kind === 'edit-item' && (
         <ItemModal
+          item={activeModal.item}
           categories={categories}
-          defaultCategoryId={verifiedGate.gate.category.id}
-          token={verifiedGate.token}
-          onClose={() => setVerifiedGate(null)}
-          onSaved={refresh}
-        />
-      )}
-      {verifiedGate?.gate.kind === 'edit-item' && (
-        <ItemModal
-          item={verifiedGate.gate.item}
-          categories={categories}
-          token={verifiedGate.token}
-          onClose={() => setVerifiedGate(null)}
+          onClose={() => setActiveModal(null)}
           onSaved={refresh}
         />
       )}

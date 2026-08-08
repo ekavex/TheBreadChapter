@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyScope, SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 
-// Gates /dashboard and /pos behind the single dashboard-access credential
-// (Module 9 — no roles, just one gate). Menu-CRUD is a separate, per-action
-// popup check enforced at the API route level, not here.
 export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value
-  const ok = await verifyScope(token, 'dashboard')
+  const session = await getSession(token)
+  const { pathname } = req.nextUrl
 
-  if (!ok) {
+  if (!session) {
     const loginUrl = new URL('/login', req.url)
-    loginUrl.searchParams.set('next', req.nextUrl.pathname)
+    loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
+  }
+
+  const { role } = session
+
+  // Admin-only area
+  if (pathname.startsWith('/dashboard/admin')) {
+    if (role !== 'admin') {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+  }
+
+  // Staff can only access POS and menu-manager within the dashboard
+  if (pathname.startsWith('/dashboard') && role === 'staff') {
+    if (!pathname.startsWith('/dashboard/menu-manager')) {
+      return NextResponse.redirect(new URL('/pos', req.url))
+    }
   }
 
   return NextResponse.next()

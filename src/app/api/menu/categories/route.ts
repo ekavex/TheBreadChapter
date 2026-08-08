@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireMenuCrudToken } from '@/lib/auth/requireMenuCrud'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 
-// POST /api/menu/categories — Module 9: menu-CRUD gated (Add Menu Category)
+async function recordStaffAction(userId: string, action: string, description: string) {
+  const supabase = createAdminClient()
+  await supabase.from('staff_notifications').insert({
+    cafe_id: DEMO_CAFE_ID,
+    action,
+    description,
+    created_by: userId,
+  })
+}
+
+// POST /api/menu/categories — Add menu category (staff action logged)
 export async function POST(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
-  const guard = await requireMenuCrudToken(req)
-  if (guard) return guard
 
   try {
     const body = await req.json()
@@ -33,6 +40,12 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+
+    const user = await getSessionUser(req)
+    if (user?.role === 'staff') {
+      await recordStaffAction(user.userId, 'category_added', `Staff added menu category "${name}"`)
+    }
+
     return NextResponse.json({ data, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create category'

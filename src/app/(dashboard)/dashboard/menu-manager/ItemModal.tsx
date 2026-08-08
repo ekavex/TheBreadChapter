@@ -8,12 +8,11 @@ interface Props {
   item?: MenuItem | null
   categories: MenuCategory[]
   defaultCategoryId?: string
-  token: string
   onClose: () => void
   onSaved: () => void
 }
 
-export default function ItemModal({ item, categories, defaultCategoryId, token, onClose, onSaved }: Props) {
+export default function ItemModal({ item, categories, defaultCategoryId, onClose, onSaved }: Props) {
   const isEdit = !!item
   const [categoryId, setCategoryId] = useState(item?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? '')
   const [name, setName] = useState(item?.name ?? '')
@@ -45,15 +44,11 @@ export default function ItemModal({ item, categories, defaultCategoryId, token, 
 
       const res = await fetch(isEdit ? `/api/menu/items/${item!.id}` : '/api/menu/items', {
         method: isEdit ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-menu-crud-token': token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       const { error } = await res.json()
-      if (error) {
-        if (res.status === 401) toast.error('Menu session expired — click Add/Edit again to re-verify')
-        else toast.error(error)
-        return
-      }
+      if (error) { toast.error(error); return }
 
       toast.success(isEdit ? 'Item updated' : 'Item added')
       onSaved()

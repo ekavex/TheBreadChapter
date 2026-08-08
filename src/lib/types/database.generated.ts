@@ -38,25 +38,66 @@ export type Database = {
         Row: {
           id: string
           password_hash: string
-          scope: string
+          role: string
+          display_name: string
           updated_at: string
           user_id: string
         }
         Insert: {
           id?: string
           password_hash: string
-          scope: string
+          role: string
+          display_name?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           id?: string
           password_hash?: string
-          scope?: string
+          role?: string
+          display_name?: string
           updated_at?: string
           user_id?: string
         }
         Relationships: []
+      }
+      staff_notifications: {
+        Row: {
+          id: string
+          cafe_id: string
+          action: string
+          description: string
+          created_by: string
+          is_read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          cafe_id: string
+          action: string
+          description: string
+          created_by: string
+          is_read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          cafe_id?: string
+          action?: string
+          description?: string
+          created_by?: string
+          is_read?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'staff_notifications_cafe_id_fkey'
+            columns: ['cafe_id']
+            isOneToOne: false
+            referencedRelation: 'cafes'
+            referencedColumns: ['id']
+          }
+        ]
       }
       cafes: {
         Row: {
