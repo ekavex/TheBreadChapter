@@ -4,8 +4,7 @@ import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { UserRole } from '@/lib/types'
 
-function defaultRedirect(role: UserRole): string {
-  if (role === 'staff') return '/pos'
+function defaultRedirect(_role: UserRole): string {
   return '/dashboard'
 }
 

@@ -21,13 +21,6 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // Staff can only access POS and menu-manager within the dashboard
-  if (pathname.startsWith('/dashboard') && role === 'staff') {
-    if (!pathname.startsWith('/dashboard/menu-manager')) {
-      return NextResponse.redirect(new URL('/pos', req.url))
-    }
-  }
-
   return NextResponse.next()
 }
 
