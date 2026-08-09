@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env.local
+.env*.local
+node_modules
+.next
+out
+coverage
+README.md
+docs
+*.md
+.dockerignore
+Dockerfile
+scripts
