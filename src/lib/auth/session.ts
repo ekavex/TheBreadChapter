@@ -10,6 +10,7 @@ export const DASHBOARD_SESSION_TTL_SECONDS = 12 * 60 * 60 // 12h
 interface TokenPayload {
   userId: string
   role: UserRole
+  displayName: string
   exp: number
 }
 
@@ -58,20 +59,21 @@ async function verify(token: string | undefined | null): Promise<TokenPayload | 
     const payload = JSON.parse(base64UrlDecodeToString(body)) as TokenPayload
     if (typeof payload.exp !== 'number' || payload.exp < Math.floor(Date.now() / 1000)) return null
     if (!payload.userId || !payload.role) return null
+    payload.displayName = payload.displayName ?? ''
     return payload
   } catch {
     return null
   }
 }
 
-export async function createSession(userId: string, role: UserRole): Promise<string> {
-  return sign({ userId, role, exp: Math.floor(Date.now() / 1000) + DASHBOARD_SESSION_TTL_SECONDS })
+export async function createSession(userId: string, role: UserRole, displayName: string): Promise<string> {
+  return sign({ userId, role, displayName, exp: Math.floor(Date.now() / 1000) + DASHBOARD_SESSION_TTL_SECONDS })
 }
 
 export async function getSession(
   token: string | undefined | null
-): Promise<{ userId: string; role: UserRole } | null> {
+): Promise<{ userId: string; role: UserRole; displayName: string } | null> {
   const payload = await verify(token)
   if (!payload) return null
-  return { userId: payload.userId, role: payload.role }
+  return { userId: payload.userId, role: payload.role, displayName: payload.displayName }
 }

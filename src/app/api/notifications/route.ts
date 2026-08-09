@@ -112,13 +112,13 @@ export async function GET(req: NextRequest) {
     })
 
     // ── Staff menu change notifications ───────────────────────
-    type StaffRow = { id: string; description: string; created_at: string }
+    type StaffRow = { id: string; description: string; created_by: string; created_at: string }
     ;(staffNotifResult.data ?? []).forEach(n => {
       const row = n as StaffRow
       notifications.push({
         id: `staff-${row.id}`,
         severity: 'info',
-        title: 'Menu updated by staff',
+        title: `Menu change by ${row.created_by}`,
         body: row.description,
         href: '/dashboard/menu-manager',
         createdAt: row.created_at,

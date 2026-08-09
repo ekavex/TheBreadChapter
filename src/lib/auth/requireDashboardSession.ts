@@ -16,7 +16,7 @@ export async function requireDashboardSession(req: NextRequest): Promise<NextRes
 // Returns the authenticated user or null — for routes that need to act on role.
 export async function getSessionUser(
   req: NextRequest
-): Promise<{ userId: string; role: UserRole } | null> {
+): Promise<{ userId: string; role: UserRole; displayName: string } | null> {
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value
   return getSession(token)
 }

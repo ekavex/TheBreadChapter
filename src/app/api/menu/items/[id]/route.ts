@@ -60,8 +60,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const user = await getSessionUser(req)
     if (user?.role === 'staff') {
+      const who = user.displayName || user.userId
       const itemName = (data as { name?: string })?.name ?? params.id
-      await recordStaffAction(user.userId, 'item_updated', `Staff updated menu item "${itemName}"`)
+      await recordStaffAction(user.userId, 'item_updated', `${who} updated menu item: "${itemName}"`)
     }
 
     return NextResponse.json({ data, error: null })
@@ -93,8 +94,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const user = await getSessionUser(req)
   if (user?.role === 'staff') {
+    const who = user.displayName || user.userId
     const itemName = (existing as { name?: string } | null)?.name ?? params.id
-    await recordStaffAction(user.userId, 'item_deleted', `Staff deleted menu item "${itemName}"`)
+    await recordStaffAction(user.userId, 'item_deleted', `${who} deleted menu item: "${itemName}"`)
   }
 
   return NextResponse.json({ data: { ok: true }, error: null })
