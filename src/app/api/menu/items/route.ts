@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
 
     const user = await getSessionUser(req)
     if (user?.role === 'staff') {
-      await recordStaffAction(user.userId, 'item_added', `Staff added menu item "${name}"`)
+      const who = user.displayName || user.userId
+      await recordStaffAction(user.userId, 'item_added', `${who} added a new menu item: "${name}"`)
     }
 
     return NextResponse.json({ data, error: null })

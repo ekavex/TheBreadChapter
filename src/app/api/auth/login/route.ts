@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { role, displayName } = result
-  const token = await createSession(userId, role)
+  const token = await createSession(userId, role, displayName)
 
   const cookieOpts = {
     secure: process.env.NODE_ENV === 'production',
