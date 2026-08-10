@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { getReportData, type ReportRange } from '@/lib/reports'
 import { reportToCsv, reportToExcelBuffer, reportToPdfBuffer } from '@/lib/reports-export'
@@ -20,8 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: { range: strin
     return NextResponse.json({ data: null, error: 'format must be csv|excel|pdf' }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
-  const data = await getReportData(supabase, params.range as ReportRange)
+  const data = await getReportData(params.range as ReportRange)
   const rangeLabel = params.range
 
   if (format === 'csv') {

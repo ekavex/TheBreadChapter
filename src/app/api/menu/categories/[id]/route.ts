@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { MenuCategory } from '@/lib/types'
@@ -7,13 +7,8 @@ import type { MenuCategory } from '@/lib/types'
 type CategoryPatch = Partial<Pick<MenuCategory, 'name' | 'name_hi' | 'description' | 'sort_order' | 'is_active'>>
 
 async function recordStaffAction(userId: string, action: string, description: string) {
-  const supabase = createAdminClient()
-  await supabase.from('staff_notifications').insert({
-    cafe_id: DEMO_CAFE_ID,
-    action,
-    description,
-    created_by: userId,
-  })
+  const sql = getDb()
+  await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
 }
 
 // PATCH /api/menu/categories/[id] — Edit menu category (staff action logged)
@@ -34,15 +29,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ data: null, error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('menu_categories')
-      .update(updateData)
-      .eq('id', params.id)
-      .select()
-      .single()
-
-    if (error) throw error
+    const sql = getDb()
+    const [data] = await sql`UPDATE menu_categories SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
 
     const user = await getSessionUser(req)
     if (user?.role === 'staff') {
@@ -63,30 +51,31 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
 
-  const supabase = createAdminClient()
-  const { data: existing } = await supabase.from('menu_categories').select('name').eq('id', params.id).maybeSingle()
+  try {
+    const sql = getDb()
+    const [existing] = await sql`SELECT name FROM menu_categories WHERE id = ${params.id}`
 
-  const { count } = await supabase
-    .from('menu_items')
-    .select('id', { count: 'exact', head: true })
-    .eq('category_id', params.id)
+    const [{ count }] = await sql`SELECT count(*) FROM menu_items WHERE category_id = ${params.id}`
 
-  if (count && count > 0) {
-    return NextResponse.json(
-      { data: null, error: `This category still has ${count} item(s) — delete or move them first` },
-      { status: 409 }
-    )
+    if (Number(count) > 0) {
+      return NextResponse.json(
+        { data: null, error: `This category still has ${count} item(s) — delete or move them first` },
+        { status: 409 }
+      )
+    }
+
+    await sql`DELETE FROM menu_categories WHERE id = ${params.id}`
+
+    const user = await getSessionUser(req)
+    if (user?.role === 'staff') {
+      const who = user.displayName || user.userId
+      const catName = (existing as { name?: string } | undefined)?.name ?? params.id
+      await recordStaffAction(user.userId, 'category_deleted', `${who} deleted menu category: "${catName}"`)
+    }
+
+    return NextResponse.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete category'
+    return NextResponse.json({ data: null, error: message }, { status: 500 })
   }
-
-  const { error } = await supabase.from('menu_categories').delete().eq('id', params.id)
-  if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
-
-  const user = await getSessionUser(req)
-  if (user?.role === 'staff') {
-    const who = user.displayName || user.userId
-    const catName = (existing as { name?: string } | null)?.name ?? params.id
-    await recordStaffAction(user.userId, 'category_deleted', `${who} deleted menu category: "${catName}"`)
-  }
-
-  return NextResponse.json({ data: { ok: true }, error: null })
 }

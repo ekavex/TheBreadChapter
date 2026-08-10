@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { getCustomerAnalytics } from '@/lib/analytics'
 
@@ -11,7 +10,6 @@ export async function GET(req: NextRequest) {
   if (sessionGuard) return sessionGuard
 
   const days = Number(new URL(req.url).searchParams.get('days') ?? '30')
-  const supabase = createAdminClient()
-  const data = await getCustomerAnalytics(supabase, days)
+  const data = await getCustomerAnalytics(days)
   return NextResponse.json({ data, error: null })
 }

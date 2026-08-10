@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 
 async function recordStaffAction(userId: string, action: string, description: string) {
-  const supabase = createAdminClient()
-  await supabase.from('staff_notifications').insert({
-    cafe_id: DEMO_CAFE_ID,
-    action,
-    description,
-    created_by: userId,
-  })
+  const sql = getDb()
+  await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
 }
 
 // POST /api/menu/categories — Add menu category (staff action logged)
@@ -26,20 +21,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data: null, error: 'name is required' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('menu_categories')
-      .insert({
-        cafe_id: DEMO_CAFE_ID,
-        name,
-        name_hi: name_hi || null,
-        description: description || null,
-        sort_order: sort_order ?? 0,
-      })
-      .select()
-      .single()
-
-    if (error) throw error
+    const sql = getDb()
+    const [data] = await sql`
+      INSERT INTO menu_categories (cafe_id, name, name_hi, description, sort_order)
+      VALUES (
+        ${DEMO_CAFE_ID},
+        ${name},
+        ${name_hi || null},
+        ${description || null},
+        ${sort_order ?? 0}
+      )
+      RETURNING *
+    `
 
     const user = await getSessionUser(req)
     if (user?.role === 'staff') {

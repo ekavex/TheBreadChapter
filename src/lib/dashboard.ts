@@ -1,13 +1,10 @@
 // Module 10 "Live Dashboard" — today's sales/profit, low-stock items, top
 // seller, most-visited area, peak hour, pending orders, inventory value,
-// live table statuses. Shared by the server-rendered overview page and
-// GET /api/dashboard so the two never drift out of sync.
+// live table statuses.
 import { startOfDay, endOfDay } from 'date-fns'
+import { getDb } from '@/lib/db'
 import { DEMO_CAFE_ID } from '@/lib/constants'
-import type { createAdminClient } from '@/lib/supabase/server'
 import type { Ingredient, Section, Table } from '@/lib/types'
-
-type Supabase = ReturnType<typeof createAdminClient>
 
 export interface NamedCount {
   name: string
@@ -15,8 +12,8 @@ export interface NamedCount {
 }
 
 export interface DashboardData {
-  todaysSales: number // rupees
-  todaysProfit: number // rupees
+  todaysSales: number
+  todaysProfit: number
   ordersToday: number
   avgOrderValue: number
   topSellerToday: NamedCount | null
@@ -29,36 +26,77 @@ export interface DashboardData {
   sections: { section: Section; tables: Table[] }[]
 }
 
-export async function getDashboardData(supabase: Supabase): Promise<DashboardData> {
+export async function getDashboardData(): Promise<DashboardData> {
+  const sql = getDb()
   const today = new Date()
   const startISO = startOfDay(today).toISOString()
   const endISO = endOfDay(today).toISOString()
 
-  const { data: todaysOrdersRaw } = await supabase
-    .from('orders')
-    .select('*, items:order_items(*, menu_item:menu_items(cost_price_paisa)), table:tables(section:sections(name))')
-    .eq('cafe_id', DEMO_CAFE_ID)
-    .gte('created_at', startISO)
-    .lte('created_at', endISO)
-    .neq('pos_status', 'OPEN')
+  // Fetch all today's orders (excluding bare OPEN orders with no items)
+  const allOrders = await sql`
+    SELECT o.id, o.total_amount, o.payment_status, o.created_at, o.table_id
+    FROM orders o
+    WHERE o.cafe_id = ${DEMO_CAFE_ID}
+      AND o.created_at >= ${startISO}
+      AND o.created_at <= ${endISO}
+      AND o.pos_status != 'OPEN'
+  `
 
-  const todaysOrders = todaysOrdersRaw ?? []
+  // Fetch items (with cost) and section name for those orders in parallel
+  type OrderRow = { id: string; total_amount: number; payment_status: string; created_at: string; table_id: string | null }
+  type Item = { order_id: string; name: string; quantity: number; cost_price_paisa: number | null }
+
+  const ordArr = allOrders as unknown as OrderRow[]
+  const orderIds = ordArr.map((o) => o.id)
+  const tableIds = Array.from(new Set(ordArr.map((o) => o.table_id).filter((id): id is string => !!id)))
+
+  const [allItems, allTables] = await Promise.all([
+    orderIds.length
+      ? sql`
+          SELECT oi.order_id, oi.name, oi.quantity, mi.cost_price_paisa
+          FROM order_items oi
+          LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+          WHERE oi.order_id = ANY(${sql.array(orderIds)}::uuid[])
+        `
+      : Promise.resolve([]),
+    tableIds.length
+      ? sql`
+          SELECT t.id, s.name AS section_name
+          FROM tables t
+          LEFT JOIN sections s ON s.id = t.section_id
+          WHERE t.id = ANY(${sql.array(tableIds)}::uuid[])
+        `
+      : Promise.resolve([]),
+  ])
+
+  // Build lookup maps
+  const itemsByOrder = new Map<string, Item[]>()
+  for (const item of allItems as unknown as Item[]) {
+    const list = itemsByOrder.get(item.order_id) ?? []
+    list.push(item)
+    itemsByOrder.set(item.order_id, list)
+  }
+  const sectionByTable = new Map<string, string>((allTables as unknown as { id: string; section_name: string | null }[]).map((t) => [t.id, t.section_name ?? 'Unseated']))
+
+  const todaysOrders = ordArr.map((o) => ({
+    ...o,
+    items: itemsByOrder.get(o.id) ?? [],
+    sectionName: o.table_id ? (sectionByTable.get(o.table_id) ?? 'Unseated') : null,
+  }))
+
   const paidOrders = todaysOrders.filter((o) => o.payment_status === 'paid')
-
   const todaysSales = paidOrders.reduce((sum, o) => sum + o.total_amount, 0)
   const todaysCost = paidOrders.reduce((sum, o) => {
-    const orderCost = (o.items ?? []).reduce(
-      (s, i) => s + ((i.menu_item?.cost_price_paisa ?? 0) / 100) * i.quantity,
-      0
-    )
-    return sum + orderCost
+    return sum + o.items.reduce((s, i) => s + ((i.cost_price_paisa ?? 0) / 100) * i.quantity, 0)
   }, 0)
   const todaysProfit = todaysSales - todaysCost
 
   const itemCounts: Record<string, number> = {}
-  todaysOrders.forEach((o) => (o.items ?? []).forEach((i) => {
-    itemCounts[i.name] = (itemCounts[i.name] ?? 0) + i.quantity
-  }))
+  todaysOrders.forEach((o) =>
+    o.items.forEach((i) => {
+      itemCounts[i.name] = (itemCounts[i.name] ?? 0) + i.quantity
+    })
+  )
   const topItemsToday = Object.entries(itemCounts)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
@@ -66,8 +104,7 @@ export async function getDashboardData(supabase: Supabase): Promise<DashboardDat
 
   const areaCounts: Record<string, number> = {}
   todaysOrders.forEach((o) => {
-    const sectionName = o.table?.section?.name
-    if (sectionName) areaCounts[sectionName] = (areaCounts[sectionName] ?? 0) + 1
+    if (o.sectionName) areaCounts[o.sectionName] = (areaCounts[o.sectionName] ?? 0) + 1
   })
   const mostVisitedEntry = Object.entries(areaCounts).sort((a, b) => b[1] - a[1])[0]
   const mostVisitedArea = mostVisitedEntry ? { name: mostVisitedEntry[0], count: mostVisitedEntry[1] } : null
@@ -80,30 +117,26 @@ export async function getDashboardData(supabase: Supabase): Promise<DashboardDat
   const peakHourEntry = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
   const peakHour = peakHourEntry ? { hour: Number(peakHourEntry[0]), count: peakHourEntry[1] } : null
 
-  // Excludes pos_status 'OPEN' — a table that was tapped but never had an
-  // item added stays status='pending' forever with total_amount=0, which
-  // would otherwise inflate this count with orders nothing was ever placed
-  // for. "Active" here means actually sent to the kitchen (KOT_SENT and
-  // beyond), matching the "in kitchen now" label on the dashboard tile.
-  const { count: pendingOrders } = await supabase
-    .from('orders')
-    .select('id', { count: 'exact', head: true })
-    .eq('cafe_id', DEMO_CAFE_ID)
-    .not('status', 'in', '(completed,cancelled)')
-    .neq('pos_status', 'OPEN')
+  const [pendingResult, ingredientsRaw, sectionsRaw, tablesRaw] = await Promise.all([
+    sql`
+      SELECT count(*) FROM orders
+      WHERE cafe_id = ${DEMO_CAFE_ID}
+        AND status NOT IN ('completed', 'cancelled')
+        AND pos_status != 'OPEN'
+    `,
+    sql`SELECT * FROM ingredients ORDER BY name ASC`,
+    sql`SELECT * FROM sections ORDER BY sort_order ASC`,
+    sql`SELECT * FROM tables WHERE cafe_id = ${DEMO_CAFE_ID} AND is_active = true ORDER BY number ASC`,
+  ])
 
-  const { data: ingredientsRaw } = await supabase.from('ingredients').select('*').order('name', { ascending: true })
-  const ingredients = (ingredientsRaw ?? []) as Ingredient[]
+  const pendingOrders = Number((pendingResult[0] as unknown as { count: string }).count)
+  const ingredients = ingredientsRaw as unknown as Ingredient[]
   const lowStockItems = ingredients.filter((i) => i.current_stock <= i.low_stock_threshold)
   const inventoryValuePaisa = ingredients.reduce((sum, i) => sum + i.current_stock * i.cost_per_unit_paisa, 0)
 
-  const [{ data: sectionsRaw }, { data: tablesRaw }] = await Promise.all([
-    supabase.from('sections').select('*').order('sort_order', { ascending: true }),
-    supabase.from('tables').select('*').eq('cafe_id', DEMO_CAFE_ID).eq('is_active', true).order('number', { ascending: true }),
-  ])
-  const sections = ((sectionsRaw ?? []) as Section[]).map((section) => ({
+  const sections = (sectionsRaw as unknown as Section[]).map((section) => ({
     section,
-    tables: ((tablesRaw ?? []) as Table[]).filter((t) => t.section_id === section.id),
+    tables: (tablesRaw as unknown as Table[]).filter((t) => t.section_id === section.id),
   }))
 
   return {
@@ -115,7 +148,7 @@ export async function getDashboardData(supabase: Supabase): Promise<DashboardDat
     topItemsToday: topItemsToday.slice(0, 5),
     mostVisitedArea,
     peakHour,
-    pendingOrders: pendingOrders ?? 0,
+    pendingOrders,
     lowStockItems,
     inventoryValuePaisa,
     sections,

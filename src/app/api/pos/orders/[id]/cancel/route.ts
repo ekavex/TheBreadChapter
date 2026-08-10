@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { paymentProvider } from '@/lib/payment/MockPaymentProvider'
 import { DEMO_STORE_ID } from '@/lib/constants'
 import { logger } from '@/lib/logger'
+
+async function fetchOrderWithItems(orderId: string) {
+  const sql = getDb()
+  const [order] = await sql`SELECT * FROM orders WHERE id = ${orderId}`
+  const items = await sql`SELECT * FROM order_items WHERE order_id = ${orderId} ORDER BY created_at`
+  const [tableRow] = order?.table_id
+    ? await sql`SELECT * FROM tables WHERE id = ${order.table_id}`
+    : [undefined]
+  return { ...order, items, table: tableRow ?? null }
+}
 
 // POST /api/pos/orders/[id]/cancel — releases the table. Best-effort cancels
 // any in-flight payment (per the state machine, only allowed before PIN entry
@@ -13,20 +23,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (sessionGuard) return sessionGuard
 
   try {
-    const supabase = createAdminClient()
-    const { data: order, error: orderError } = await supabase.from('orders').select('*').eq('id', params.id).single()
-    if (orderError || !order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
+    const sql = getDb()
+    const [order] = await sql`SELECT * FROM orders WHERE id = ${params.id}`
+    if (!order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
     if (['PAID', 'CANCELLED'].includes(order.pos_status)) {
       return NextResponse.json({ data: null, error: `Cannot cancel an order that is already ${order.pos_status}` }, { status: 409 })
     }
 
-    const { data: latestPayment } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('order_id', params.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const payments = await sql`
+      SELECT * FROM payments WHERE order_id = ${params.id} ORDER BY created_at DESC LIMIT 1
+    `
+    const latestPayment = payments[0] ?? null
 
     if (latestPayment?.plutus_ptrid && latestPayment.status === 'initiated') {
       logger.info('payment.cancel.start', { orderId: params.id, ptrid: latestPayment.plutus_ptrid })
@@ -35,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           clientId: latestPayment.client_id ?? '',
           storeId: latestPayment.store_id ?? DEMO_STORE_ID,
         })
-        await supabase.from('payments').update({ status: 'cancelled' }).eq('id', latestPayment.id)
+        await sql`UPDATE payments SET status = 'cancelled' WHERE id = ${latestPayment.id}`
         logger.info('payment.cancel.success', { orderId: params.id, ptrid: latestPayment.plutus_ptrid })
       } catch (err) {
         // best-effort — proceed with cancelling the order regardless
@@ -47,16 +54,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     }
 
-    await supabase.from('tables').update({ status: 'free' }).eq('id', order.table_id)
+    await sql`UPDATE tables SET status = 'free' WHERE id = ${order.table_id}`
 
-    const { data: cancelledOrder, error: updateError } = await supabase
-      .from('orders')
-      .update({ pos_status: 'CANCELLED', status: 'cancelled' })
-      .eq('id', params.id)
-      .select('*, items:order_items(*), table:tables(*)')
-      .single()
-    if (updateError) throw updateError
+    await sql`UPDATE orders SET pos_status = 'CANCELLED', status = 'cancelled' WHERE id = ${params.id}`
 
+    const cancelledOrder = await fetchOrderWithItems(params.id)
     return NextResponse.json({ data: cancelledOrder, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to cancel order'

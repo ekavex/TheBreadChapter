@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { MenuItem } from '@/lib/types'
@@ -14,13 +14,8 @@ type ItemPatch = Partial<
 >
 
 async function recordStaffAction(userId: string, action: string, description: string) {
-  const supabase = createAdminClient()
-  await supabase.from('staff_notifications').insert({
-    cafe_id: DEMO_CAFE_ID,
-    action,
-    description,
-    created_by: userId,
-  })
+  const sql = getDb()
+  await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
 }
 
 // PATCH /api/menu/items/[id] — Edit menu item (staff action logged)
@@ -48,15 +43,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ data: null, error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('menu_items')
-      .update(updateData)
-      .eq('id', params.id)
-      .select()
-      .single()
-
-    if (error) throw error
+    const sql = getDb()
+    const [data] = await sql`UPDATE menu_items SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
 
     const user = await getSessionUser(req)
     if (user?.role === 'staff') {
@@ -77,27 +65,30 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
 
-  // Fetch the name before deleting for the notification
-  const supabase = createAdminClient()
-  const { data: existing } = await supabase.from('menu_items').select('name').eq('id', params.id).maybeSingle()
+  try {
+    const sql = getDb()
+    // Fetch the name before deleting for the notification
+    const [existing] = await sql`SELECT name FROM menu_items WHERE id = ${params.id}`
 
-  const { error } = await supabase.from('menu_items').delete().eq('id', params.id)
+    await sql`DELETE FROM menu_items WHERE id = ${params.id}`
 
-  if (error) {
-    const status = error.code === '23503' ? 409 : 500
-    const message =
-      error.code === '23503'
-        ? 'This item has previous orders on record — mark it unavailable instead of deleting it'
-        : error.message
-    return NextResponse.json({ data: null, error: message }, { status })
+    const user = await getSessionUser(req)
+    if (user?.role === 'staff') {
+      const who = user.displayName || user.userId
+      const itemName = (existing as { name?: string } | undefined)?.name ?? params.id
+      await recordStaffAction(user.userId, 'item_deleted', `${who} deleted menu item: "${itemName}"`)
+    }
+
+    return NextResponse.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    const code = (err as { code?: string }).code
+    if (code === '23503') {
+      return NextResponse.json(
+        { data: null, error: 'This item has previous orders on record — mark it unavailable instead of deleting it' },
+        { status: 409 }
+      )
+    }
+    const message = err instanceof Error ? err.message : 'Failed to delete menu item'
+    return NextResponse.json({ data: null, error: message }, { status: 500 })
   }
-
-  const user = await getSessionUser(req)
-  if (user?.role === 'staff') {
-    const who = user.displayName || user.userId
-    const itemName = (existing as { name?: string } | null)?.name ?? params.id
-    await recordStaffAction(user.userId, 'item_deleted', `${who} deleted menu item: "${itemName}"`)
-  }
-
-  return NextResponse.json({ data: { ok: true }, error: null })
 }

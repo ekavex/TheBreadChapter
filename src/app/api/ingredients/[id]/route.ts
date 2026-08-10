@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import type { Ingredient } from '@/lib/types'
 
@@ -29,15 +29,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ data: null, error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('ingredients')
-      .update(updateData)
-      .eq('id', params.id)
-      .select()
-      .single()
+    const sql = getDb()
+    const [data] = await sql`UPDATE ingredients SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
 
-    if (error) throw error
     return NextResponse.json({ data, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update ingredient'
@@ -50,18 +44,20 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
 
-  const supabase = createAdminClient()
-  const { error } = await supabase.from('ingredients').delete().eq('id', params.id)
-
-  if (error) {
+  try {
+    const sql = getDb()
+    await sql`DELETE FROM ingredients WHERE id = ${params.id}`
+    return NextResponse.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    const code = (err as { code?: string }).code
     // FK violation — ingredient is still used in a recipe
-    const status = error.code === '23503' ? 409 : 500
-    const message =
-      error.code === '23503'
-        ? 'This ingredient is used in one or more recipes — remove it from those recipes first'
-        : error.message
-    return NextResponse.json({ data: null, error: message }, { status })
+    if (code === '23503') {
+      return NextResponse.json(
+        { data: null, error: 'This ingredient is used in one or more recipes — remove it from those recipes first' },
+        { status: 409 }
+      )
+    }
+    const message = err instanceof Error ? err.message : 'Failed to delete ingredient'
+    return NextResponse.json({ data: null, error: message }, { status: 500 })
   }
-
-  return NextResponse.json({ data: { ok: true }, error: null })
 }

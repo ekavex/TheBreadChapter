@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth/requireDashboardSession'
 import bcrypt from 'bcryptjs'
 import type { UserRole } from '@/lib/types'
@@ -29,16 +29,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ data: null, error: 'Nothing to update' }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from('auth_credentials')
-    .update(update)
-    .eq('id', params.id)
-    .select('id, user_id, role, display_name, updated_at')
-    .single()
-
-  if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
-  return NextResponse.json({ data, error: null })
+  try {
+    const sql = getDb()
+    const [data] = await sql`
+      UPDATE auth_credentials SET ${sql(update as Record<string, unknown>)} WHERE id = ${params.id}
+      RETURNING id, user_id, role, display_name, updated_at
+    `
+    return NextResponse.json({ data, error: null })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update user'
+    return NextResponse.json({ data: null, error: message }, { status: 500 })
+  }
 }
 
 // DELETE /api/admin/users/[id] — Remove user (admin only)
@@ -46,20 +47,20 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const guard = await requireAdmin(req)
   if (guard) return guard
 
-  const supabase = createAdminClient()
+  try {
+    const sql = getDb()
 
-  // Prevent deleting the last admin
-  const { count } = await supabase
-    .from('auth_credentials')
-    .select('id', { count: 'exact', head: true })
-    .eq('role', 'admin')
+    // Prevent deleting the last admin
+    const [{ count: adminCount }] = await sql`SELECT count(*) FROM auth_credentials WHERE role = 'admin'`
+    const [target] = await sql`SELECT role FROM auth_credentials WHERE id = ${params.id}`
+    if ((target as { role?: string } | undefined)?.role === 'admin' && Number(adminCount) <= 1) {
+      return NextResponse.json({ data: null, error: 'Cannot delete the last admin account' }, { status: 409 })
+    }
 
-  const { data: target } = await supabase.from('auth_credentials').select('role').eq('id', params.id).maybeSingle()
-  if ((target as { role?: string } | null)?.role === 'admin' && (count ?? 0) <= 1) {
-    return NextResponse.json({ data: null, error: 'Cannot delete the last admin account' }, { status: 409 })
+    await sql`DELETE FROM auth_credentials WHERE id = ${params.id}`
+    return NextResponse.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete user'
+    return NextResponse.json({ data: null, error: message }, { status: 500 })
   }
-
-  const { error } = await supabase.from('auth_credentials').delete().eq('id', params.id)
-  if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
-  return NextResponse.json({ data: { ok: true }, error: null })
 }

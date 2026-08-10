@@ -1,0 +1,65 @@
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       breadchapter
+      POSTGRES_USER:     breaduser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U breaduser -d breadchapter"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Next.js app ─────────────────────────────────────────────────────────────
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://breaduser:${POSTGRES_PASSWORD}@db:5432/breadchapter
+      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-The Bread Chapter}
+
+      # Payment — leave blank to use mock payment in development
+      PINELABS_MERCHANT_ID:    ${PINELABS_MERCHANT_ID:-}
+      PINELABS_SECURITY_TOKEN: ${PINELABS_SECURITY_TOKEN:-}
+      PINELABS_STORE_ID:       ${PINELABS_STORE_ID:-}
+      PINELABS_BASE_URL:       ${PINELABS_BASE_URL:-https://api.pinelabs.com}
+      MOCK_PAYMENT_OUTCOME:    ${MOCK_PAYMENT_OUTCOME:-approved}
+
+      # Thermal printers — leave blank if not connected
+      PRINTER_KITCHEN_USB_DEVICE:  ${PRINTER_KITCHEN_USB_DEVICE:-}
+      PRINTER_BEVERAGE_USB_DEVICE: ${PRINTER_BEVERAGE_USB_DEVICE:-}
+      PRINTER_KITCHEN_BT_MAC:      ${PRINTER_KITCHEN_BT_MAC:-}
+      PRINTER_KITCHEN_BT_DEVICE:   ${PRINTER_KITCHEN_BT_DEVICE:-}
+      PRINTER_BEVERAGE_BT_MAC:     ${PRINTER_BEVERAGE_BT_MAC:-}
+      PRINTER_BEVERAGE_BT_DEVICE:  ${PRINTER_BEVERAGE_BT_DEVICE:-}
+      PRINTER_KITCHEN_IP:          ${PRINTER_KITCHEN_IP:-}
+      PRINTER_BEVERAGE_IP:         ${PRINTER_BEVERAGE_IP:-}
+
+    # USB thermal printers — uncomment when printers are connected.
+    # Devices must exist on the host before `docker compose up`.
+    # devices:
+    #   - /dev/usb/lp0:/dev/usb/lp0   # kitchen printer  (set PRINTER_KITCHEN_USB_DEVICE)
+    #   - /dev/usb/lp1:/dev/usb/lp1   # beverage printer (set PRINTER_BEVERAGE_USB_DEVICE)
+    #
+    # For Bluetooth, bind RFCOMM channels on the host first, then map here:
+    #   sudo rfcomm bind 0 66:32:F7:C5:B7:05 1   # kitchen  → /dev/rfcomm0
+    #   sudo rfcomm bind 1 66:22:34:20:A1:B3 1   # beverage → /dev/rfcomm1
+    #   - /dev/rfcomm0:/dev/rfcomm0
+    #   - /dev/rfcomm1:/dev/rfcomm1
+
+volumes:
+  postgres_data:

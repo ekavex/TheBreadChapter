@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { getPnLData } from '@/lib/analytics'
 
@@ -12,7 +11,6 @@ export async function GET(req: NextRequest) {
 
   const range = (new URL(req.url).searchParams.get('range') ?? 'monthly') as
     | 'daily' | 'weekly' | 'monthly' | 'yearly'
-  const supabase = createAdminClient()
-  const data = await getPnLData(supabase, range)
+  const data = await getPnLData(range)
   return NextResponse.json({ data, error: null })
 }

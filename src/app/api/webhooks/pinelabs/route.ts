@@ -13,25 +13,19 @@
 //   • Response must be 200 quickly so Pine Labs doesn't retry indefinitely.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { paymentProvider } from '@/lib/payment/MockPaymentProvider'
 import { finalizeApprovedPayment } from '@/lib/payment/finalize'
 import { logger } from '@/lib/logger'
 import { DEMO_STORE_ID } from '@/lib/constants'
 import type { Order, Payment } from '@/lib/types'
 
-const ORDER_WITH_ITEMS_AND_TABLE = '*, items:order_items(*), table:tables(*)'
-
-// Pine Labs postback is a comma-joined "key=value" string, NOT a standard
-// URL-encoded body. Parse it into a plain object.
 function parsePostBack(raw: string): Record<string, string> {
   const result: Record<string, string> = {}
   for (const pair of raw.split(',')) {
     const eq = pair.indexOf('=')
     if (eq < 1) continue
-    const key = pair.slice(0, eq).trim()
-    const val = pair.slice(eq + 1).trim()
-    result[key] = val
+    result[pair.slice(0, eq).trim()] = pair.slice(eq + 1).trim()
   }
   return result
 }
@@ -39,24 +33,18 @@ function parsePostBack(raw: string): Record<string, string> {
 export async function POST(req: NextRequest) {
   let rawBody = ''
   try {
-    // Pine Labs sends application/x-www-form-urlencoded but the CSV payload
-    // is the raw text — read it as text to preserve the format.
     rawBody = await req.text()
   } catch {
     return NextResponse.json({ error: 'Could not read body' }, { status: 400 })
   }
 
-  // The body may arrive as "ResponseCode=0,ResponseMessage=APPROVED,..." directly
-  // or URL-encoded as a form field. Handle both.
   let csvPayload = rawBody
   if (rawBody.includes('%3D') || rawBody.startsWith('data=') || rawBody.includes('&')) {
-    // Standard URL-encoded — decode and extract the CSV value
     const params = new URLSearchParams(rawBody)
     csvPayload = params.get('data') ?? params.get('postback') ?? rawBody
   }
 
   const fields = parsePostBack(decodeURIComponent(csvPayload))
-
   const ptrid             = fields['PlutusTransactionReferenceID']
   const transactionNumber = fields['TransactionNumber']
   const postbackCode      = Number(fields['ResponseCode'] ?? '-1')
@@ -70,53 +58,51 @@ export async function POST(req: NextRequest) {
 
   if (!ptrid && !transactionNumber) {
     logger.warn('webhook.pinelabs.unidentifiable', { raw: rawBody.slice(0, 200) })
-    return NextResponse.json({ ok: true }) // ack so Pine Labs doesn't retry
+    return NextResponse.json({ ok: true })
   }
 
   try {
-    const supabase = createAdminClient()
+    const sql = getDb()
 
-    // Find the payment row — try by PTRID first, fall back to TransactionNumber
-    const { data: paymentRaw } = await supabase
-      .from('payments')
-      .select('*')
-      .or(
-        [
-          ptrid             ? `plutus_ptrid.eq.${ptrid}`                       : '',
-          transactionNumber ? `transaction_number.eq.${transactionNumber}` : '',
-        ]
-          .filter(Boolean)
-          .join(',')
-      )
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
+    // Find the payment row
+    let paymentRows: ReturnType<typeof sql>
+    if (ptrid && transactionNumber) {
+      paymentRows = sql`
+        SELECT * FROM payments
+        WHERE plutus_ptrid = ${ptrid} OR transaction_number = ${transactionNumber}
+        ORDER BY created_at DESC
+        LIMIT 1
+      `
+    } else if (ptrid) {
+      paymentRows = sql`SELECT * FROM payments WHERE plutus_ptrid = ${ptrid} ORDER BY created_at DESC LIMIT 1`
+    } else {
+      paymentRows = sql`SELECT * FROM payments WHERE transaction_number = ${transactionNumber} ORDER BY created_at DESC LIMIT 1`
+    }
+    const [paymentRaw] = await paymentRows
     if (!paymentRaw) {
       logger.warn('webhook.pinelabs.payment_not_found', { ptrid, transactionNumber })
       return NextResponse.json({ ok: true })
     }
     const payment = paymentRaw as Payment
 
-    // Find the order
-    const { data: orderRaw } = await supabase
-      .from('orders')
-      .select(ORDER_WITH_ITEMS_AND_TABLE)
-      .eq('id', payment.order_id)
-      .single()
+    // Find the order with items and table
+    const [orderRaw] = await sql`SELECT * FROM orders WHERE id = ${payment.order_id}`
     if (!orderRaw) {
       logger.warn('webhook.pinelabs.order_not_found', { orderId: payment.order_id })
       return NextResponse.json({ ok: true })
     }
-    const order = orderRaw as Order
+    const items = await sql`SELECT * FROM order_items WHERE order_id = ${payment.order_id} ORDER BY created_at`
+    const [tableRow] = orderRaw.table_id
+      ? await sql`SELECT t.*, s.name AS section_name FROM tables t LEFT JOIN sections s ON s.id = t.section_id WHERE t.id = ${orderRaw.table_id}`
+      : [null]
+    const table = tableRow ? { ...tableRow, section: tableRow.section_name ? { name: tableRow.section_name } : null } : null
+    const order = { ...orderRaw, items, table } as unknown as Order
 
-    // Already in a terminal state — nothing to do
     if (['PAID', 'CANCELLED'].includes(order.pos_status)) {
       logger.info('webhook.pinelabs.already_terminal', { orderId: order.id, posStatus: order.pos_status })
       return NextResponse.json({ ok: true })
     }
 
-    // Re-verify with GetStatus — NEVER trust the postback amount/mode directly
     const resolvedPtrid = ptrid ?? payment.plutus_ptrid
     if (!resolvedPtrid) {
       logger.warn('webhook.pinelabs.no_ptrid', { orderId: order.id })
@@ -135,36 +121,30 @@ export async function POST(req: NextRequest) {
     })
 
     if (statusResult.status === 'approved') {
-      await finalizeApprovedPayment(supabase, order, payment, statusResult, null, null)
+      await finalizeApprovedPayment(order, payment, statusResult, null, null)
       logger.info('webhook.pinelabs.finalized', { orderId: order.id })
       return NextResponse.json({ ok: true })
     }
 
-    // Declined or cancelled — mark the order as failed so the waiter can retry
     if (statusResult.status === 'declined' || statusResult.status === 'cancelled') {
       const toJson = (v: unknown) => JSON.parse(JSON.stringify(v))
-      await supabase
-        .from('payments')
-        .update({
-          status:       statusResult.status === 'cancelled' ? 'cancelled' : 'declined',
-          raw_response: toJson(statusResult),
-        })
-        .eq('id', payment.id)
-
-      await supabase
-        .from('orders')
-        .update({ pos_status: 'PAYMENT_FAILED', payment_status: 'failed' })
-        .eq('id', order.id)
-
+      await sql`
+        UPDATE payments
+        SET status = ${statusResult.status === 'cancelled' ? 'cancelled' : 'declined'},
+            raw_response = ${sql.json(toJson(statusResult))}
+        WHERE id = ${payment.id}
+      `
+      await sql`
+        UPDATE orders SET pos_status = 'PAYMENT_FAILED', payment_status = 'failed'
+        WHERE id = ${order.id}
+      `
       logger.info('webhook.pinelabs.failed', { orderId: order.id, status: statusResult.status })
     }
 
-    // 'pending' — terminal hasn't settled yet; do nothing, let polling handle it
     return NextResponse.json({ ok: true })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('webhook.pinelabs.error', { ptrid, transactionNumber, error: message })
-    // Still return 200 — a 500 would make Pine Labs retry the same webhook
     return NextResponse.json({ ok: true })
   }
 }

@@ -1,6 +1,7 @@
 import type { PrinterService, KotTicket } from './types'
 import { NetworkPrinterService } from './NetworkPrinterService'
 import { BluetoothPrinterService } from './BluetoothPrinterService'
+import { UsbPrinterService } from './UsbPrinterService'
 
 class MockPrinterService implements PrinterService {
   async printTicket(ticket: KotTicket): Promise<void> {
@@ -11,36 +12,55 @@ class MockPrinterService implements PrinterService {
   }
 }
 
-// Priority: Bluetooth (BT_DEVICE/BT_MAC) > Network (IP) > Mock (console log).
-// Set env vars in .env.local to enable a real printer — no code changes needed.
+// Priority: USB > Bluetooth/RFCOMM > Network (TCP) > Mock (console log).
+// Set the matching env vars in .env.local — no code changes needed.
+//
+//  USB:       PRINTER_KITCHEN_USB_DEVICE=/dev/usb/lp0
+//             PRINTER_BEVERAGE_USB_DEVICE=/dev/usb/lp1
+//
+//  Bluetooth: PRINTER_KITCHEN_BT_MAC=AA:BB:CC:DD:EE:FF
+//             PRINTER_KITCHEN_BT_DEVICE=/dev/rfcomm0   (optional, defaults to /dev/rfcomm0)
+//             PRINTER_BEVERAGE_BT_MAC=AA:BB:CC:DD:EE:FF
+//             PRINTER_BEVERAGE_BT_DEVICE=/dev/rfcomm1  (optional, defaults to /dev/rfcomm1)
+//
+//  Network:   PRINTER_KITCHEN_IP=192.168.1.100
+//             PRINTER_BEVERAGE_IP=192.168.1.101
 function createPrinterService(): PrinterService {
-  const kitchenBtDevice  = process.env.PRINTER_KITCHEN_BT_DEVICE
+  // ── USB ──────────────────────────────────────────────────────────────────────
+  const kitchenUsb  = process.env.PRINTER_KITCHEN_USB_DEVICE
+  const beverageUsb = process.env.PRINTER_BEVERAGE_USB_DEVICE
+  if (kitchenUsb || beverageUsb) {
+    return new UsbPrinterService({
+      kitchen:          kitchenUsb,
+      beverage_counter: beverageUsb,
+    })
+  }
+
+  // ── Bluetooth / RFCOMM ────────────────────────────────────────────────────────
   const kitchenBtMac     = process.env.PRINTER_KITCHEN_BT_MAC
-  const beverageBtDevice = process.env.PRINTER_BEVERAGE_BT_DEVICE
+  const kitchenBtDevice  = process.env.PRINTER_KITCHEN_BT_DEVICE
   const beverageBtMac    = process.env.PRINTER_BEVERAGE_BT_MAC
+  const beverageBtDevice = process.env.PRINTER_BEVERAGE_BT_DEVICE
 
-  if (kitchenBtDevice || kitchenBtMac) {
-    const kitchenDevice = kitchenBtDevice ?? '/dev/rfcomm0'
-
-    // If beverage uses the same MAC as kitchen (one physical printer), route it
-    // to the same rfcomm device — a single Bluetooth device can only hold one
-    // RFCOMM binding at a time.
+  if (kitchenBtMac || kitchenBtDevice) {
+    // If both stations share the same MAC it's one physical printer — route
+    // both stations to the same RFCOMM device (can't hold two bindings at once).
     const samePrinter = !!beverageBtMac && beverageBtMac === kitchenBtMac
-    const beverageDevice = samePrinter
-      ? kitchenDevice
-      : (beverageBtDevice ?? '/dev/rfcomm1')
-
     return new BluetoothPrinterService({
       kitchen: {
-        device: kitchenDevice,
+        device: kitchenBtDevice ?? '/dev/rfcomm0',
         mac:    kitchenBtMac,
       },
-      beverage_counter: beverageBtDevice || beverageBtMac
-        ? { device: beverageDevice, mac: beverageBtMac }
+      beverage_counter: (beverageBtMac || beverageBtDevice)
+        ? {
+            device: samePrinter ? (kitchenBtDevice ?? '/dev/rfcomm0') : (beverageBtDevice ?? '/dev/rfcomm1'),
+            mac:    beverageBtMac,
+          }
         : undefined,
     })
   }
 
+  // ── Network (raw TCP port 9100) ───────────────────────────────────────────────
   const kitchenIp  = process.env.PRINTER_KITCHEN_IP
   const beverageIp = process.env.PRINTER_BEVERAGE_IP
   if (kitchenIp || beverageIp) {
@@ -50,6 +70,7 @@ function createPrinterService(): PrinterService {
     })
   }
 
+  // ── Mock (console log fallback) ───────────────────────────────────────────────
   return new MockPrinterService()
 }
 

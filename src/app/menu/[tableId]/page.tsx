@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import type { MenuPageData, Cafe, MenuCategory } from '@/lib/types'
 import MenuShell from '@/components/menu/MenuShell'
 
@@ -9,52 +9,39 @@ interface Props {
 }
 
 export async function generateMetadata({ searchParams }: Props) {
-  const supabase = createServerSupabaseClient()
+  const sql = getDb()
   const cafeSlug = searchParams.cafe ?? 'the-bread-chapter'
-  const { data: cafe } = await supabase
-    .from('cafes').select('name').eq('slug', cafeSlug).single()
+  const [cafe] = await sql`SELECT name FROM cafes WHERE slug = ${cafeSlug} LIMIT 1`
   return { title: cafe?.name ?? 'Menu' }
 }
 
 export default async function MenuPage({ params, searchParams }: Props) {
-  const supabase = createServerSupabaseClient()
+  const sql = getDb()
   const cafeSlug = searchParams.cafe ?? 'the-bread-chapter'
   const tableNumber = parseInt(params.tableId, 10)
 
-  // Fetch cafe
-  const { data: cafe } = await supabase
-    .from('cafes')
-    .select('*')
-    .eq('slug', cafeSlug)
-    .eq('is_active', true)
-    .single()
-  if (!cafe) notFound()
+  const [cafeRow] = await sql`SELECT * FROM cafes WHERE slug = ${cafeSlug} AND is_active = true LIMIT 1`
+  if (!cafeRow) notFound()
 
-  // Fetch table
-  const { data: table } = await supabase
-    .from('tables')
-    .select('*')
-    .eq('cafe_id', cafe.id)
-    .eq('number', tableNumber)
-    .eq('is_active', true)
-    .single()
-  if (!table) notFound()
+  const [tableRow, categoriesRaw, menuItems] = await Promise.all([
+    sql`SELECT * FROM tables WHERE cafe_id = ${cafeRow.id} AND number = ${tableNumber} AND is_active = true LIMIT 1`,
+    sql`SELECT * FROM menu_categories WHERE cafe_id = ${cafeRow.id} AND is_active = true ORDER BY sort_order ASC`,
+    sql`SELECT * FROM menu_items WHERE cafe_id = ${cafeRow.id} AND is_available = true ORDER BY sort_order ASC`,
+  ])
 
-  // Fetch full menu with categories
-  const { data: categories } = await supabase
-    .from('menu_categories')
-    .select('*, items:menu_items(*)')
-    .eq('cafe_id', cafe.id)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
+  if (!tableRow[0]) notFound()
 
-  // `settings` (JSONB) and menu item `spice_level`/`upsell_item_ids` are
-  // narrower in our app types than what postgrest's generated Row can prove —
-  // the DB's default values + CHECK constraint guarantee the narrower shape.
+  const cats = categoriesRaw as unknown as { id: string }[]
+  const miArr = menuItems as unknown as { category_id: string }[]
+  const categories: MenuCategory[] = cats.map((c) => ({
+    ...c,
+    items: miArr.filter((i) => i.category_id === c.id),
+  })) as MenuCategory[]
+
   const pageData: MenuPageData = {
-    cafe: cafe as Cafe,
-    table,
-    categories: (categories ?? []) as MenuCategory[],
+    cafe: cafeRow as unknown as Cafe,
+    table: tableRow[0] as unknown as MenuPageData['table'],
+    categories,
   }
 
   return <MenuShell data={pageData} />

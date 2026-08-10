@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import type { StockTxnType } from '@/lib/types'
 
@@ -36,44 +36,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       signedQuantity = rawQuantity // manual_adjustment — caller supplies the sign
     }
 
-    const supabase = createAdminClient()
-    const { data: txn, error: txnError } = await supabase
-      .from('stock_transactions')
-      .insert({
-        ingredient_id: params.id,
-        type,
-        quantity: signedQuantity,
-        note,
-      })
-      .select()
-      .single()
-
-    if (txnError) throw txnError
+    const sql = getDb()
+    const [txn] = await sql`
+      INSERT INTO stock_transactions (ingredient_id, type, quantity, note)
+      VALUES (${params.id}, ${type}, ${signedQuantity}, ${note})
+      RETURNING *
+    `
 
     // Purchasing a perishable item can move the nearest-upcoming-expiry date.
     // Simplification (see docs/IMPLEMENTATION_PLAN.md open item #4): one
     // expiry_date per ingredient, not full per-batch FIFO tracking.
     if (type === 'purchase' && expiryDate) {
-      const { data: ingredient } = await supabase
-        .from('ingredients')
-        .select('expiry_date')
-        .eq('id', params.id)
-        .maybeSingle()
-
+      const [ingredient] = await sql`SELECT expiry_date FROM ingredients WHERE id = ${params.id}`
       const currentExpiry = ingredient?.expiry_date
       const shouldUpdate = !currentExpiry || new Date(expiryDate) < new Date(currentExpiry)
       if (shouldUpdate) {
-        await supabase.from('ingredients').update({ expiry_date: expiryDate }).eq('id', params.id)
+        await sql`UPDATE ingredients SET expiry_date = ${expiryDate} WHERE id = ${params.id}`
       }
     }
 
-    const { data: ingredient, error: fetchError } = await supabase
-      .from('ingredients')
-      .select('*')
-      .eq('id', params.id)
-      .single()
+    const [ingredient] = await sql`SELECT * FROM ingredients WHERE id = ${params.id}`
 
-    if (fetchError) throw fetchError
     return NextResponse.json({ data: { transaction: txn, ingredient }, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to log stock transaction'

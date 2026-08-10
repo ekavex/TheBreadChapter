@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { getDashboardData } from '@/lib/dashboard'
 import DashboardMetrics from '@/components/dashboard/DashboardMetrics'
 import RecentOrders from '@/components/dashboard/RecentOrders'
@@ -10,26 +10,37 @@ import { startOfDay, endOfDay } from 'date-fns'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { Order } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Dashboard' }
 
 export default async function DashboardPage() {
-  const supabase = createAdminClient()
+  const sql = getDb()
   const today = new Date()
+  const startISO = startOfDay(today).toISOString()
+  const endISO = endOfDay(today).toISOString()
 
-  // Recent orders list (kept as its own lightweight query — getDashboardData
-  // returns aggregates, not the raw list this panel needs).
-  const { data: recentOrdersRaw } = await supabase
-    .from('orders')
-    .select('*, items:order_items(*)')
-    .eq('cafe_id', DEMO_CAFE_ID)
-    .gte('created_at', startOfDay(today).toISOString())
-    .lte('created_at', endOfDay(today).toISOString())
-    .neq('pos_status', 'OPEN')
-    .order('created_at', { ascending: false })
-    .limit(10)
-  const recentOrders = (recentOrdersRaw ?? []) as Order[]
+  // Recent orders list (getDashboardData returns aggregates, not the raw list)
+  const recentOrdersRaw = await sql`
+    SELECT o.* FROM orders o
+    WHERE o.cafe_id = ${DEMO_CAFE_ID}
+      AND o.created_at >= ${startISO}
+      AND o.created_at <= ${endISO}
+      AND o.pos_status != 'OPEN'
+    ORDER BY o.created_at DESC
+    LIMIT 10
+  `
+  const rawOrders = recentOrdersRaw as unknown as { id: string }[]
+  const orderIds = rawOrders.map((o) => o.id)
+  const allItemsRaw = orderIds.length
+    ? await sql`SELECT * FROM order_items WHERE order_id = ANY(${sql.array(orderIds)}::uuid[])`
+    : []
+  const allItems = allItemsRaw as unknown as { order_id: string }[]
+  const recentOrders: Order[] = rawOrders.map((o) => ({
+    ...o,
+    items: allItems.filter((i) => i.order_id === o.id),
+  })) as Order[]
 
-  const data = await getDashboardData(supabase)
+  const data = await getDashboardData()
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">

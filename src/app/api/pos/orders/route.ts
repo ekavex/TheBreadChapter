@@ -1,7 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
+
+async function fetchFullOrder(orderId: string) {
+  const sql = getDb()
+  const [order] = await sql`SELECT * FROM orders WHERE id = ${orderId}`
+  if (!order) return null
+  const items = await sql`SELECT * FROM order_items WHERE order_id = ${orderId} ORDER BY created_at`
+  const [tableRow] = order.table_id
+    ? await sql`
+        SELECT t.*, s.id AS section_id_val, s.name AS section_name,
+               s.sort_order AS section_sort_order
+        FROM tables t
+        LEFT JOIN sections s ON s.id = t.section_id
+        WHERE t.id = ${order.table_id}
+      `
+    : [null]
+  const section = tableRow?.section_name
+    ? { id: tableRow.section_id_val, name: tableRow.section_name, sort_order: tableRow.section_sort_order }
+    : null
+  const table = tableRow ? { ...tableRow, section } : null
+  return { ...order, items, table }
+}
 
 // POST /api/pos/orders — Module 5 "Order Entry (POS)":
 // waiter taps a table → if free, opens a new order and marks it occupied;
@@ -15,24 +36,22 @@ export async function POST(req: NextRequest) {
     const { tableId } = await req.json()
     if (!tableId) return NextResponse.json({ data: null, error: 'tableId is required' }, { status: 400 })
 
-    const supabase = createAdminClient()
-    const { data: table, error: tableError } = await supabase.from('tables').select('*').eq('id', tableId).single()
-    if (tableError || !table) {
-      return NextResponse.json({ data: null, error: 'Table not found' }, { status: 404 })
-    }
+    const sql = getDb()
+    const [table] = await sql`SELECT * FROM tables WHERE id = ${tableId}`
+    if (!table) return NextResponse.json({ data: null, error: 'Table not found' }, { status: 404 })
 
     // Resume any existing open order regardless of table status
-    const { data: existing, error: existingError } = await supabase
-      .from('orders')
-      .select('*, items:order_items(*), table:tables(*, section:sections(*))')
-      .eq('table_id', tableId)
-      .not('pos_status', 'in', '(PAID,CANCELLED)')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (existingError) throw existingError
-    if (existing) return NextResponse.json({ data: existing, error: null })
+    const existingRows = await sql`
+      SELECT id FROM orders
+      WHERE table_id = ${tableId}
+        AND pos_status NOT IN ('PAID', 'CANCELLED')
+      ORDER BY created_at DESC
+      LIMIT 1
+    `
+    if (existingRows.length) {
+      const existing = await fetchFullOrder(existingRows[0].id as string)
+      return NextResponse.json({ data: existing, error: null })
+    }
 
     // No open order — table must be free to create one
     if (table.status !== 'free') {
@@ -42,24 +61,19 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { data: orderNumber, error: numberError } = await supabase.rpc('generate_order_number', { cafe_id: DEMO_CAFE_ID })
-    if (numberError) throw numberError
+    const [{ order_number: orderNumber }] = await sql`
+      SELECT generate_order_number(${DEMO_CAFE_ID}::uuid) AS order_number
+    `
 
     // Create the order — table stays 'free' until the first item is added
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        cafe_id: DEMO_CAFE_ID,
-        table_id: tableId,
-        order_number: orderNumber,
-        status: 'pending',
-        pos_status: 'OPEN',
-      })
-      .select('*, items:order_items(*), table:tables(*, section:sections(*))')
-      .single()
-    if (orderError) throw orderError
+    const [order] = await sql`
+      INSERT INTO orders (cafe_id, table_id, order_number, status, pos_status)
+      VALUES (${DEMO_CAFE_ID}, ${tableId}, ${orderNumber}, 'pending', 'OPEN')
+      RETURNING *
+    `
 
-    return NextResponse.json({ data: order, error: null })
+    const full = await fetchFullOrder(order.id as string)
+    return NextResponse.json({ data: full, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to open order'
     return NextResponse.json({ data: null, error: message }, { status: 500 })

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { getDashboardData } from '@/lib/dashboard'
 
@@ -10,7 +9,6 @@ export async function GET(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
 
-  const supabase = createAdminClient()
-  const data = await getDashboardData(supabase)
+  const data = await getDashboardData()
   return NextResponse.json({ data, error: null })
 }

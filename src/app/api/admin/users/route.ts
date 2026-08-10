@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth/requireDashboardSession'
 import bcrypt from 'bcryptjs'
 import type { UserRole } from '@/lib/types'
@@ -9,14 +9,14 @@ export async function GET(req: NextRequest) {
   const guard = await requireAdmin(req)
   if (guard) return guard
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from('auth_credentials')
-    .select('id, user_id, role, display_name, updated_at')
-    .order('role')
-
-  if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
-  return NextResponse.json({ data, error: null })
+  try {
+    const sql = getDb()
+    const data = await sql`SELECT id, user_id, role, display_name, updated_at FROM auth_credentials ORDER BY role`
+    return NextResponse.json({ data, error: null })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to fetch users'
+    return NextResponse.json({ data: null, error: message }, { status: 500 })
+  }
 }
 
 // POST /api/admin/users — Create new user (admin only)
@@ -32,18 +32,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: null, error: 'role must be admin, manager, or staff' }, { status: 400 })
   }
 
-  const password_hash = await bcrypt.hash(password, 10)
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from('auth_credentials')
-    .insert({ user_id: userId, password_hash, role: role as UserRole, display_name: displayName ?? '' })
-    .select('id, user_id, role, display_name, updated_at')
-    .single()
-
-  if (error) {
-    const status = error.code === '23505' ? 409 : 500
-    const message = error.code === '23505' ? `User "${userId}" already exists` : error.message
+  try {
+    const password_hash = await bcrypt.hash(password, 10)
+    const sql = getDb()
+    const [data] = await sql`
+      INSERT INTO auth_credentials (user_id, password_hash, role, display_name)
+      VALUES (${userId}, ${password_hash}, ${role as UserRole}, ${displayName ?? ''})
+      RETURNING id, user_id, role, display_name, updated_at
+    `
+    return NextResponse.json({ data, error: null })
+  } catch (err) {
+    const code = (err as { code?: string }).code
+    const status = code === '23505' ? 409 : 500
+    const message = code === '23505' ? `User "${userId}" already exists` : (err instanceof Error ? err.message : 'Failed to create user')
     return NextResponse.json({ data: null, error: message }, { status })
   }
-  return NextResponse.json({ data, error: null })
 }
