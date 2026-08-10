@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import type { Order } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -13,29 +13,30 @@ export async function POST(req: NextRequest) {
       subtotal, taxAmount, totalAmount,
     } = body
 
-    const supabase = createAdminClient()
+    const sql = getDb()
 
     // Create the order
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        cafe_id: cafeId,
-        table_id: tableId,
-        order_number: `ORD-${Date.now().toString().slice(-4)}`,
-        status: 'pending',
-        payment_method: paymentMethod,
-        payment_status: paymentMethod === 'cash' ? 'pending' : 'pending',
-        subtotal,
-        tax_amount: taxAmount,
-        service_charge: 0,
-        discount_amount: 0,
-        total_amount: totalAmount,
-        notes: notes || null,
-      })
-      .select()
-      .single()
-
-    if (orderError) throw orderError
+    const [order] = await sql`
+      INSERT INTO orders (
+        cafe_id, table_id, order_number, status, payment_method, payment_status,
+        subtotal, tax_amount, service_charge, discount_amount, total_amount, notes
+      )
+      VALUES (
+        ${cafeId},
+        ${tableId},
+        ${'ORD-' + Date.now().toString().slice(-4)},
+        'pending',
+        ${paymentMethod},
+        'pending',
+        ${subtotal},
+        ${taxAmount},
+        ${0},
+        ${0},
+        ${totalAmount},
+        ${notes || null}
+      )
+      RETURNING *
+    `
 
     // Insert order items
     const orderItems = items.map((item: any) => ({
@@ -49,11 +50,7 @@ export async function POST(req: NextRequest) {
       status: 'pending',
     }))
 
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(orderItems)
-
-    if (itemsError) throw itemsError
+    await sql`INSERT INTO order_items ${sql(orderItems)}`
 
     // TODO Phase 2: Send WhatsApp confirmation to customer
     // await sendWhatsAppConfirmation(order, items)
@@ -69,24 +66,17 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const { orderId, status } = await req.json()
-    const supabase = createAdminClient()
+    const sql = getDb()
 
-    // Omit the UI-only joined fields (`items`, `table`) — not real columns,
-    // so they can't be part of an .update() payload.
-    const updateData: Partial<Omit<Order, 'items' | 'table'>> = { status }
-    if (status === 'confirmed') updateData.confirmed_at = new Date().toISOString()
-    if (status === 'ready')     updateData.ready_at = new Date().toISOString()
-    if (status === 'served')    updateData.served_at = new Date().toISOString()
-    if (status === 'completed') updateData.completed_at = new Date().toISOString()
+    const now = new Date().toISOString()
+    const updateData: Record<string, unknown> = { status }
+    if (status === 'confirmed') updateData.confirmed_at = now
+    if (status === 'ready')     updateData.ready_at = now
+    if (status === 'served')    updateData.served_at = now
+    if (status === 'completed') updateData.completed_at = now
 
-    const { data, error } = await supabase
-      .from('orders')
-      .update(updateData)
-      .eq('id', orderId)
-      .select()
-      .single()
+    const [data] = await sql`UPDATE orders SET ${sql(updateData)} WHERE id = ${orderId} RETURNING *`
 
-    if (error) throw error
     return NextResponse.json({ data, error: null })
   } catch (err: any) {
     return NextResponse.json({ data: null, error: err.message }, { status: 500 })
@@ -96,19 +86,50 @@ export async function PATCH(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const cafeId = searchParams.get('cafeId')
+  const kitchen = searchParams.get('kitchen') === 'true'
   const date = searchParams.get('date') ?? new Date().toISOString().split('T')[0]
 
   if (!cafeId) return NextResponse.json({ error: 'cafeId required' }, { status: 400 })
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*, items:order_items(*), table:tables(number,label)')
-    .eq('cafe_id', cafeId)
-    .gte('created_at', `${date}T00:00:00`)
-    .lte('created_at', `${date}T23:59:59`)
-    .order('created_at', { ascending: false })
+  try {
+    const sql = getDb()
+    const orders = kitchen
+      ? await sql`
+          SELECT * FROM orders
+          WHERE cafe_id = ${cafeId}
+            AND status IN ('pending', 'confirmed', 'making', 'ready')
+            AND pos_status != 'OPEN'
+          ORDER BY created_at ASC
+        `
+      : await sql`
+          SELECT * FROM orders
+          WHERE cafe_id = ${cafeId}
+            AND created_at >= ${date + 'T00:00:00'}
+            AND created_at <= ${date + 'T23:59:59'}
+          ORDER BY created_at DESC
+        `
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ data, error: null })
+    if (orders.length === 0) return NextResponse.json({ data: [], error: null })
+
+    const ordArr = orders as unknown as { id: string; table_id?: string }[]
+    const orderIds = ordArr.map((o) => o.id)
+    const allItems = await sql`SELECT * FROM order_items WHERE order_id = ANY(${sql.array(orderIds)}::uuid[])`
+    const itemArr = allItems as unknown as { order_id: string }[]
+
+    const tableIds = ordArr.map((o) => o.table_id).filter(Boolean) as string[]
+    const tableRows = tableIds.length
+      ? await sql`SELECT id, number, label FROM tables WHERE id = ANY(${sql.array(tableIds)}::uuid[])`
+      : []
+    const tableMap = Object.fromEntries((tableRows as unknown as { id: string }[]).map((t) => [t.id, t]))
+
+    const data = ordArr.map((order) => ({
+      ...order,
+      items: itemArr.filter((i) => i.order_id === order.id),
+      table: order.table_id ? tableMap[order.table_id] ?? null : null,
+    }))
+
+    return NextResponse.json({ data, error: null })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
 }

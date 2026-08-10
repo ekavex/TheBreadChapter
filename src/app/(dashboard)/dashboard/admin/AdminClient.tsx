@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users } from 'lucide-react'
+import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, Wifi, Usb, HardDrive } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 import toast from 'react-hot-toast'
 
@@ -23,11 +23,30 @@ const ROLE_ICONS: Record<UserRole, React.ReactNode> = {
   staff:   <Users size={12} />,
 }
 
+interface PrinterStationCfg {
+  btDevice?: string
+  usbDevice?: string
+  ip?: string
+}
+interface PrinterCfg {
+  kitchen: PrinterStationCfg
+  beverage_counter: PrinterStationCfg
+}
+
 export default function AdminClient() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
+
+  // ── Printer settings ────────────────────────────────────────────
+  const [printerCfg, setPrinterCfg] = useState<PrinterCfg>({
+    kitchen:          { btDevice: '', usbDevice: '', ip: '' },
+    beverage_counter: { btDevice: '', usbDevice: '', ip: '' },
+  })
+  const [printerLoading, setPrinterLoading] = useState(true)
+  const [printerSaving, setPrinterSaving] = useState(false)
+  const [testing, setTesting] = useState<string | null>(null)
 
   // Add form state
   const [newUserId, setNewUserId] = useState('')
@@ -54,6 +73,47 @@ export default function AdminClient() {
   }, [])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
+
+  // Printer config load
+  useEffect(() => {
+    fetch('/api/admin/settings/printers')
+      .then(r => r.json())
+      .then(j => { if (j.data) setPrinterCfg(j.data) })
+      .finally(() => setPrinterLoading(false))
+  }, [])
+
+  async function savePrinters(e: React.FormEvent) {
+    e.preventDefault()
+    setPrinterSaving(true)
+    try {
+      const res = await fetch('/api/admin/settings/printers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(printerCfg),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Failed to save'); return }
+      toast.success('Printer settings saved')
+    } finally {
+      setPrinterSaving(false)
+    }
+  }
+
+  async function testPrint(station: string) {
+    setTesting(station)
+    try {
+      const res = await fetch(`/api/admin/settings/printers?action=test&station=${station}`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) toast.error(json.error ?? 'Test failed')
+      else toast.success(`Test sent via ${json.data?.method}`)
+    } finally {
+      setTesting(null)
+    }
+  }
+
+  function updateStation(station: keyof PrinterCfg, field: keyof PrinterStationCfg, value: string) {
+    setPrinterCfg(prev => ({ ...prev, [station]: { ...prev[station], [field]: value } }))
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
@@ -311,6 +371,96 @@ export default function AdminClient() {
             <span>POS + Menu manager only — menu changes are logged as notifications to managers</span>
           </div>
         </div>
+      </div>
+
+      {/* ── Printer Settings ───────────────────────────────────────────────── */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Printer size={18} className="text-ink-muted" />
+          <h2 className="font-display text-xl font-bold text-ink">Thermal Printer Settings</h2>
+        </div>
+        <p className="text-sm text-ink-muted mb-4">
+          Configure device paths for kitchen and beverage printers. On each print the app tries
+          Bluetooth first, falls back to USB automatically. Leave a field blank to skip that method.
+        </p>
+
+        {printerLoading ? (
+          <div className="p-6 text-center text-sm text-ink-faint">Loading…</div>
+        ) : (
+          <form onSubmit={savePrinters} className="space-y-4">
+            {(
+              [
+                { key: 'kitchen' as const,          label: 'Kitchen Printer',   color: 'bg-orange-50 border-orange-200 text-orange-700' },
+                { key: 'beverage_counter' as const, label: 'Beverage Printer',  color: 'bg-blue-50 border-blue-200 text-blue-700' },
+              ] as const
+            ).map(({ key, label, color }) => (
+              <div key={key} className="p-4 bg-surface-raised rounded-2xl border border-ink/8">
+                <div className="flex items-center justify-between mb-3">
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${color}`}>
+                    <Printer size={11} /> {label}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={testing === key}
+                    onClick={() => testPrint(key)}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-ink/12 text-ink-muted hover:bg-surface-overlay disabled:opacity-50 transition-colors"
+                  >
+                    {testing === key ? 'Printing…' : 'Test print'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-ink-muted mb-1">
+                      <Wifi size={11} /> Bluetooth device
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      placeholder="/dev/rfcomm0"
+                      value={printerCfg[key].btDevice ?? ''}
+                      onChange={e => updateStation(key, 'btDevice', e.target.value)}
+                    />
+                    <p className="text-[10px] text-ink-faint mt-0.5">Tried first. Requires rfcomm bind.</p>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-ink-muted mb-1">
+                      <Usb size={11} /> USB device
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      placeholder="/dev/usb/lp0"
+                      value={printerCfg[key].usbDevice ?? ''}
+                      onChange={e => updateStation(key, 'usbDevice', e.target.value)}
+                    />
+                    <p className="text-[10px] text-ink-faint mt-0.5">Fallback when BT is unavailable.</p>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-ink-muted mb-1">
+                      <HardDrive size={11} /> Network IP
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      placeholder="192.168.1.100"
+                      value={printerCfg[key].ip ?? ''}
+                      onChange={e => updateStation(key, 'ip', e.target.value)}
+                    />
+                    <p className="text-[10px] text-ink-faint mt-0.5">TCP port 9100. Used if BT+USB absent.</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={printerSaving}
+                className="px-5 py-2 rounded-xl bg-ink text-surface text-sm font-medium disabled:opacity-50"
+              >
+                {printerSaving ? 'Saving…' : 'Save printer settings'}
+              </button>
+              <p className="text-xs text-ink-faint">Changes apply immediately — no restart needed.</p>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   )

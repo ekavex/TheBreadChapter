@@ -98,10 +98,16 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     if (!order || (order.items ?? []).length === 0) return toast.error('Add at least one item first')
     setBusy(true)
     try {
-      const updated = await api<Order>(`/api/pos/orders/${order.id}/kot`, 'POST')
-      setOrder(updated)
-      printKot(updated)
-      toast.success('Sent to kitchen — KOT printed')
+      const res = await fetch(`/api/pos/orders/${order.id}/kot`, { method: 'POST' })
+      const json = await res.json()
+      if (json.error) throw new Error(json.error)
+      setOrder(json.data as Order)
+      printKot(json.data as Order)
+      if (json.printerWarning) {
+        toast('KOT sent — thermal printer offline, printing from browser instead', { icon: '⚠️' })
+      } else {
+        toast.success('Sent to kitchen — KOT printed')
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send KOT')
     } finally {

@@ -1,0 +1,11 @@
+.git
+.next
+node_modules
+.env
+.env.local
+.env*.local
+*.log
+docker/
+supabase/
+scripts/
+README.md

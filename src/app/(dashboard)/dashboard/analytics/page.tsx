@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase/server'
 import { getPnLData, getAreaAnalytics, getCustomerAnalytics, type PnLData } from '@/lib/analytics'
 import PnLClient from './PnLClient'
 import { formatPaisa } from '@/lib/money'
@@ -13,17 +12,15 @@ function formatHour(hour: number): string {
 }
 
 export default async function AnalyticsPage() {
-  const supabase = createAdminClient()
-
   // P&L across all four ranges up front — the range switcher is client-side
   // (no refetch). Each range is bounded so this stays light.
   const [daily, weekly, monthly, yearly, area, customer] = await Promise.all([
-    getPnLData(supabase, 'daily'),
-    getPnLData(supabase, 'weekly'),
-    getPnLData(supabase, 'monthly'),
-    getPnLData(supabase, 'yearly'),
-    getAreaAnalytics(supabase, 30),
-    getCustomerAnalytics(supabase, 30),
+    getPnLData('daily'),
+    getPnLData('weekly'),
+    getPnLData('monthly'),
+    getPnLData('yearly'),
+    getAreaAnalytics(30),
+    getCustomerAnalytics(30),
   ])
 
   const maxVisitors = Math.max(...area.visitors.map((v) => v.value), 1)

@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
-import { printerService } from '@/lib/printer/MockPrinterService'
+import { loadPrinterConfig, buildPrinterService } from '@/lib/printer'
 import { logger } from '@/lib/logger'
+import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { KotStation, MenuItemCategory } from '@/lib/types'
 
 const STATION_BY_CATEGORY: Record<MenuItemCategory, KotStation> = {
   food: 'kitchen',
   beverage: 'beverage_counter',
+}
+
+async function fetchOrderWithItems(orderId: string) {
+  const sql = getDb()
+  const [order] = await sql`SELECT * FROM orders WHERE id = ${orderId}`
+  const items = await sql`SELECT * FROM order_items WHERE order_id = ${orderId} ORDER BY created_at`
+  const [tableRow] = order?.table_id
+    ? await sql`SELECT * FROM tables WHERE id = ${order.table_id}`
+    : [undefined]
+  return { ...order, items, table: tableRow ?? null }
 }
 
 // POST /api/pos/orders/[id]/kot — Module 5 "KOT Routing": on confirm, split
@@ -18,30 +29,40 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (sessionGuard) return sessionGuard
 
   try {
-    const supabase = createAdminClient()
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('*, items:order_items(*), table:tables(*)')
-      .eq('id', params.id)
-      .single()
-    if (orderError || !order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
+    const sql = getDb()
+    const printerCfg = await loadPrinterConfig(sql, DEMO_CAFE_ID)
+    const printerService = buildPrinterService(printerCfg)
+
+    const [order] = await sql`SELECT * FROM orders WHERE id = ${params.id}`
+    if (!order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
     if (order.pos_status !== 'OPEN') {
       return NextResponse.json({ data: null, error: `Order is already ${order.pos_status}` }, { status: 409 })
     }
-    if (!order.items || order.items.length === 0) {
+
+    const orderItems = await sql`SELECT * FROM order_items WHERE order_id = ${params.id}`
+    if (!orderItems || orderItems.length === 0) {
       return NextResponse.json({ data: null, error: 'Add at least one item before sending to the kitchen' }, { status: 400 })
     }
+
+    const [tableRow] = order.table_id
+      ? await sql`SELECT * FROM tables WHERE id = ${order.table_id}`
+      : [undefined]
+    const table = tableRow ?? null
 
     // A retry after a partial failure below (e.g. station A printed fine but
     // station B's ticket insert threw) must not reprint a station that's
     // already been ticketed — order stays OPEN until every station succeeds,
     // so a naive retry would otherwise double-print station A.
-    const { data: existingTickets } = await supabase.from('kot_tickets').select('station').eq('order_id', order.id)
-    const alreadyTicketed = new Set((existingTickets ?? []).map((t) => t.station))
+    const ticketRows = await sql`SELECT station FROM kot_tickets WHERE order_id = ${order.id}`
+    const alreadyTicketed = new Set((ticketRows as unknown as { station: string }[]).map((t) => t.station))
+
+    type OrderItem = { category?: MenuItemCategory; name: string; quantity: number }
+    const typedItems = orderItems as unknown as OrderItem[]
 
     const stations: KotStation[] = ['kitchen', 'beverage_counter']
+    let printerWarning: string | null = null
     for (const station of stations) {
-      const items = order.items
+      const items = typedItems
         .filter((i) => STATION_BY_CATEGORY[i.category ?? 'food'] === station)
         .map((i) => ({ name: i.name, quantity: i.quantity }))
 
@@ -54,42 +75,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       logger.info('kot.print.start', { orderId: order.id, station, itemCount: items.length })
       try {
         await printerService.printTicket({
-          tableNumber: order.table!.number,
+          tableNumber: table!.number,
           orderId: order.id,
           station,
           items,
         })
+        logger.info('kot.print.success', { orderId: order.id, station })
       } catch (printErr) {
-        logger.error('kot.print.error', {
-          orderId: order.id,
-          station,
-          error: printErr instanceof Error ? printErr.message : String(printErr),
-        })
-        throw printErr
+        printerWarning = printErr instanceof Error ? printErr.message : String(printErr)
+        logger.error('kot.print.error', { orderId: order.id, station, error: printerWarning })
+        // Printer failure is non-fatal: the browser print dialog is the fallback.
+        // The order still advances to KOT_SENT so the waiter isn't stuck.
       }
-      logger.info('kot.print.success', { orderId: order.id, station })
 
-      const { error: ticketError } = await supabase.from('kot_tickets').insert({
-        order_id: order.id,
-        station,
-        items_json: items,
-      })
-      if (ticketError) throw ticketError
+      await sql`INSERT INTO kot_tickets (order_id, station, items_json) VALUES (${order.id}, ${station}, ${sql.json(items)})`
     }
 
-    const { error: tableError } = await supabase.from('tables').update({ status: 'kot_sent' }).eq('id', order.table_id)
-    if (tableError) throw tableError
+    await sql`UPDATE tables SET status = 'kot_sent' WHERE id = ${order.table_id}`
 
     const now = new Date().toISOString()
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from('orders')
-      .update({ pos_status: 'KOT_SENT', kot_sent_at: now, status: 'confirmed', confirmed_at: now })
-      .eq('id', params.id)
-      .select('*, items:order_items(*), table:tables(*)')
-      .single()
-    if (updateError) throw updateError
+    await sql`
+      UPDATE orders
+      SET pos_status = 'KOT_SENT', kot_sent_at = ${now}, status = 'confirmed', confirmed_at = ${now}
+      WHERE id = ${params.id}
+    `
 
-    return NextResponse.json({ data: updatedOrder, error: null })
+    const updatedOrder = await fetchOrderWithItems(params.id)
+    return NextResponse.json({ data: updatedOrder, error: null, printerWarning: printerWarning ?? null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to send KOT'
     return NextResponse.json({ data: null, error: message }, { status: 500 })

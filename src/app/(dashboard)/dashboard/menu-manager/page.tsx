@@ -1,27 +1,31 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
+import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { MenuCategory, Ingredient } from '@/lib/types'
 import MenuManagerClient from './MenuManagerClient'
 
-const DEMO_CAFE_ID = '11111111-1111-1111-1111-111111111111'
-
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Menu Manager' }
 
 export default async function MenuManagerPage() {
-  const supabase = createServerSupabaseClient()
+  const sql = getDb()
 
-  const { data: categories } = await supabase
-    .from('menu_categories')
-    .select('*, items:menu_items(*)')
-    .eq('cafe_id', DEMO_CAFE_ID)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
+  const [categoriesRaw, itemsRaw, ingredientsRaw] = await Promise.all([
+    sql`SELECT * FROM menu_categories WHERE cafe_id = ${DEMO_CAFE_ID} AND is_active = true ORDER BY sort_order ASC`,
+    sql`SELECT * FROM menu_items WHERE cafe_id = ${DEMO_CAFE_ID} ORDER BY sort_order ASC`,
+    sql`SELECT * FROM ingredients ORDER BY name ASC`,
+  ])
 
-  const { data: ingredients } = await supabase.from('ingredients').select('*').order('name', { ascending: true })
+  const cats = categoriesRaw as unknown as { id: string }[]
+  const items = itemsRaw as unknown as { category_id: string }[]
+  const categories: MenuCategory[] = cats.map((c) => ({
+    ...c,
+    items: items.filter((i) => i.category_id === c.id),
+  })) as MenuCategory[]
 
   return (
     <MenuManagerClient
-      categories={(categories ?? []) as MenuCategory[]}
-      ingredients={(ingredients ?? []) as Ingredient[]}
+      categories={categories}
+      ingredients={ingredientsRaw as unknown as Ingredient[]}
     />
   )
 }

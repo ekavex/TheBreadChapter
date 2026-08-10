@@ -1,22 +1,21 @@
 import { notFound } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import type { Order } from '@/lib/types'
 import OrderTracker from './OrderTracker'
 
 interface Props { params: { orderId: string } }
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Your Order' }
 
 export default async function OrderPage({ params }: Props) {
-  const supabase = createServerSupabaseClient()
+  const sql = getDb()
 
-  const { data } = await supabase
-    .from('orders')
-    .select('*, items:order_items(*)')
-    .eq('id', params.orderId)
-    .single()
+  const [order] = await sql`SELECT * FROM orders WHERE id = ${params.orderId}`
+  if (!order) notFound()
 
-  if (!data) notFound()
+  const items = await sql`SELECT * FROM order_items WHERE order_id = ${params.orderId} ORDER BY created_at`
+  const data: Order = { ...order, items } as unknown as Order
 
-  return <OrderTracker initialOrder={data as Order} />
+  return <OrderTracker initialOrder={data} />
 }

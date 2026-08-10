@@ -106,10 +106,17 @@ export class BluetoothPrinterService implements PrinterService {
     await this.writeToDevice(cfg.device, buildPayload(ticket))
   }
 
-  // If the RFCOMM device doesn't exist yet and a MAC is configured, try to
-  // bind it automatically. If no MAC is configured, throw a helpful error.
+  // If the device doesn't exist, attempt recovery.
+  // USB paths (/dev/usb/lp*) — device must be plugged in; no binding possible.
+  // RFCOMM paths (/dev/rfcomm*) — try `rfcomm bind` using the configured MAC.
   private async ensureDevice(cfg: BluetoothStationConfig): Promise<void> {
     if (await deviceExists(cfg.device)) return
+
+    if (!cfg.device.includes('rfcomm')) {
+      throw new Error(
+        `Printer device ${cfg.device} not found — is the USB cable connected and the printer powered on?`
+      )
+    }
 
     if (!cfg.mac) {
       throw new Error(

@@ -1,19 +1,13 @@
 // Shared finalization logic used by both the pay route (polling path) and the
-// Pine Labs webhook (push path). The function is idempotent — concurrent calls
-// for the same approved payment are serialized by an atomic UPDATE claim on
-// orders.stock_deducted_at (see inline comment).
+// Pine Labs webhook (push path). Idempotent — concurrent calls are serialized
+// by an atomic UPDATE claim on orders.stock_deducted_at.
 
 import { upsertCustomer } from '@/lib/customers'
+import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
-import type { createAdminClient } from '@/lib/supabase/server'
 import type { Order, Payment } from '@/lib/types'
 import type { PaymentResult } from './types'
 
-type Supabase = ReturnType<typeof createAdminClient>
-
-const ORDER_WITH_ITEMS_AND_TABLE = '*, items:order_items(*), table:tables(*)'
-
-// round-trip through JSON to coerce into a jsonb-compatible value
 function toJson(v: unknown) { return JSON.parse(JSON.stringify(v)) }
 
 function mapPaymentMethod(mode?: string): 'card' | 'upi' | 'cash' | 'unpaid' {
@@ -30,97 +24,104 @@ export interface FinalizeResult {
   payment: Payment
 }
 
-// Atomic claim via stock_deducted_at prevents double-stock-deduction when
-// a webhook push + a poll race each other for the same approved PTRID.
+async function fetchOrderWithItems(orderId: string): Promise<Order | null> {
+  const sql = getDb()
+  const [order] = await sql`SELECT * FROM orders WHERE id = ${orderId}`
+  if (!order) return null
+  const items = await sql`SELECT * FROM order_items WHERE order_id = ${orderId} ORDER BY created_at`
+  const [tableRow] = order.table_id
+    ? await sql`SELECT t.*, s.name AS section_name FROM tables t LEFT JOIN sections s ON s.id = t.section_id WHERE t.id = ${order.table_id}`
+    : [null]
+  return {
+    ...order,
+    items,
+    table: tableRow ? { ...tableRow, section: tableRow.section_name ? { name: tableRow.section_name } : null } : null,
+  } as unknown as Order
+}
+
 export async function finalizeApprovedPayment(
-  supabase:      Supabase,
   order:         Order,
   payment:       Payment,
   statusResult:  PaymentResult,
   customerPhone: string | null | undefined,
   customerName:  string | null | undefined,
 ): Promise<FinalizeResult> {
+  const sql = getDb()
 
   // Early-out if already finalized by a concurrent caller
-  const { data: freshOrder } = await supabase
-    .from('orders').select('pos_status').eq('id', order.id).single()
-  if (freshOrder?.pos_status === 'PAID') {
-    const { data: paid } = await supabase
-      .from('orders').select(ORDER_WITH_ITEMS_AND_TABLE).eq('id', order.id).single()
-    return { order: paid as Order, payment }
+  const [freshOrderRow] = await sql`SELECT pos_status FROM orders WHERE id = ${order.id}`
+  if (freshOrderRow?.pos_status === 'PAID') {
+    const paidOrder = await fetchOrderWithItems(order.id)
+    return { order: paidOrder ?? order, payment }
   }
 
   // Atomic claim — first writer wins; second writer bails without side-effects
-  const { data: claim } = await supabase
-    .from('orders')
-    .update({ stock_deducted_at: new Date().toISOString() })
-    .eq('id', order.id)
-    .is('stock_deducted_at', null)
-    .select('id')
-    .maybeSingle()
+  const claimed = await sql`
+    UPDATE orders
+    SET stock_deducted_at = ${new Date().toISOString()}
+    WHERE id = ${order.id} AND stock_deducted_at IS NULL
+    RETURNING id
+  `
 
-  if (!claim) {
+  if (!claimed.length) {
     logger.warn('payment.finalize.lost_race', { orderId: order.id, paymentId: payment.id })
-    const { data: current } = await supabase
-      .from('orders').select(ORDER_WITH_ITEMS_AND_TABLE).eq('id', order.id).single()
-    return { order: (current as Order) ?? order, payment }
+    const currentOrder = await fetchOrderWithItems(order.id)
+    return { order: currentOrder ?? order, payment }
   }
 
   // Stock deduction — one stock_transaction row per recipe ingredient line
   for (const item of order.items ?? []) {
-    const { data: recipe } = await supabase
-      .from('recipes')
-      .select('*, ingredients:recipe_ingredients(*)')
-      .eq('menu_item_id', item.menu_item_id)
-      .maybeSingle()
+    const [recipe] = await sql`SELECT * FROM recipes WHERE menu_item_id = ${item.menu_item_id}`
     if (!recipe) continue
-    for (const line of recipe.ingredients ?? []) {
-      await supabase.from('stock_transactions').insert({
-        ingredient_id:      line.ingredient_id,
-        type:               'sale_deduction',
-        quantity:           -(line.quantity * item.quantity),
-        reference_order_id: order.id,
-        note: `Order ${order.order_number} — ${item.name} x${item.quantity}`,
-      })
+    const lines = await sql`SELECT * FROM recipe_ingredients WHERE recipe_id = ${recipe.id}`
+    for (const line of lines) {
+      await sql`
+        INSERT INTO stock_transactions (ingredient_id, type, quantity, reference_order_id, note)
+        VALUES (
+          ${line.ingredient_id},
+          'sale_deduction',
+          ${-(line.quantity * item.quantity)},
+          ${order.id},
+          ${`Order ${order.order_number} — ${item.name} x${item.quantity}`}
+        )
+      `
     }
   }
 
   // Update payment record with final bank references
-  const { data: approvedPayment } = await supabase
-    .from('payments')
-    .update({
-      status:        'approved',
-      mode:          statusResult.mode          ?? payment.mode ?? null,
-      rrn:           statusResult.rrn           ?? null,
-      approval_code: statusResult.approvalCode  ?? null,
-      txn_log_id:    statusResult.txnLogId      ?? null,
-      raw_response:  toJson(statusResult),
-    })
-    .eq('id', payment.id)
-    .select()
-    .single()
+  const [approvedPayment] = await sql`
+    UPDATE payments SET
+      status        = 'approved',
+      mode          = ${statusResult.mode ?? payment.mode ?? null},
+      rrn           = ${statusResult.rrn ?? null},
+      approval_code = ${statusResult.approvalCode ?? null},
+      txn_log_id    = ${statusResult.txnLogId ?? null},
+      raw_response  = ${sql.json(toJson(statusResult))}
+    WHERE id = ${payment.id}
+    RETURNING *
+  `
 
   // Release the table
-  await supabase.from('tables').update({ status: 'free' }).eq('id', order.table_id)
+  await sql`UPDATE tables SET status = 'free' WHERE id = ${order.table_id}`
 
   // Optional customer capture (phone entered at payment)
-  const customerId = await upsertCustomer(supabase, customerPhone, customerName)
+  const customerId = await upsertCustomer(customerPhone, customerName)
 
   const now = new Date().toISOString()
-  const { data: paidOrder, error } = await supabase
-    .from('orders')
-    .update({
-      pos_status:      'PAID',
-      payment_status:  'paid',
-      payment_method:  mapPaymentMethod(statusResult.mode ?? payment.mode ?? undefined),
-      status:          'completed',
-      completed_at:    now,
-      ...(customerId ? { customer_id: customerId } : {}),
-    })
-    .eq('id', order.id)
-    .select(ORDER_WITH_ITEMS_AND_TABLE)
-    .single()
-  if (error) throw error
+  const [paidOrder] = await sql`
+    UPDATE orders SET
+      pos_status     = 'PAID',
+      payment_status = 'paid',
+      payment_method = ${mapPaymentMethod(statusResult.mode ?? payment.mode ?? undefined)},
+      status         = 'completed',
+      completed_at   = ${now}
+      ${customerId ? sql`, customer_id = ${customerId}` : sql``}
+    WHERE id = ${order.id}
+    RETURNING *
+  `
+  if (!paidOrder) throw new Error('Failed to mark order as PAID')
+
+  const finalOrder = await fetchOrderWithItems(order.id)
 
   logger.info('payment.finalize.success', {
     orderId:   order.id,
@@ -128,5 +129,5 @@ export async function finalizeApprovedPayment(
     ptrid:     statusResult.ptrid,
   })
 
-  return { order: paidOrder as Order, payment: (approvedPayment as Payment) ?? payment }
+  return { order: (finalOrder ?? paidOrder) as Order, payment: (approvedPayment as Payment) ?? payment }
 }

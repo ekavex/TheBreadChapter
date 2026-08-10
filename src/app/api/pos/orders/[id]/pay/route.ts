@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { paymentProvider } from '@/lib/payment/MockPaymentProvider'
 import { finalizeApprovedPayment } from '@/lib/payment/finalize'
@@ -8,50 +8,51 @@ import { logger } from '@/lib/logger'
 import type { Order, Payment, Terminal } from '@/lib/types'
 import type { PaymentResult } from '@/lib/payment/types'
 
-type Supabase = ReturnType<typeof createAdminClient>
-
 const ALLOWED_MODE_CODE: Record<'card' | 'cash' | 'upi', string> = { card: '1', cash: '2', upi: '10' }
-const ORDER_WITH_ITEMS_AND_TABLE = '*, items:order_items(*), table:tables(*)'
 
 function toJson(value: unknown) { return JSON.parse(JSON.stringify(value)) }
 
-async function latestPaymentFor(supabase: Supabase, orderId: string) {
-  const { data } = await supabase
-    .from('payments')
-    .select('*')
-    .eq('order_id', orderId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  return data as Payment | null
+async function fetchOrderWithItemsAndTable(orderId: string): Promise<Order | null> {
+  const sql = getDb()
+  const [order] = await sql`SELECT * FROM orders WHERE id = ${orderId}`
+  if (!order) return null
+  const items = await sql`SELECT * FROM order_items WHERE order_id = ${orderId} ORDER BY created_at`
+  const [tableRow] = order.table_id
+    ? await sql`SELECT t.*, s.name AS section_name FROM tables t LEFT JOIN sections s ON s.id = t.section_id WHERE t.id = ${order.table_id}`
+    : [null]
+  const table = tableRow ? { ...tableRow, section: tableRow.section_name ? { name: tableRow.section_name } : null } : null
+  return { ...order, items, table } as unknown as Order
 }
 
+async function latestPaymentFor(orderId: string): Promise<Payment | null> {
+  const sql = getDb()
+  const rows = await sql`
+    SELECT * FROM payments
+    WHERE order_id = ${orderId}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `
+  return (rows[0] as Payment) ?? null
+}
 
-// Offline-payment behavior: an order can be left in AWAITING_PAYMENT if the
-// network/terminal drops between charge() and the PAID transition. Rather
-// than firing a second charge (double-charge risk), poll the existing
-// payment's status and finalize/fail from that — never re-charge here.
 async function reconcileAwaitingPayment(
-  supabase: Supabase,
   order: Order,
   terminal: Terminal,
   customerPhone: string | null | undefined,
   customerName: string | null | undefined
 ) {
-  const payment = await latestPaymentFor(supabase, order.id)
+  const sql = getDb()
+  const payment = await latestPaymentFor(order.id)
 
   if (!payment?.plutus_ptrid) {
-    // No charge was ever recorded (e.g. charge() itself threw before the
-    // payment row was inserted) — nothing to reconcile against. Fail it back
-    // to a retryable state instead of leaving the order stuck forever.
     logger.warn('payment.reconcile.no_pending_payment', { orderId: order.id })
-    const { data: failedOrder } = await supabase
-      .from('orders')
-      .update({ pos_status: 'PAYMENT_FAILED', payment_status: 'failed' })
-      .eq('id', order.id)
-      .select(ORDER_WITH_ITEMS_AND_TABLE)
-      .single()
-    return { order: (failedOrder as Order) ?? order, payment }
+    const [failedOrderRow] = await sql`
+      UPDATE orders SET pos_status = 'PAYMENT_FAILED', payment_status = 'failed'
+      WHERE id = ${order.id}
+      RETURNING *
+    `
+    const failedOrder = await fetchOrderWithItemsAndTable(order.id)
+    return { order: failedOrder ?? (failedOrderRow as Order) ?? order, payment }
   }
 
   logger.info('payment.reconcile.start', { orderId: order.id, ptrid: payment.plutus_ptrid })
@@ -62,35 +63,28 @@ async function reconcileAwaitingPayment(
   logger.info('payment.reconcile.result', { orderId: order.id, ptrid: payment.plutus_ptrid, status: statusResult.status })
 
   if (statusResult.status === 'approved') {
-    return finalizeApprovedPayment(supabase, order, payment, statusResult, customerPhone, customerName)
+    return finalizeApprovedPayment(order, payment, statusResult, customerPhone, customerName)
   }
 
   if (statusResult.status === 'pending') {
-    // Terminal/network still hasn't settled — leave it AWAITING_PAYMENT so
-    // the waiter can check again shortly rather than treating it as failed.
     return { order, payment }
   }
 
-  await supabase
-    .from('payments')
-    .update({ status: statusResult.status === 'cancelled' ? 'cancelled' : 'declined', raw_response: toJson(statusResult) })
-    .eq('id', payment.id)
-
-  const { data: failedOrder } = await supabase
-    .from('orders')
-    .update({ pos_status: 'PAYMENT_FAILED', payment_status: 'failed' })
-    .eq('id', order.id)
-    .select(ORDER_WITH_ITEMS_AND_TABLE)
-    .single()
-
-  return { order: (failedOrder as Order) ?? order, payment: { ...payment, status: statusResult.status } as Payment }
+  await sql`
+    UPDATE payments
+    SET status = ${statusResult.status === 'cancelled' ? 'cancelled' : 'declined'},
+        raw_response = ${sql.json(toJson(statusResult))}
+    WHERE id = ${payment.id}
+  `
+  const failedOrder = await fetchOrderWithItemsAndTable(order.id)
+  await sql`
+    UPDATE orders SET pos_status = 'PAYMENT_FAILED', payment_status = 'failed'
+    WHERE id = ${order.id}
+  `
+  return { order: failedOrder ?? order, payment: { ...payment, status: statusResult.status } as Payment }
 }
 
-// POST /api/pos/orders/[id]/pay — Module 5 §9: UploadBilledTransaction (charge)
-// then GetStatus (status) against the PaymentProvider abstraction. On approval:
-// idempotent finalize — deduct ingredient stock per recipe, mark PAID, release
-// the table. On decline: PAYMENT_FAILED, table stays billed so the waiter can
-// retry. See reconcileAwaitingPayment for the crash/offline-retry path.
+// POST /api/pos/orders/[id]/pay
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -103,55 +97,46 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       customer_name?: string | null
     }
 
-    const supabase = createAdminClient()
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select(ORDER_WITH_ITEMS_AND_TABLE)
-      .eq('id', params.id)
-      .single()
-    if (orderError || !order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
-    const typedOrder = order as Order
+    const sql = getDb()
+    const order = await fetchOrderWithItemsAndTable(params.id)
+    if (!order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
 
-    const { data: terminal } = await supabase.from('terminals').select('*').limit(1).maybeSingle()
+    const [terminal] = await sql`SELECT * FROM terminals LIMIT 1`
     if (!terminal) return NextResponse.json({ data: null, error: 'No payment terminal configured' }, { status: 500 })
 
-    if (typedOrder.pos_status === 'PAID') {
-      const payment = await latestPaymentFor(supabase, typedOrder.id)
-      return NextResponse.json({ data: { order: typedOrder, payment }, error: null })
+    if (order.pos_status === 'PAID') {
+      const payment = await latestPaymentFor(order.id)
+      return NextResponse.json({ data: { order, payment }, error: null })
     }
 
-    if (typedOrder.pos_status === 'AWAITING_PAYMENT') {
-      const result = await reconcileAwaitingPayment(supabase, typedOrder, terminal as Terminal, customer_phone, customer_name)
+    if (order.pos_status === 'AWAITING_PAYMENT') {
+      const result = await reconcileAwaitingPayment(order, terminal as Terminal, customer_phone, customer_name)
       return NextResponse.json({ data: result, error: null })
     }
 
-    if (!['BILLED', 'PAYMENT_FAILED'].includes(typedOrder.pos_status)) {
-      return NextResponse.json({ data: null, error: `Cannot take payment on an order that is ${typedOrder.pos_status}` }, { status: 409 })
+    if (!['BILLED', 'PAYMENT_FAILED'].includes(order.pos_status)) {
+      return NextResponse.json({ data: null, error: `Cannot take payment on an order that is ${order.pos_status}` }, { status: 409 })
     }
     if (!mode || !['card', 'cash', 'upi'].includes(mode)) {
       return NextResponse.json({ data: null, error: 'mode must be "card", "cash" or "upi"' }, { status: 400 })
     }
 
-    // Atomic claim — a double-click or a concurrent retry racing this same
-    // request must not both pass the BILLED/PAYMENT_FAILED check and fire two
-    // charges. Whoever's UPDATE actually matches a row wins the charge.
-    const { data: claimedOrder } = await supabase
-      .from('orders')
-      .update({ pos_status: 'AWAITING_PAYMENT' })
-      .eq('id', params.id)
-      .in('pos_status', ['BILLED', 'PAYMENT_FAILED'])
-      .select(ORDER_WITH_ITEMS_AND_TABLE)
-      .maybeSingle()
+    // Atomic claim — whoever's UPDATE matches first wins the charge
+    const claimedRows = await sql`
+      UPDATE orders SET pos_status = 'AWAITING_PAYMENT'
+      WHERE id = ${params.id}
+        AND pos_status = ANY(${sql.array(['BILLED', 'PAYMENT_FAILED'])})
+      RETURNING *
+    `
 
-    if (!claimedOrder) {
-      const { data: fresh } = await supabase.from('orders').select(ORDER_WITH_ITEMS_AND_TABLE).eq('id', params.id).single()
-      const freshOrder = fresh as Order | null
+    if (!claimedRows.length) {
+      const freshOrder = await fetchOrderWithItemsAndTable(params.id)
       if (freshOrder?.pos_status === 'AWAITING_PAYMENT') {
-        const result = await reconcileAwaitingPayment(supabase, freshOrder, terminal as Terminal, customer_phone, customer_name)
+        const result = await reconcileAwaitingPayment(freshOrder, terminal as Terminal, customer_phone, customer_name)
         return NextResponse.json({ data: result, error: null })
       }
       if (freshOrder?.pos_status === 'PAID') {
-        const payment = await latestPaymentFor(supabase, freshOrder.id)
+        const payment = await latestPaymentFor(freshOrder.id)
         return NextResponse.json({ data: { order: freshOrder, payment }, error: null })
       }
       return NextResponse.json(
@@ -160,7 +145,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       )
     }
 
-    const claimed = claimedOrder as Order
+    const claimed = { ...claimedRows[0], items: order.items, table: order.table } as Order
     const transactionNumber = `${claimed.order_number}-${Date.now()}`
     logger.info('payment.charge.start', { orderId: claimed.id, transactionNumber, amountPaisa: claimed.total_paisa, mode })
 
@@ -174,32 +159,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         storeId: DEMO_STORE_ID,
       })
     } catch (chargeErr) {
-      // Network/terminal drop mid-charge, before any payment row exists.
-      // Fail it back to a retryable state rather than leaving it claimed
-      // forever — a retry will start a clean new charge.
       const message = chargeErr instanceof Error ? chargeErr.message : String(chargeErr)
       logger.error('payment.charge.error', { orderId: claimed.id, transactionNumber, error: message })
-      await supabase.from('orders').update({ pos_status: 'PAYMENT_FAILED', payment_status: 'failed' }).eq('id', params.id)
+      await sql`UPDATE orders SET pos_status = 'PAYMENT_FAILED', payment_status = 'failed' WHERE id = ${params.id}`
       throw chargeErr
     }
     logger.info('payment.charge.result', { orderId: claimed.id, transactionNumber, ptrid: chargeResult.ptrid, status: chargeResult.status })
 
-    const { data: payment, error: paymentInsertError } = await supabase
-      .from('payments')
-      .insert({
-        order_id: params.id,
-        transaction_number: transactionNumber,
-        plutus_ptrid: chargeResult.ptrid ?? null,
-        status: 'initiated',
-        mode: chargeResult.mode ?? null,
-        amount_paisa: claimed.total_paisa,
-        client_id: terminal.client_id,
-        store_id: DEMO_STORE_ID,
-        raw_response: toJson(chargeResult),
-      })
-      .select()
-      .single()
-    if (paymentInsertError) throw paymentInsertError
+    const [payment] = await sql`
+      INSERT INTO payments (
+        order_id, transaction_number, plutus_ptrid, status, mode,
+        amount_paisa, client_id, store_id, raw_response
+      ) VALUES (
+        ${params.id},
+        ${transactionNumber},
+        ${chargeResult.ptrid ?? null},
+        'initiated',
+        ${chargeResult.mode ?? null},
+        ${claimed.total_paisa},
+        ${terminal.client_id},
+        ${DEMO_STORE_ID},
+        ${sql.json(toJson(chargeResult))}
+      )
+      RETURNING *
+    `
 
     logger.info('payment.status.start', { orderId: claimed.id, ptrid: chargeResult.ptrid })
     const statusResult = chargeResult.ptrid
@@ -208,26 +191,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     logger.info('payment.status.result', { orderId: claimed.id, ptrid: chargeResult.ptrid, status: statusResult.status })
 
     if (statusResult.status === 'approved') {
-      const result = await finalizeApprovedPayment(supabase, claimed, payment as Payment, statusResult, customer_phone, customer_name)
+      const result = await finalizeApprovedPayment(claimed, payment as Payment, statusResult, customer_phone, customer_name)
       return NextResponse.json({ data: result, error: null })
     }
 
-    // declined / cancelled / pending-but-unresolved
     logger.warn('payment.declined', { orderId: claimed.id, ptrid: chargeResult.ptrid, status: statusResult.status })
-    await supabase
-      .from('payments')
-      .update({ status: statusResult.status === 'cancelled' ? 'cancelled' : 'declined', raw_response: toJson(statusResult) })
-      .eq('id', payment.id)
-
-    const { data: failedOrder, error: failedError } = await supabase
-      .from('orders')
-      .update({ pos_status: 'PAYMENT_FAILED', payment_status: 'failed' })
-      .eq('id', params.id)
-      .select(ORDER_WITH_ITEMS_AND_TABLE)
-      .single()
-    if (failedError) throw failedError
-
-    return NextResponse.json({ data: { order: failedOrder, payment: { ...payment, status: statusResult.status } }, error: null })
+    await sql`
+      UPDATE payments
+      SET status = ${statusResult.status === 'cancelled' ? 'cancelled' : 'declined'},
+          raw_response = ${sql.json(toJson(statusResult))}
+      WHERE id = ${payment.id}
+    `
+    await sql`
+      UPDATE orders SET pos_status = 'PAYMENT_FAILED', payment_status = 'failed'
+      WHERE id = ${params.id}
+    `
+    const failedOrder = await fetchOrderWithItemsAndTable(params.id)
+    return NextResponse.json({ data: { order: failedOrder ?? claimed, payment: { ...payment, status: statusResult.status } }, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Payment failed'
     logger.error('payment.route.error', { orderId: params.id, error: message })

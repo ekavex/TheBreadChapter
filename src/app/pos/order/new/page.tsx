@@ -1,52 +1,55 @@
 import { notFound, redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { DEMO_CAFE_ID } from '@/lib/constants'
-import type { MenuCategory, Order, Table } from '@/lib/types'
+import type { MenuCategory, Table } from '@/lib/types'
 import PosOrderClient from '../[orderId]/PosOrderClient'
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'New Order' }
 
 export default async function NewOrderPage({ searchParams }: { searchParams: { tableId?: string } }) {
   const tableId = searchParams.tableId
   if (!tableId) notFound()
 
-  const supabase = createServerSupabaseClient()
+  const sql = getDb()
 
-  // If an open order already exists (e.g. user hit back then tapped again),
-  // resume it rather than showing a duplicate new-order screen.
-  const { data: existing } = await supabase
-    .from('orders')
-    .select('id')
-    .eq('table_id', tableId)
-    .not('pos_status', 'in', '(PAID,CANCELLED)')
-    .maybeSingle()
+  // Resume existing open order rather than creating a duplicate
+  const existing = await sql`
+    SELECT id FROM orders
+    WHERE table_id = ${tableId}
+      AND pos_status NOT IN ('PAID', 'CANCELLED')
+    LIMIT 1
+  `
+  if (existing[0]) redirect(`/pos/order/${existing[0].id}`)
 
-  if (existing) redirect(`/pos/order/${existing.id}`)
+  const [tableRaw, categoriesRaw, menuItems] = await Promise.all([
+    sql`SELECT t.*, s.id AS section_id, s.name AS section_name, s.sort_order AS section_sort_order FROM tables t LEFT JOIN sections s ON s.id = t.section_id WHERE t.id = ${tableId}`,
+    sql`SELECT * FROM menu_categories WHERE cafe_id = ${DEMO_CAFE_ID} AND is_active = true ORDER BY sort_order ASC`,
+    sql`SELECT * FROM menu_items WHERE cafe_id = ${DEMO_CAFE_ID} ORDER BY sort_order ASC`,
+  ])
 
-  const { data: table } = await supabase
-    .from('tables')
-    .select('*, section:sections(*)')
-    .eq('id', tableId)
-    .single()
+  if (!tableRaw[0]) notFound()
 
-  if (!table) notFound()
+  type TR = { section_name?: string; section_id?: string; section_sort_order?: number }
+  const tr = tableRaw[0] as unknown as TR
+  const table: Table = {
+    ...(tableRaw[0] as unknown as object),
+    section: tr.section_name ? { id: tr.section_id, name: tr.section_name, sort_order: tr.section_sort_order } : null,
+  } as unknown as Table
 
-  const { data: categories } = await supabase
-    .from('menu_categories')
-    .select('*, items:menu_items(*)')
-    .eq('cafe_id', DEMO_CAFE_ID)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
+  const cats = categoriesRaw as unknown as { id: string }[]
+  const miArr = menuItems as unknown as { category_id: string; is_available: boolean }[]
+  const categories: MenuCategory[] = cats.map((c) => ({
+    ...c,
+    items: miArr.filter((i) => i.category_id === c.id && i.is_available),
+  })) as MenuCategory[]
 
   return (
     <PosOrderClient
       initialOrder={null}
       tableId={tableId}
-      initialTable={table as Table}
-      categories={((categories ?? []) as MenuCategory[]).map((c) => ({
-        ...c,
-        items: (c.items ?? []).filter((i) => i.is_available),
-      }))}
+      initialTable={table}
+      categories={categories}
     />
   )
 }

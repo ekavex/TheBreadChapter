@@ -1,20 +1,20 @@
 import bcrypt from 'bcryptjs'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import type { UserRole } from '@/lib/types'
 
 export async function verifyCredentials(
   userId: string,
   password: string
 ): Promise<{ role: UserRole; displayName: string } | null> {
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from('auth_credentials')
-    .select('password_hash, role, display_name')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (error || !data) return null
-  const match = await bcrypt.compare(password, data.password_hash)
+  const sql = getDb()
+  const rows = await sql`
+    SELECT password_hash, role, display_name
+    FROM auth_credentials
+    WHERE user_id = ${userId}
+  `
+  const row = rows[0]
+  if (!row) return null
+  const match = await bcrypt.compare(password, row.password_hash as string)
   if (!match) return null
-  return { role: data.role as UserRole, displayName: data.display_name }
+  return { role: row.role as UserRole, displayName: row.display_name as string }
 }

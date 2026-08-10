@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import type { Ingredient } from '@/lib/types'
 
@@ -11,11 +11,14 @@ export async function GET(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase.from('ingredients').select('*').order('name', { ascending: true })
+  try {
+    const sql = getDb()
+    const data = await sql`SELECT * FROM ingredients ORDER BY name ASC`
 
-  if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
-
-  const lowStock = ((data ?? []) as Ingredient[]).filter((i) => i.current_stock <= i.low_stock_threshold)
-  return NextResponse.json({ data: lowStock, error: null })
+    const lowStock = (data as unknown as Ingredient[]).filter((i) => i.current_stock <= i.low_stock_threshold)
+    return NextResponse.json({ data: lowStock, error: null })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to fetch low-stock ingredients'
+    return NextResponse.json({ data: null, error: message }, { status: 500 })
+  }
 }

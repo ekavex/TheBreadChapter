@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
@@ -9,8 +9,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
 
+  let bodyNumber: number | undefined
   try {
     const body = await req.json()
+    bodyNumber = body.number
     const patch: {
       number?: number
       label?: string | null
@@ -27,22 +29,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ data: null, error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('tables')
-      .update(patch)
-      .eq('id', params.id)
-      .select()
-      .single()
+    const sql = getDb()
+    const [data] = await sql`UPDATE tables SET ${sql(patch as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
 
-    if (error) {
-      if (error.code === '23505') {
-        return NextResponse.json({ data: null, error: `Table number ${body.number} already exists` }, { status: 409 })
-      }
-      throw error
-    }
     return NextResponse.json({ data, error: null })
   } catch (err) {
+    const code = (err as { code?: string }).code
+    if (code === '23505') {
+      return NextResponse.json({ data: null, error: `Table number ${bodyNumber} already exists` }, { status: 409 })
+    }
     return NextResponse.json({ data: null, error: err instanceof Error ? err.message : 'Update failed' }, { status: 500 })
   }
 }
@@ -53,30 +48,27 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
 
-  const supabase = createAdminClient()
+  try {
+    const sql = getDb()
 
-  // Check the table's current status
-  const { data: table, error: fetchError } = await supabase
-    .from('tables')
-    .select('status, number')
-    .eq('id', params.id)
-    .single()
+    // Check the table's current status
+    const [table] = await sql`SELECT status, number FROM tables WHERE id = ${params.id}`
 
-  if (fetchError || !table) {
-    return NextResponse.json({ data: null, error: 'Table not found' }, { status: 404 })
+    if (!table) {
+      return NextResponse.json({ data: null, error: 'Table not found' }, { status: 404 })
+    }
+    if (table.status !== 'free') {
+      return NextResponse.json(
+        { data: null, error: `Table ${table.number} is currently ${table.status} — free it before removing` },
+        { status: 409 }
+      )
+    }
+
+    await sql`UPDATE tables SET is_active = false WHERE id = ${params.id}`
+
+    return NextResponse.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete table'
+    return NextResponse.json({ data: null, error: message }, { status: 500 })
   }
-  if (table.status !== 'free') {
-    return NextResponse.json(
-      { data: null, error: `Table ${table.number} is currently ${table.status} — free it before removing` },
-      { status: 409 }
-    )
-  }
-
-  const { error } = await supabase
-    .from('tables')
-    .update({ is_active: false })
-    .eq('id', params.id)
-
-  if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
-  return NextResponse.json({ data: { ok: true }, error: null })
 }

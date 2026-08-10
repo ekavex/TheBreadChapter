@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { getReportData, type ReportRange } from '@/lib/reports'
 
@@ -13,7 +12,6 @@ export async function GET(req: NextRequest, { params }: { params: { range: strin
   if (!['daily', 'weekly', 'monthly'].includes(params.range)) {
     return NextResponse.json({ data: null, error: 'range must be daily|weekly|monthly' }, { status: 400 })
   }
-  const supabase = createAdminClient()
-  const data = await getReportData(supabase, params.range as ReportRange)
+  const data = await getReportData(params.range as ReportRange)
   return NextResponse.json({ data, error: null })
 }
