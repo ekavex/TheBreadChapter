@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { Ingredient } from '@/lib/types'
+
+async function recordStaffAction(userId: string, action: string, description: string) {
+  const sql = getDb()
+  await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +65,13 @@ export async function POST(req: NextRequest) {
       )
       RETURNING *
     `
+
+    const user = await getSessionUser(req)
+    if (user) {
+      const who = user.displayName || user.userId
+      await recordStaffAction(user.userId, 'ingredient_added', `${who} added ingredient: "${name}"`)
+    }
+
     return NextResponse.json({ data, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create ingredient'

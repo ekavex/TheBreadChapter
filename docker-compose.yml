@@ -11,6 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./docker/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U breaduser -d breadchapter"]
       interval: 5s
