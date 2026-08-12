@@ -111,16 +111,18 @@ export async function GET(req: NextRequest) {
         })
       })
 
-      // ── Staff menu change notifications ───────────────────────
-      type StaffRow = { id: string; description: string; created_by: string; created_at: string }
+      // ── Staff action notifications (menu + inventory) ─────────
+      type StaffRow = { id: string; action: string; description: string; created_by: string; created_at: string }
+      const inventoryActions = new Set(['ingredient_added', 'ingredient_updated', 'ingredient_deleted', 'stock_updated'])
       staffNotifResult.forEach((n: unknown) => {
         const row = n as StaffRow
+        const isInventory = inventoryActions.has(row.action)
         notifications.push({
           id: `staff-${row.id}`,
           severity: 'info',
-          title: `Menu change by ${row.created_by}`,
+          title: isInventory ? `Inventory change by ${row.created_by}` : `Menu change by ${row.created_by}`,
           body: row.description,
-          href: '/dashboard/menu-manager',
+          href: isInventory ? '/dashboard/inventory' : '/dashboard/menu-manager',
           createdAt: row.created_at,
         })
       })

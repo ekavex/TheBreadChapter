@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { StockTxnType } from '@/lib/types'
+
+async function recordStaffAction(userId: string, action: string, description: string) {
+  const sql = getDb()
+  await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
+}
 
 // POST /api/ingredients/[id]/stock — Module 1 "Update Stock":
 // purchase entry, manual adjustment, expired stock removal. Every change
@@ -56,6 +62,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const [ingredient] = await sql`SELECT * FROM ingredients WHERE id = ${params.id}`
+
+    const user = await getSessionUser(req)
+    if (user) {
+      const who = user.displayName || user.userId
+      const ingName = (ingredient as { name?: string })?.name ?? params.id
+      const sign = signedQuantity > 0 ? '+' : ''
+      const txnLabel = type === 'purchase' ? 'purchased' : type === 'expired_removal' ? 'removed expired' : 'adjusted'
+      await recordStaffAction(
+        user.userId,
+        'stock_updated',
+        `${who} ${txnLabel} stock for "${ingName}": ${sign}${signedQuantity} ${(ingredient as { unit?: string })?.unit ?? ''}`
+      )
+    }
 
     return NextResponse.json({ data: { transaction: txn, ingredient }, error: null })
   } catch (err) {

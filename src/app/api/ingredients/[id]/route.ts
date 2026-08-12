@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { Ingredient } from '@/lib/types'
+
+async function recordStaffAction(userId: string, action: string, description: string) {
+  const sql = getDb()
+  await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
+}
 
 type IngredientPatch = Partial<
   Pick<Ingredient, 'name' | 'unit' | 'low_stock_threshold' | 'cost_per_unit_paisa' | 'is_perishable' | 'expiry_date'>
@@ -32,6 +38,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const sql = getDb()
     const [data] = await sql`UPDATE ingredients SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
 
+    const user = await getSessionUser(req)
+    if (user) {
+      const who = user.displayName || user.userId
+      const ingredientName = (data as { name?: string })?.name ?? params.id
+      await recordStaffAction(user.userId, 'ingredient_updated', `${who} updated ingredient: "${ingredientName}"`)
+    }
+
     return NextResponse.json({ data, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update ingredient'
@@ -46,7 +59,16 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   try {
     const sql = getDb()
+    const [existing] = await sql`SELECT name FROM ingredients WHERE id = ${params.id}`
     await sql`DELETE FROM ingredients WHERE id = ${params.id}`
+
+    const user = await getSessionUser(req)
+    if (user) {
+      const who = user.displayName || user.userId
+      const ingredientName = (existing as { name?: string } | undefined)?.name ?? params.id
+      await recordStaffAction(user.userId, 'ingredient_deleted', `${who} deleted ingredient: "${ingredientName}"`)
+    }
+
     return NextResponse.json({ data: { ok: true }, error: null })
   } catch (err) {
     const code = (err as { code?: string }).code

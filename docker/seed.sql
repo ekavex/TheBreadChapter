@@ -1,4 +1,4 @@
--- Seed data: cafe, users, menu, tables, sections
+-- Seed data: cafe, users, menu, tables, sections, ingredients, recipes, terminals
 -- Applied automatically by Docker on first start (empty volume only).
 -- Passwords: admin=admin123, manager=manager123, staff=staff123
 
@@ -95,3 +95,45 @@ fea76353-c809-42e8-9d80-9cdca5b8bdb3	11111111-1111-1111-1111-111111111111	ca0000
 26aa3487-518a-44dc-bef6-a0a7076aaad1	11111111-1111-1111-1111-111111111111	ca000001-0000-0000-0000-000000000001	Mocha	\N	Rich chocolate and bold espresso blended beneath silky steamed milk	\N	296.00	\N	t	f	f	t	f	0	t	t	50	10	5	{}	2026-08-05 10:01:54.310688+00	2026-08-05 10:01:54.310688+00	beverage	0
 \.
 ALTER TABLE public.menu_items ENABLE TRIGGER ALL;
+
+-- ── Ingredients ─────────────────────────────────────────────────────────────
+
+ALTER TABLE public.ingredients DISABLE TRIGGER ALL;
+COPY public.ingredients (id, name, unit, current_stock, low_stock_threshold, cost_per_unit_paisa, is_perishable, expiry_date, created_at, updated_at) FROM stdin;
+a0000001-0000-0000-0000-000000000001	Milk	ml	17800.000	3000.000	5	t	\N	2026-07-28 05:23:22.486911+00	2026-07-28 05:23:22.486911+00
+a0000002-0000-0000-0000-000000000002	Coffee Powder	gm	4890.000	500.000	12	f	\N	2026-07-28 05:23:22.486911+00	2026-07-28 05:23:22.486911+00
+a0000003-0000-0000-0000-000000000003	Sugar	gm	7835.000	500.000	6	f	\N	2026-07-28 05:23:22.486911+00	2026-07-28 05:23:22.486911+00
+a0000004-0000-0000-0000-000000000004	Bread	pieces	178.000	20.000	400	t	\N	2026-07-28 05:23:22.486911+00	2026-07-28 05:23:22.486911+00
+a0000005-0000-0000-0000-000000000005	Butter	gm	2890.000	300.000	80	t	\N	2026-07-28 05:23:22.486911+00	2026-07-28 05:23:22.486911+00
+a0000006-0000-0000-0000-000000000006	Vegetables	gm	6000.000	500.000	20	t	\N	2026-07-28 05:23:22.486911+00	2026-07-28 05:23:22.486911+00
+8d5ab3f1-e723-4593-8d5e-1e2b8a668586	Tea Leaves	gm	500.000	50.000	50	f	\N	2026-08-10 18:24:38.606427+00	2026-08-10 18:24:38.606427+00
+\.
+ALTER TABLE public.ingredients ENABLE TRIGGER ALL;
+
+-- ── Recipes ─────────────────────────────────────────────────────────────────
+
+ALTER TABLE public.recipes DISABLE TRIGGER ALL;
+COPY public.recipes (id, menu_item_id, created_at) FROM stdin;
+b0000001-0000-0000-0000-000000000001	243f1217-4976-46ec-8cf9-8d2ff7560f16	2026-07-28 05:23:22.488508+00
+b0000002-0000-0000-0000-000000000002	725267b5-d678-4ccc-9b81-37d165138c69	2026-07-28 05:23:22.496916+00
+a578b0cf-832b-478a-a301-ad7ef8c98967	8ed41962-0285-4dcf-ac0a-f30b33c7223e	2026-08-10 18:21:15.875939+00
+\.
+ALTER TABLE public.recipes ENABLE TRIGGER ALL;
+
+-- ── Recipe ingredients ───────────────────────────────────────────────────────
+
+ALTER TABLE public.recipe_ingredients DISABLE TRIGGER ALL;
+COPY public.recipe_ingredients (id, recipe_id, ingredient_id, quantity) FROM stdin;
+94f09006-f504-4791-9e2c-50e09421b681	a578b0cf-832b-478a-a301-ad7ef8c98967	a0000001-0000-0000-0000-000000000001	100.000
+7728229a-1cbd-46a6-8283-a9bab3a32d56	a578b0cf-832b-478a-a301-ad7ef8c98967	a0000003-0000-0000-0000-000000000003	50.000
+6f84703a-ff5a-47b9-928f-5f90033a9d2a	a578b0cf-832b-478a-a301-ad7ef8c98967	8d5ab3f1-e723-4593-8d5e-1e2b8a668586	5.000
+\.
+ALTER TABLE public.recipe_ingredients ENABLE TRIGGER ALL;
+
+-- ── Terminals ────────────────────────────────────────────────────────────────
+
+ALTER TABLE public.terminals DISABLE TRIGGER ALL;
+COPY public.terminals (id, client_id, label, section_id, created_at) FROM stdin;
+f9b2a222-9776-43bc-b235-cc1966973399	UAT-TERMINAL-1	Front Counter A910S	1	2026-07-28 05:23:22.474817+00
+\.
+ALTER TABLE public.terminals ENABLE TRIGGER ALL;
