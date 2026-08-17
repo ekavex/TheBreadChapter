@@ -91,14 +91,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await sql`INSERT INTO kot_tickets (order_id, station, items_json) VALUES (${order.id}, ${station}, ${sql.json(items)})`
     }
 
-    await sql`UPDATE tables SET status = 'kot_sent' WHERE id = ${order.table_id}`
-
     const now = new Date().toISOString()
-    await sql`
-      UPDATE orders
-      SET pos_status = 'KOT_SENT', kot_sent_at = ${now}, status = 'confirmed', confirmed_at = ${now}
-      WHERE id = ${params.id}
-    `
+    await sql.begin(async (tx) => {
+      await tx`UPDATE tables SET status = 'kot_sent' WHERE id = ${order.table_id}`
+      await tx`
+        UPDATE orders
+        SET pos_status = 'KOT_SENT', kot_sent_at = ${now}, status = 'confirmed', confirmed_at = ${now}
+        WHERE id = ${params.id} AND pos_status = 'OPEN'
+      `
+    })
 
     const updatedOrder = await fetchOrderWithItems(params.id)
     return NextResponse.json({ data: updatedOrder, error: null, printerWarning: printerWarning ?? null })

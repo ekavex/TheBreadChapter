@@ -29,8 +29,11 @@ export async function GET(req: NextRequest) {
     const today = new Date().toISOString().split('T')[0]
     const soonCutoff = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const stuckCutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    const unsettledCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString()
 
-    const [ingredientsResult, stuckOrdersResult, staffNotifResult] = await Promise.all([
+    // Unsettled money is the highest-priority notification there is: an order
+    // whose payment we could not resolve must never quietly disappear.
+    const [ingredientsResult, stuckOrdersResult, staffNotifResult, unsettledResult] = await Promise.all([
       sql`SELECT * FROM ingredients ORDER BY name`,
       sql`
         SELECT id, order_number, status, created_at FROM orders
@@ -46,11 +49,40 @@ export async function GET(req: NextRequest) {
             LIMIT 20
           `
         : Promise.resolve([]),
+      sql`
+        SELECT id, order_number, pos_status, total_amount, updated_at
+        FROM orders
+        WHERE cafe_id = ${DEMO_CAFE_ID}
+          AND pos_status IN ('REQUIRES_VERIFICATION', 'AWAITING_PAYMENT')
+          AND updated_at <= ${unsettledCutoff}
+        ORDER BY updated_at ASC
+        LIMIT 20
+      `,
     ])
 
     const items = ingredientsResult as unknown as Ingredient[]
     const notifications: AppNotification[] = []
     const now = new Date().toISOString()
+
+    // Visible to every role — whoever is on the floor needs to act on this.
+    ;(unsettledResult as unknown as {
+      id: string; order_number: string; pos_status: string; total_amount: number; updated_at: string
+    }[]).forEach((o) => {
+      const mins = Math.round((Date.now() - new Date(o.updated_at).getTime()) / 60000)
+      const needsHuman = o.pos_status === 'REQUIRES_VERIFICATION'
+      notifications.push({
+        id: `unsettled-${o.id}`,
+        severity: 'critical',
+        title: needsHuman
+          ? `Order ${o.order_number} — payment needs verification`
+          : `Order ${o.order_number} — payment unresolved for ${mins} min`,
+        body: needsHuman
+          ? `₹${o.total_amount}: check the terminal and the Pine Labs report before charging again.`
+          : `₹${o.total_amount} has been awaiting the terminal for ${mins} min.`,
+        href: `/pos/order/${o.id}`,
+        createdAt: o.updated_at,
+      })
+    })
 
     if (isManagerOrAdmin) {
       // ── Expired ingredients ──────────────────────────────────

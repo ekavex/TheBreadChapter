@@ -1,10 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
 import { printKot } from '@/lib/printer/kotPrint'
+import { printBill } from '@/lib/printer/billPrint'
 
 interface Props {
   initialOrder: Order | null
@@ -20,8 +21,22 @@ const STATUS_LABELS: Record<PosStatus, string> = {
   AWAITING_PAYMENT: 'Awaiting Payment',
   PAID: 'Paid',
   PAYMENT_FAILED: 'Payment Failed',
+  REQUIRES_VERIFICATION: 'Needs Verification',
   CANCELLED: 'Cancelled',
 }
+
+type PaymentState = 'paid' | 'failed' | 'cancelled' | 'pending' | 'requires_verification'
+
+interface PaymentResponse {
+  order: Order
+  payment: Payment
+  paymentState: PaymentState
+  message: string | null
+}
+
+// Automatic follow-up while a transaction is open on the terminal.
+const PAYMENT_TRACK_GAP_MS = 2_000
+const PAYMENT_TRACK_TIMEOUT_MS = 6 * 60_000
 
 async function api<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -43,6 +58,11 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null)
+  // True while the terminal still has the transaction open — the screen tracks
+  // it automatically so the cashier never has to poll by hand.
+  const [autoTracking, setAutoTracking] = useState(false)
+  const trackingRef = useRef(false)
 
   // Table info — use joined order.table once order exists, fall back to initialTable prop
   const tableNumber = order?.table?.number ?? initialTable?.number
@@ -128,26 +148,94 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     }
   }
 
+  // One request shape for both "take payment" and "verify what happened".
+  // The server decides which it is from the order state, so the client can
+  // never accidentally start a second charge.
+  const submitPayment = useCallback(
+    async (opts: { announce: boolean }): Promise<PaymentState | null> => {
+      if (!order) return null
+      try {
+        const result = await api<PaymentResponse>(`/api/pos/orders/${order.id}/pay`, 'POST', {
+          mode: paymentMode,
+          customer_phone: customerPhone.trim() || null,
+          customer_name: customerName.trim() || null,
+        })
+        setOrder(result.order)
+        setPayment(result.payment)
+        setPaymentNotice(result.message ?? null)
+
+        // A timeout is NOT a failure — never say "declined" unless Pine Labs did.
+        if (opts.announce || result.paymentState !== 'pending') {
+          switch (result.paymentState) {
+            case 'paid':
+              toast.success('Payment approved')
+              break
+            case 'pending':
+              toast('Waiting for the customer to pay on the terminal…', { icon: '⏳' })
+              break
+            case 'requires_verification':
+              toast.error(result.message ?? 'Payment needs verification — do not retry yet', { duration: 8000 })
+              break
+            case 'cancelled':
+              toast('Payment cancelled on the terminal', { icon: '🚫' })
+              break
+            default:
+              toast.error('Payment declined by the terminal — you can retry')
+          }
+        }
+        return result.paymentState
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Payment failed')
+        return null
+      }
+    },
+    [order, paymentMode, customerPhone, customerName]
+  )
+
   async function pay() {
-    if (!order) return
     setBusy(true)
     try {
-      const result = await api<{ order: Order; payment: Payment }>(`/api/pos/orders/${order.id}/pay`, 'POST', {
-        mode: paymentMode,
-        customer_phone: customerPhone.trim() || null,
-        customer_name: customerName.trim() || null,
-      })
-      setOrder(result.order)
-      setPayment(result.payment)
-      if (result.order.pos_status === 'PAID') toast.success('Payment approved')
-      else if (result.order.pos_status === 'AWAITING_PAYMENT') toast('Still processing — check again shortly')
-      else toast.error('Payment declined — you can retry')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Payment failed')
+      await submitPayment({ announce: true })
     } finally {
       setBusy(false)
     }
   }
+
+  // Keeps verifying an open transaction until the terminal settles it. Each
+  // request already waits server-side, so this is a slow, cheap loop — and it
+  // is verification only, never a new charge.
+  useEffect(() => {
+    if (order?.pos_status !== 'AWAITING_PAYMENT') {
+      trackingRef.current = false
+      setAutoTracking(false)
+      return
+    }
+    if (trackingRef.current) return
+
+    trackingRef.current = true
+    setAutoTracking(true)
+    let cancelled = false
+
+    const track = async () => {
+      const deadline = Date.now() + PAYMENT_TRACK_TIMEOUT_MS
+      while (!cancelled && Date.now() < deadline) {
+        const state = await submitPayment({ announce: false })
+        if (cancelled || state !== 'pending') break
+        await new Promise((r) => setTimeout(r, PAYMENT_TRACK_GAP_MS))
+      }
+      if (!cancelled) {
+        trackingRef.current = false
+        setAutoTracking(false)
+      }
+    }
+
+    void track()
+    return () => {
+      cancelled = true
+      trackingRef.current = false
+      setAutoTracking(false)
+    }
+  }, [order?.pos_status, submitPayment])
 
   async function markOccupied() {
     setBusy(true)
@@ -186,7 +274,10 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const runningSubtotal = items.reduce((sum, i) => sum + i.subtotal, 0)
   const posStatus = order?.pos_status ?? 'OPEN'
   const isOpen = posStatus === 'OPEN'
-  const canCancel = !['PAID', 'CANCELLED'].includes(posStatus)
+  // AWAITING_PAYMENT stays cancellable — the server force-cancels the open
+  // transaction and refuses if the money was actually taken. An order already
+  // flagged for verification must be resolved by a human, not cancelled away.
+  const canCancel = !['PAID', 'CANCELLED', 'REQUIRES_VERIFICATION'].includes(posStatus)
   const tableIsFree = !order || order.table?.status === 'free'
   const activeCategoryItems = categories.find((c) => c.id === activeCategory)?.items ?? []
 
@@ -352,10 +443,21 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         </button>
       )}
 
+      {order && ['BILLED', 'AWAITING_PAYMENT', 'PAYMENT_FAILED', 'PAID'].includes(posStatus) && (
+        <button
+          onClick={() => printBill(order, { paid: posStatus === 'PAID', mode: payment?.mode ?? order.payment_method })}
+          className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl border border-ink/15 text-ink py-2.5 text-sm font-medium"
+        >
+          <Receipt size={15} /> Print customer bill
+        </button>
+      )}
+
       {(posStatus === 'BILLED' || posStatus === 'PAYMENT_FAILED') && (
         <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
           {posStatus === 'PAYMENT_FAILED' && (
-            <p className="text-sm text-status-overdue mb-3">Payment was declined or cancelled — try again.</p>
+            <p className="text-sm text-status-overdue mb-3">
+              {paymentNotice ?? 'The terminal declined or cancelled this payment — you can retry.'}
+            </p>
           )}
           <p className="text-sm font-medium text-ink-muted mb-2">Payment method</p>
           <div className="grid grid-cols-3 gap-2 mb-4">
@@ -398,16 +500,42 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
 
       {posStatus === 'AWAITING_PAYMENT' && (
         <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+            </span>
+            <p className="font-display font-semibold text-ink">
+              {autoTracking ? 'Waiting for the terminal…' : 'Payment in progress'}
+            </p>
+          </div>
           <p className="text-sm text-ink-muted mb-3">
-            Payment is being processed. If the network or terminal dropped mid-transaction, checking again is
-            safe — it will never charge twice.
+            {paymentNotice ??
+              'Ask the customer to complete the payment on the terminal. This screen updates itself — you never need to charge again.'}
+          </p>
+          <button
+            onClick={pay}
+            disabled={busy}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-ink/15 text-ink py-3 font-medium disabled:opacity-50"
+          >
+            <CreditCard size={16} /> {busy ? 'Checking…' : 'Check now'}
+          </button>
+        </div>
+      )}
+
+      {posStatus === 'REQUIRES_VERIFICATION' && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5">
+          <p className="font-display font-semibold text-amber-900 mb-1">Payment needs verification</p>
+          <p className="text-sm text-amber-900/80 mb-3">
+            {paymentNotice ??
+              'We could not confirm the outcome of this payment with Pine Labs. Check the terminal and the Pine Labs report before charging again — the customer may already have paid.'}
           </p>
           <button
             onClick={pay}
             disabled={busy}
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
           >
-            <CreditCard size={16} /> {busy ? 'Checking…' : 'Check payment status'}
+            <CreditCard size={16} /> {busy ? 'Checking…' : 'Re-check with Pine Labs'}
           </button>
         </div>
       )}

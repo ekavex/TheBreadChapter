@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 import { getDb } from '@/lib/db'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,9 @@ export const dynamic = 'force-dynamic'
 // POST /api/tables — generate QR codes for all tables of a cafe
 
 export async function POST(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   try {
     const { cafeId, cafeSlug } = await req.json()
     const sql = getDb()
@@ -44,6 +48,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   const cafeId = new URL(req.url).searchParams.get('cafeId')
   if (!cafeId) return NextResponse.json({ error: 'cafeId required' }, { status: 400 })
 

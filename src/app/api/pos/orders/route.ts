@@ -65,14 +65,32 @@ export async function POST(req: NextRequest) {
       SELECT generate_order_number(${DEMO_CAFE_ID}::uuid) AS order_number
     `
 
-    // Create the order — table stays 'free' until the first item is added
-    const [order] = await sql`
-      INSERT INTO orders (cafe_id, table_id, order_number, status, pos_status)
-      VALUES (${DEMO_CAFE_ID}, ${tableId}, ${orderNumber}, 'pending', 'OPEN')
-      RETURNING *
-    `
+    // Create the order — table stays 'free' until the first item is added.
+    // `uniq_live_order_per_table` (migration 006) makes a simultaneous second
+    // insert fail instead of creating a duplicate open order; in that case the
+    // loser simply resumes the winner's order.
+    let orderId: string
+    try {
+      const [order] = await sql`
+        INSERT INTO orders (cafe_id, table_id, order_number, status, pos_status)
+        VALUES (${DEMO_CAFE_ID}, ${tableId}, ${orderNumber}, 'pending', 'OPEN')
+        RETURNING *
+      `
+      orderId = order.id as string
+    } catch (insertErr) {
+      const code = (insertErr as { code?: string })?.code
+      if (code !== '23505') throw insertErr
+      const [winner] = await sql`
+        SELECT id FROM orders
+        WHERE table_id = ${tableId} AND pos_status NOT IN ('PAID', 'CANCELLED')
+        ORDER BY created_at DESC
+        LIMIT 1
+      `
+      if (!winner) throw insertErr
+      orderId = winner.id as string
+    }
 
-    const full = await fetchFullOrder(order.id as string)
+    const full = await fetchFullOrder(orderId)
     return NextResponse.json({ data: full, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to open order'
