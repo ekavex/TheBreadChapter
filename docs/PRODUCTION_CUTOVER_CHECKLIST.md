@@ -7,31 +7,36 @@ breaks the business if skipped, not by module number.
 
 ## 1. Credentials & secrets
 
-- [ ] Rotate the seeded dashboard login (`manager` / `ChangeMe123!`) and the
-      menu-CRUD login (`admin` / `MenuCrud123!`) — update `auth_credentials`
-      rows directly (bcrypt-hashed), never ship the demo passwords.
-- [ ] Set a fresh, random `AUTH_SESSION_SECRET` in production env — do not
-      reuse the local-dev value committed in `.env.local.example`.
-- [ ] Confirm `SUPABASE_SERVICE_ROLE_KEY` is only present in server-side env
-      (Vercel/host secret store), never in a client bundle or `NEXT_PUBLIC_*`.
+- [ ] Rotate the seeded logins (`admin` / `manager` / `staff`, seeded by
+      `supabase/migrations/005_rbac.sql`). The login route refuses the default
+      passwords in production unless `ALLOW_DEFAULT_CREDENTIALS=true`, which
+      must NOT be set for a real cafe.
+- [ ] Set a fresh, random `AUTH_SESSION_SECRET` (`openssl rand -hex 32`).
+- [ ] Set `PINELABS_WEBHOOK_SECRET` and register the Post Back URL as
+      `https://<domain>/api/webhooks/pinelabs?token=<secret>`.
+- [ ] Set `CRON_SECRET` for the manual reconciliation endpoint.
 - [ ] Fill in real `PINELABS_MERCHANT_ID` / `PINELABS_SECURITY_TOKEN` /
-      `PINELABS_STORE_ID` and confirm `PINELABS_BASE_URL` points at the
-      production host (UAT host is the default — see Pine Labs section below).
+      `PINELABS_STORE_ID`, and point `PINELABS_BASE_URL` at the **production**
+      host confirmed with Pine Labs (the default is UAT).
+- [ ] `PAYMENT_PROVIDER=pinelabs`. The app refuses to serve payments on the
+      mock provider when `NODE_ENV=production`, so a missing value fails loudly
+      rather than approving orders for free.
 
-## 2. Pine Labs (Module 5 payment — blocked open item)
+## 2. Pine Labs payment
 
-- [ ] `PineLabsCloudProvider` implemented behind `PaymentProvider` (M6) and
-      swapped in for `MockPaymentProvider` in `src/app/api/pos/orders/[id]/pay/route.ts`
-      and `.../cancel/route.ts`.
-- [ ] Ran the full UAT matrix from `PINELABS_INTEGRATION_MASTER.md` §14
-      against real terminals, including a forced network-drop mid-charge to
-      confirm the M9 reconciliation path (`reconcileAwaitingPayment`) resolves
-      correctly against the *real* `GetStatus` endpoint, not just the mock.
-- [ ] `terminals.client_id` rows match the real Pine Labs `ClientId` for each
-      physical A910S terminal in the cafe (one row per terminal, currently
-      seeded with a single demo terminal).
-- [ ] Confirm which payment modes are actually enabled on the account and
-      that `ALLOWED_MODE_CODE` in `pay/route.ts` matches.
+- [ ] `terminals.client_id` rows match the real `ClientId` of each physical
+      A910S, with `section_id` set so bills route to the right device.
+- [ ] Ran the UAT matrix from `PINELABS_INTEGRATION_MASTER.md` §14 against real
+      terminals, including: network drop mid-charge, app restart mid-charge,
+      duplicate webhook, late webhook, cancel before PIN, and a deliberate
+      amount mismatch.
+- [ ] Confirmed which payment modes are enabled on the account and that
+      `ALLOWED_MODE_CODE` in `pay/route.ts` matches.
+- [ ] Reconciler running (check for `payment.reconcile.scheduled` in the logs)
+      and an alert exists for orders in `REQUIRES_VERIFICATION`.
+- [ ] Read `docs/PAYMENT_OPERATIONS.md` with whoever runs the floor — they need
+      to know that `REQUIRES_VERIFICATION` means "check the terminal", never
+      "charge again".
 
 ## 3. KOT printers (Module 5)
 

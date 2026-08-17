@@ -8,3 +8,6 @@ node_modules/
 next/
 tsconfig.tsbuildinfo
 .env
+
+# Database dumps — may contain customer and payment data
+backups/

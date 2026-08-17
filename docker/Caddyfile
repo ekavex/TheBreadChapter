@@ -1,0 +1,37 @@
+# HTTPS termination for the cafe POS.
+#
+# Pine Labs delivers the Post Back to a public HTTPS URL, so TLS is a payment
+# requirement, not a nicety. Caddy obtains and renews a certificate itself.
+#
+# Enable with:  docker compose --profile tls up -d
+# Requires DOMAIN and ACME_EMAIL in .env, and ports 80/443 reachable.
+
+{
+	email {$ACME_EMAIL}
+	# Health of the upstream is checked by compose; keep Caddy quiet otherwise.
+	admin off
+}
+
+{$DOMAIN} {
+	encode gzip
+
+	# Security headers. The app serves no third-party scripts, so a strict
+	# policy costs nothing and blocks a whole class of injection.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# The Pine Labs postback must reach the app even under load; it is small
+	# and infrequent, so no rate limiting here — the endpoint authenticates
+	# itself with PINELABS_WEBHOOK_SECRET.
+	reverse_proxy app:3000 {
+		health_uri /api/health
+		health_interval 30s
+		health_timeout 5s
+	}
+}
