@@ -40,11 +40,15 @@ services:
       PINELABS_BASE_URL:       ${PINELABS_BASE_URL:-https://api.pinelabs.com}
       MOCK_PAYMENT_OUTCOME:    ${MOCK_PAYMENT_OUTCOME:-approved}
 
+      # Android print bridge — set to a random secret, then configure the same
+      # value in the APK's Settings screen. Leave blank to disable the bridge.
+      PRINT_BRIDGE_TOKEN:      ${PRINT_BRIDGE_TOKEN:-}
+
       # Thermal printers — leave blank if not connected
       PRINTER_KITCHEN_USB_DEVICE:  ${PRINTER_KITCHEN_USB_DEVICE:-}
       PRINTER_BEVERAGE_USB_DEVICE: ${PRINTER_BEVERAGE_USB_DEVICE:-}
-      PRINTER_KITCHEN_BT_MAC:      ${PRINTER_KITCHEN_BT_MAC:-}
-      PRINTER_KITCHEN_BT_DEVICE:   ${PRINTER_KITCHEN_BT_DEVICE:-}
+      PRINTER_KITCHEN_BT_MAC:      ${PRINTER_KITCHEN_BT_MAC:-66:32:F7:C5:B7:05}
+      PRINTER_KITCHEN_BT_DEVICE:   ${PRINTER_KITCHEN_BT_DEVICE:-/dev/rfcomm0}
       PRINTER_BEVERAGE_BT_MAC:     ${PRINTER_BEVERAGE_BT_MAC:-}
       PRINTER_BEVERAGE_BT_DEVICE:  ${PRINTER_BEVERAGE_BT_DEVICE:-}
       PRINTER_KITCHEN_IP:          ${PRINTER_KITCHEN_IP:-}
@@ -59,8 +63,8 @@ services:
     # For Bluetooth, bind RFCOMM channels on the host first, then map here:
     #   sudo rfcomm bind 0 66:32:F7:C5:B7:05 1   # kitchen  → /dev/rfcomm0
     #   sudo rfcomm bind 1 66:22:34:20:A1:B3 1   # beverage → /dev/rfcomm1
-    #   - /dev/rfcomm0:/dev/rfcomm0
-    #   - /dev/rfcomm1:/dev/rfcomm1
+    devices:
+      - /dev/rfcomm0:/dev/rfcomm0
 
 volumes:
   postgres_data:

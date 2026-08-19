@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const sql = getDb()
     const [order] = await sql`SELECT pos_status, table_id FROM orders WHERE id = ${params.id}`
     if (!order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
-    if (order.pos_status !== 'OPEN') {
+    if (!['OPEN', 'KOT_SENT'].includes(order.pos_status)) {
       return NextResponse.json({ data: null, error: `Items are locked — order is already ${order.pos_status}` }, { status: 409 })
     }
 

@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
-import { printKot } from '@/lib/printer/kotPrint'
 
 interface Props {
   initialOrder: Order | null
@@ -53,8 +52,6 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     if (order) return order.id
     const created = await api<Order>('/api/pos/orders', 'POST', { tableId })
     setOrder(created)
-    // Update URL to the real order page so refreshing works correctly
-    router.replace(`/pos/order/${created.id}`)
     return created.id
   }
 
@@ -70,10 +67,14 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
 
   async function addItem(item: MenuItem) {
     setBusy(true)
+    const isNewOrder = !order
     try {
       const orderId = await ensureOrder()
       const updated = await api<Order>(`/api/pos/orders/${orderId}/items`, 'POST', { menu_item_id: item.id, quantity: 1 })
       setOrder(updated)
+      // Update URL only after the item is in the DB, so the server-rendered
+      // page at the new URL already has the item when Next.js fetches it.
+      if (isNewOrder) router.replace(`/pos/order/${orderId}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add item')
     } finally {
@@ -101,12 +102,13 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       const res = await fetch(`/api/pos/orders/${order.id}/kot`, { method: 'POST' })
       const json = await res.json()
       if (json.error) throw new Error(json.error)
-      setOrder(json.data as Order)
-      printKot(json.data as Order)
+      const updatedOrder = json.data as Order
+      setOrder(updatedOrder)
+      const isAddon = order.pos_status === 'KOT_SENT'
       if (json.printerWarning) {
-        toast('KOT sent — thermal printer offline, printing from browser instead', { icon: '⚠️' })
+        toast(isAddon ? 'Add-on KOT sent — thermal printer offline, printing from browser' : 'KOT sent — thermal printer offline, printing from browser instead', { icon: '⚠️' })
       } else {
-        toast.success('Sent to kitchen — KOT printed')
+        toast.success(isAddon ? 'Add-on KOT sent to kitchen' : 'Sent to kitchen — KOT printed')
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send KOT')
@@ -186,9 +188,20 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const runningSubtotal = items.reduce((sum, i) => sum + i.subtotal, 0)
   const posStatus = order?.pos_status ?? 'OPEN'
   const isOpen = posStatus === 'OPEN'
+  const isKotSent = posStatus === 'KOT_SENT'
+  const canAddItems = isOpen || isKotSent
   const canCancel = !['PAID', 'CANCELLED'].includes(posStatus)
   const tableIsFree = !order || order.table?.status === 'free'
   const activeCategoryItems = categories.find((c) => c.id === activeCategory)?.items ?? []
+
+  // Split items into already-sent vs add-on (added after last kot_sent_at)
+  const kotSentAt = order?.kot_sent_at ? new Date(order.kot_sent_at as string) : null
+  const sentItems = isKotSent && kotSentAt
+    ? items.filter((i) => new Date(i.created_at) <= kotSentAt)
+    : isOpen ? [] : items
+  const addonItems = isKotSent && kotSentAt
+    ? items.filter((i) => new Date(i.created_at) > kotSentAt)
+    : isOpen ? items : []
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-32">
@@ -224,8 +237,8 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         </div>
       </div>
 
-      {/* Menu browser — shown while order is open (or not yet created) */}
-      {isOpen && (
+      {/* Menu browser — shown while order is open or KOT_SENT (add-on mode) */}
+      {canAddItems && (
         <div className="mb-6">
           <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
             {categories.map((cat) => (
@@ -267,19 +280,74 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         <div className="px-5 py-3 border-b border-ink/5 bg-surface-overlay">
           <h2 className="font-display font-semibold text-ink text-sm">Order items</h2>
         </div>
-        <div className="divide-y divide-ink/5">
-          {items.length === 0 && <p className="px-5 py-4 text-sm text-ink-faint">No items yet.</p>}
-          {items.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 px-5 py-3">
-              <span className="text-xs uppercase tracking-wide text-ink-faint bg-surface-overlay px-1.5 py-0.5 rounded shrink-0">
-                {item.category}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink">{item.name} × {item.quantity}</p>
-                {item.customisation && <p className="text-xs text-ink-faint">{item.customisation}</p>}
-              </div>
-              <span className="text-sm font-semibold text-ink shrink-0">₹{item.subtotal}</span>
-              {isOpen && (
+
+        {/* Items sent to kitchen (locked) */}
+        {isKotSent && sentItems.length > 0 && (
+          <>
+            <div className="px-5 py-2 bg-surface-overlay/50">
+              <p className="text-xs text-ink-faint uppercase tracking-wide font-medium">Sent to kitchen</p>
+            </div>
+            <div className="divide-y divide-ink/5">
+              {sentItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 px-5 py-3 opacity-60">
+                  <span className="text-xs uppercase tracking-wide text-ink-faint bg-surface-overlay px-1.5 py-0.5 rounded shrink-0">
+                    {item.category}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink">{item.name} × {item.quantity}</p>
+                    {item.customisation && <p className="text-xs text-ink-faint">{item.customisation}</p>}
+                  </div>
+                  <span className="text-sm font-semibold text-ink shrink-0">₹{item.subtotal}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Add-on items (new, not yet sent) */}
+        {isKotSent && addonItems.length > 0 && (
+          <>
+            <div className="px-5 py-2 bg-amber-50 border-t border-amber-100">
+              <p className="text-xs text-amber-700 uppercase tracking-wide font-medium">New — not yet sent</p>
+            </div>
+            <div className="divide-y divide-ink/5">
+              {addonItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 px-5 py-3">
+                  <span className="text-xs uppercase tracking-wide text-ink-faint bg-surface-overlay px-1.5 py-0.5 rounded shrink-0">
+                    {item.category}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink">{item.name} × {item.quantity}</p>
+                    {item.customisation && <p className="text-xs text-ink-faint">{item.customisation}</p>}
+                  </div>
+                  <span className="text-sm font-semibold text-ink shrink-0">₹{item.subtotal}</span>
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    disabled={busy}
+                    className="p-1.5 rounded-lg text-ink-faint hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* OPEN state items (standard flow) */}
+        {isOpen && (
+          <div className="divide-y divide-ink/5">
+            {items.length === 0 && <p className="px-5 py-4 text-sm text-ink-faint">No items yet.</p>}
+            {items.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 px-5 py-3">
+                <span className="text-xs uppercase tracking-wide text-ink-faint bg-surface-overlay px-1.5 py-0.5 rounded shrink-0">
+                  {item.category}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-ink">{item.name} × {item.quantity}</p>
+                  {item.customisation && <p className="text-xs text-ink-faint">{item.customisation}</p>}
+                </div>
+                <span className="text-sm font-semibold text-ink shrink-0">₹{item.subtotal}</span>
                 <button
                   onClick={() => removeItem(item.id)}
                   disabled={busy}
@@ -287,10 +355,16 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                 >
                   <Trash2 size={14} />
                 </button>
-              )}
-            </div>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Empty state for KOT_SENT with no add-ons yet */}
+        {isKotSent && sentItems.length === 0 && addonItems.length === 0 && (
+          <p className="px-5 py-4 text-sm text-ink-faint">No items yet.</p>
+        )}
+
         {items.length > 0 && (
           <div className="px-5 py-3 border-t border-ink/5 flex justify-between text-sm">
             <span className="text-ink-muted">
@@ -342,14 +416,23 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         </div>
       )}
 
-      {posStatus === 'KOT_SENT' && (
-        <button
-          onClick={generateBill}
-          disabled={busy}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
-        >
-          <Receipt size={16} /> Generate Bill
-        </button>
+      {isKotSent && (
+        <div className="space-y-2">
+          <button
+            onClick={sendToKitchen}
+            disabled={busy || addonItems.length === 0}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-400 bg-amber-50 text-amber-800 py-3 font-medium hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Send size={16} /> {addonItems.length > 0 ? `Send Add-On KOT (${addonItems.length} item${addonItems.length > 1 ? 's' : ''})` : 'Add items to send add-on KOT'}
+          </button>
+          <button
+            onClick={generateBill}
+            disabled={busy}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
+          >
+            <Receipt size={16} /> Generate Bill
+          </button>
+        </div>
       )}
 
       {(posStatus === 'BILLED' || posStatus === 'PAYMENT_FAILED') && (
