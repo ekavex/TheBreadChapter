@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Download, FileText, Printer } from 'lucide-react'
+import { Download } from 'lucide-react'
 import type { ReportData, ReportRange } from '@/lib/reports'
 
 interface Props {
@@ -58,21 +58,15 @@ export default function ReportsClient({ initial, ranges }: Props) {
 
       {/* Export bar */}
       <div className="flex flex-wrap gap-2 no-print">
-        <a href={exportUrl('csv')} className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay">
+        <a href={exportUrl('csv')} download className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay">
           <Download size={14} /> CSV
         </a>
-        <a href={exportUrl('excel')} className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay">
+        <a href={exportUrl('excel')} download className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay">
           <Download size={14} /> Excel
         </a>
-        <a href={exportUrl('pdf')} className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay">
+        <a href={exportUrl('pdf')} download className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay">
           <Download size={14} /> PDF
         </a>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay"
-        >
-          <Printer size={14} /> Print
-        </button>
       </div>
 
       {loading ? (

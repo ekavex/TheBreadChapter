@@ -2,8 +2,43 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users } from 'lucide-react'
+import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
+
+function ConfirmDialog({ title, message, confirmLabel = 'Confirm', onConfirm, onCancel }: {
+  title: string
+  message: string
+  confirmLabel?: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-red-50 shrink-0">
+              <AlertTriangle size={18} className="text-red-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-ink text-base">{title}</h3>
+              <p className="text-ink-muted text-sm mt-1 leading-relaxed">{message}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex border-t border-ink/8">
+          <button onClick={onCancel} className="flex-1 py-3.5 text-sm font-medium text-ink-muted hover:bg-surface-overlay transition-colors">
+            Keep order
+          </button>
+          <div className="w-px bg-ink/8" />
+          <button onClick={onConfirm} className="flex-1 py-3.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface Props {
   initialOrder: Order | null
@@ -57,6 +92,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [customerName, setCustomerName] = useState('')
   const [busy, setBusy] = useState(false)
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   // True while the terminal still has the transaction open — the screen tracks
   // it automatically so the cashier never has to poll by hand.
   const [autoTracking, setAutoTracking] = useState(false)
@@ -125,7 +161,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       setOrder(updatedOrder)
       const isAddon = order.pos_status === 'KOT_SENT'
       if (json.printerWarning) {
-        toast(isAddon ? 'Add-on KOT sent — thermal printer offline, printing from browser' : 'KOT sent — thermal printer offline, printing from browser instead', { icon: '⚠️' })
+        toast(isAddon ? 'Add-on KOT sent — thermal printer offline' : 'KOT sent — thermal printer offline, check printer connection', { icon: '⚠️' })
       } else {
         toast.success(isAddon ? 'Add-on KOT sent to kitchen' : 'Sent to kitchen — KOT printed')
       }
@@ -252,13 +288,17 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     }
   }
 
-  async function cancelOrder() {
+  function cancelOrder() {
     if (!order) {
-      // No DB order created yet — just go back
       router.push('/pos')
       return
     }
-    if (!confirm('Cancel this order and release the table?')) return
+    setShowCancelConfirm(true)
+  }
+
+  async function confirmCancelOrder() {
+    setShowCancelConfirm(false)
+    if (!order) return
     setBusy(true)
     try {
       const updated = await api<Order>(`/api/pos/orders/${order.id}/cancel`, 'POST')
@@ -639,6 +679,16 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             Back to tables
           </button>
         </div>
+      )}
+
+      {showCancelConfirm && (
+        <ConfirmDialog
+          title="Cancel this order?"
+          message="This will cancel the order and release the table. This cannot be undone."
+          confirmLabel="Yes, cancel order"
+          onConfirm={confirmCancelOrder}
+          onCancel={() => setShowCancelConfirm(false)}
+        />
       )}
     </div>
   )
