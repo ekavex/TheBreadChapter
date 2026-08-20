@@ -1,19 +1,8 @@
 import type { Metadata, Viewport } from 'next'
-import { Playfair_Display, DM_Sans } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
+import '@fontsource-variable/dm-sans'
+import '@fontsource-variable/playfair-display'
 import '@/styles/globals.css'
-
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  variable: '--font-display',
-  display: 'swap',
-})
-
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  variable: '--font-body',
-  display: 'swap',
-})
 
 export const metadata: Metadata = {
   title: { default: 'Cafe Menu', template: '%s | Cafe' },
@@ -29,7 +18,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${playfair.variable} ${dmSans.variable}`}>
+    <html lang="en">
       <body className="font-body bg-surface text-ink antialiased">
         {children}
         <Toaster
