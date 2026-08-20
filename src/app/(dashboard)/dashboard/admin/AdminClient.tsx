@@ -1,8 +1,16 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, Wifi, Usb, HardDrive } from 'lucide-react'
+import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, Wifi, Usb, HardDrive, CreditCard } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 import toast from 'react-hot-toast'
+
+interface TerminalRow {
+  id: string
+  client_id: string
+  label: string
+  section_id: number | null
+  created_at: string
+}
 
 interface UserRow {
   id: string
@@ -38,6 +46,56 @@ export default function AdminClient() {
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
+
+  // ── Terminal (A910S) management ──────────────────────────────────
+  const [terminals, setTerminals] = useState<TerminalRow[]>([])
+  const [termLoading, setTermLoading] = useState(true)
+  const [showAddTerminal, setShowAddTerminal] = useState(false)
+  const [newClientId, setNewClientId] = useState('')
+  const [newLabel, setNewLabel] = useState('')
+  const [termSaving, setTermSaving] = useState(false)
+
+  const fetchTerminals = useCallback(async () => {
+    setTermLoading(true)
+    try {
+      const res = await fetch('/api/admin/terminals')
+      const json = await res.json()
+      if (res.ok) setTerminals(json.data ?? [])
+    } finally {
+      setTermLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchTerminals() }, [fetchTerminals])
+
+  async function handleAddTerminal(e: React.FormEvent) {
+    e.preventDefault()
+    setTermSaving(true)
+    try {
+      const res = await fetch('/api/admin/terminals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: newClientId, label: newLabel }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Failed to add terminal'); return }
+      toast.success('Terminal added')
+      setShowAddTerminal(false)
+      setNewClientId(''); setNewLabel('')
+      await fetchTerminals()
+    } finally {
+      setTermSaving(false)
+    }
+  }
+
+  async function handleDeleteTerminal(t: TerminalRow) {
+    if (!confirm(`Remove terminal "${t.label}" (Client ID: ${t.client_id})?`)) return
+    const res = await fetch(`/api/admin/terminals/${t.id}`, { method: 'DELETE' })
+    const json = await res.json()
+    if (!res.ok) { toast.error(json.error ?? 'Failed to delete'); return }
+    toast.success('Terminal removed')
+    await fetchTerminals()
+  }
 
   // ── Printer settings ────────────────────────────────────────────
   const [printerCfg, setPrinterCfg] = useState<PrinterCfg>({
@@ -461,6 +519,91 @@ export default function AdminClient() {
             </div>
           </form>
         )}
+      </div>
+
+      {/* ── Payment Terminals (Pine Labs A910S) ───────────────────────────── */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <div className="flex items-center gap-2">
+            <CreditCard size={18} className="text-ink-muted" />
+            <h2 className="font-display text-xl font-bold text-ink">Payment Terminals</h2>
+          </div>
+          <button
+            onClick={() => setShowAddTerminal(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-ink text-surface text-xs font-medium"
+          >
+            <Plus size={12} /> Add terminal
+          </button>
+        </div>
+        <p className="text-sm text-ink-muted mb-4">
+          Pine Labs A910S card machines. Add the <strong>Client ID</strong> from each device
+          (printed on the device or provided by Pine Labs during onboarding).
+        </p>
+
+        {showAddTerminal && (
+          <form onSubmit={handleAddTerminal} className="mb-4 p-4 bg-surface-raised rounded-2xl border border-ink/8 space-y-3">
+            <p className="font-semibold text-sm text-ink">Add terminal</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-ink-muted mb-1">Client ID <span className="text-status-overdue">*</span></label>
+                <input
+                  className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  value={newClientId} onChange={e => setNewClientId(e.target.value)}
+                  placeholder="e.g. 12345" required
+                />
+                <p className="text-[10px] text-ink-faint mt-0.5">Number from Pine Labs — found on the A910S device or in their onboarding email.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink-muted mb-1">Label <span className="text-status-overdue">*</span></label>
+                <input
+                  className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  value={newLabel} onChange={e => setNewLabel(e.target.value)}
+                  placeholder="e.g. Counter Terminal" required
+                />
+                <p className="text-[10px] text-ink-faint mt-0.5">Friendly name to identify this machine.</p>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button type="submit" disabled={termSaving}
+                className="px-4 py-2 rounded-xl bg-ink text-surface text-sm font-medium disabled:opacity-50">
+                {termSaving ? 'Adding…' : 'Add'}
+              </button>
+              <button type="button" onClick={() => setShowAddTerminal(false)}
+                className="px-4 py-2 rounded-xl text-sm text-ink-muted hover:bg-surface-overlay">
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="bg-surface-raised rounded-2xl border border-ink/8 overflow-hidden">
+          {termLoading ? (
+            <div className="px-6 py-8 text-center text-sm text-ink-faint">Loading…</div>
+          ) : terminals.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm text-ink-faint">
+              No terminals added yet. Add the Client ID from your Pine Labs A910S device.
+            </div>
+          ) : (
+            <div className="divide-y divide-ink/5">
+              {terminals.map(t => (
+                <div key={t.id} className="flex items-center gap-3 px-4 py-3">
+                  <CreditCard size={16} className="text-ink-faint shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-sm text-ink">{t.label}</span>
+                    <span className="ml-2 font-mono text-xs text-ink-muted">Client ID: {t.client_id}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteTerminal(t)}
+                    className="p-1.5 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                    title="Remove terminal"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
