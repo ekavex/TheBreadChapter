@@ -63,8 +63,8 @@ services:
     # For Bluetooth, bind RFCOMM channels on the host first, then map here:
     #   sudo rfcomm bind 0 66:32:F7:C5:B7:05 1   # kitchen  → /dev/rfcomm0
     #   sudo rfcomm bind 1 66:22:34:20:A1:B3 1   # beverage → /dev/rfcomm1
-    devices:
-      - /dev/rfcomm0:/dev/rfcomm0
+    # devices:
+    #   - /dev/rfcomm0:/dev/rfcomm0
 
 volumes:
   postgres_data:
