@@ -1,10 +1,15 @@
 import { open, access } from 'fs/promises'
 import { constants } from 'fs'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import type { PrinterService, KotTicket } from './types'
 
-const execAsync = promisify(exec)
+// execFile, never exec: the MAC and device index can come from admin-editable
+// configuration, and a shell would happily run `; rm -rf /` inside them.
+const execFileAsync = promisify(execFile)
+
+const MAC_PATTERN = /^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/
+const RFCOMM_DEVICE_PATTERN = /^\/dev\/rfcomm\d{1,3}$/
 
 // O_NOCTTY is POSIX-only — prevents the RFCOMM device becoming the process's
 // controlling terminal. Falls back to 0 on platforms that don't define it.
@@ -125,9 +130,16 @@ export class BluetoothPrinterService implements PrinterService {
       )
     }
 
+    if (!RFCOMM_DEVICE_PATTERN.test(cfg.device)) {
+      throw new Error(`Refusing to bind an unexpected device path: ${cfg.device}`)
+    }
+    if (!MAC_PATTERN.test(cfg.mac)) {
+      throw new Error(`Refusing to bind an invalid Bluetooth MAC: ${cfg.mac}`)
+    }
+
     const idx = rfcommIndex(cfg.device)
-    const ch  = cfg.channel ?? 1
-    await execAsync(`rfcomm bind ${idx} ${cfg.mac} ${ch}`)
+    const ch  = Number.isInteger(cfg.channel) ? Number(cfg.channel) : 1
+    await execFileAsync('rfcomm', ['bind', idx, cfg.mac, String(ch)])
     // Give BlueZ ~1.5 s to establish the RFCOMM channel
     await new Promise<void>((r) => setTimeout(r, 1500))
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
+import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 // Item availability/price changes must be visible immediately — don't let
 // Next.js's default GET route-handler caching serve a stale menu.
@@ -29,10 +30,16 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// PATCH /api/menu — toggle item availability
+// PATCH /api/menu — toggle item availability. Staff session required.
 export async function PATCH(req: NextRequest) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
   try {
     const { itemId, is_available } = await req.json()
+    if (!itemId || typeof is_available !== 'boolean') {
+      return NextResponse.json({ data: null, error: 'itemId and is_available (boolean) are required' }, { status: 400 })
+    }
     const sql = getDb()
 
     const [data] = await sql`

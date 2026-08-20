@@ -28,7 +28,7 @@ export type StockTxnType = Enums['stock_txn_type']
 
 // CHECK-constrained TEXT columns, not real Postgres enums — codegen can't
 // narrow these, so they stay hand-written.
-export type PosStatus = 'OPEN' | 'KOT_SENT' | 'BILLED' | 'AWAITING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED'
+export type PosStatus = 'OPEN' | 'KOT_SENT' | 'BILLED' | 'AWAITING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'REQUIRES_VERIFICATION' | 'CANCELLED'
 export type UserRole = 'admin' | 'manager' | 'staff'
 export type KotStation = 'kitchen' | 'beverage_counter'
 export type PaymentTxnStatus = 'initiated' | 'approved' | 'declined' | 'cancelled'

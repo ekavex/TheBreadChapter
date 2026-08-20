@@ -53,17 +53,98 @@ function parseTransactionData(resp: StatusResponse): Partial<PaymentResult> {
   }
 }
 
-async function plPost<T>(url: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(url, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Pine Labs HTTP ${res.status}: ${text}`)
+// ─── HTTP transport ──────────────────────────────────────────────────────────
+//
+// Timeouts are mandatory: a hung Pine Labs connection would otherwise pin a
+// request until the proxy kills it, with the cashier staring at a spinner.
+//
+// Retry policy is deliberately asymmetric:
+//   • GetStatus / Cancel are read-ish and idempotent → safe to retry.
+//   • UploadBilledTransaction creates a payable transaction on the terminal →
+//     retrying a request that may have been received would risk two live
+//     transactions, i.e. a double charge. It is retried ONLY when the request
+//     provably never reached Pine Labs (connection-level failure before any
+//     response), and never after a timeout.
+
+const DEFAULT_TIMEOUT_MS = 15_000
+const RETRY_BACKOFF_MS = [400, 1200]
+
+export class PineLabsTimeoutError extends Error {
+  constructor(url: string, timeoutMs: number) {
+    super(`Pine Labs request timed out after ${timeoutMs}ms: ${url}`)
+    this.name = 'PineLabsTimeoutError'
   }
-  return res.json() as Promise<T>
+}
+
+function timeoutMs(): number {
+  const configured = Number(process.env.PINELABS_TIMEOUT_MS)
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS
+}
+
+interface PostOptions {
+  /** Retry on connection-level failures. Never enable for Upload after a timeout. */
+  retryOnConnectionError?: boolean
+  /** Retry when Pine Labs answers 5xx — only safe for idempotent calls. */
+  retryOnServerError?: boolean
+}
+
+async function plPostOnce<T>(url: string, body: Record<string, unknown>): Promise<T> {
+  const ms = timeoutMs()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    const res = await fetch(url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+      signal:  controller.signal,
+      cache:   'no-store',
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      const err = new Error(`Pine Labs HTTP ${res.status}: ${text.slice(0, 300)}`) as Error & { httpStatus?: number }
+      err.httpStatus = res.status
+      throw err
+    }
+    return (await res.json()) as T
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new PineLabsTimeoutError(url, ms)
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function plPost<T>(url: string, body: Record<string, unknown>, opts: PostOptions = {}): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
+    try {
+      return await plPostOnce<T>(url, body)
+    } catch (err) {
+      lastErr = err
+      const status = (err as { httpStatus?: number }).httpStatus
+      const isTimeout = err instanceof PineLabsTimeoutError
+      const isServerError = typeof status === 'number' && status >= 500
+      const isConnectionError = !isTimeout && status === undefined
+
+      const retryable =
+        (isConnectionError && opts.retryOnConnectionError) ||
+        (isServerError && opts.retryOnServerError) ||
+        (isTimeout && opts.retryOnServerError)
+
+      if (!retryable || attempt === RETRY_BACKOFF_MS.length) break
+
+      logger.warn('pinelabs.retry', {
+        url,
+        attempt: attempt + 1,
+        reason: isTimeout ? 'timeout' : isServerError ? `http_${status}` : 'connection',
+      })
+      await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS[attempt]))
+    }
+  }
+  throw lastErr
 }
 
 // ─── Provider ────────────────────────────────────────────────────────────────
@@ -76,9 +157,22 @@ export class PineLabsCloudProvider implements PaymentProvider {
 
   constructor() {
     this.base    = (process.env.PINELABS_BASE_URL    ?? 'https://www.plutuscloudserviceuat.in:8201').replace(/\/$/, '')
-    this.mid     = process.env.PINELABS_MERCHANT_ID    ?? ''
-    this.token   = process.env.PINELABS_SECURITY_TOKEN ?? ''
-    this.storeId = process.env.PINELABS_STORE_ID       ?? ''
+    this.mid     = (process.env.PINELABS_MERCHANT_ID    ?? '').trim()
+    this.token   = (process.env.PINELABS_SECURITY_TOKEN ?? '').trim()
+    this.storeId = (process.env.PINELABS_STORE_ID       ?? '').trim()
+
+    // Fail loudly at construction rather than sending a malformed Upload:
+    // MerchantID and StoreId go to Pine Labs as numbers, and Number('') is 0.
+    const problems: string[] = []
+    if (!this.mid)     problems.push('PINELABS_MERCHANT_ID is empty')
+    if (!this.token)   problems.push('PINELABS_SECURITY_TOKEN is empty')
+    if (!this.storeId) problems.push('PINELABS_STORE_ID is empty')
+    if (this.mid && !Number.isFinite(Number(this.mid)))         problems.push('PINELABS_MERCHANT_ID must be numeric')
+    if (this.storeId && !Number.isFinite(Number(this.storeId))) problems.push('PINELABS_STORE_ID must be numeric')
+    if (!/^https:\/\//.test(this.base)) problems.push('PINELABS_BASE_URL must be https')
+    if (problems.length) {
+      throw new Error(`Invalid Pine Labs configuration: ${problems.join('; ')}`)
+    }
   }
 
   // ─── charge → UploadBilledTransaction ──────────────────────────────────────
@@ -86,6 +180,12 @@ export class PineLabsCloudProvider implements PaymentProvider {
   // Returns status:'pending' + PTRID on success — caller must poll status().
   async charge(input: ChargeInput): Promise<PaymentResult> {
     const url = `${this.base}/API/CloudBasedIntegration/V1/UploadBilledTransaction`
+    if (!input.clientId || !Number.isFinite(Number(input.clientId))) {
+      throw new Error(`Invalid terminal ClientId "${input.clientId}" — the bill cannot be routed to a terminal`)
+    }
+    if (!Number.isInteger(input.amountPaisa) || input.amountPaisa <= 0) {
+      throw new Error(`Invalid amount ${input.amountPaisa} — Pine Labs requires a positive integer paisa amount`)
+    }
     const body = {
       MerchantID:                   Number(this.mid),
       SecurityToken:                this.token,
@@ -108,7 +208,8 @@ export class PineLabsCloudProvider implements PaymentProvider {
       mode: input.allowedModes,
     })
 
-    const resp = await plPost<UploadResponse>(url, body)
+    // Upload is NOT idempotent — only retried when the connection never landed.
+    const resp = await plPost<UploadResponse>(url, body, { retryOnConnectionError: true })
 
     logger.info('pinelabs.upload.response', {
       txn:  input.transactionNumber,
@@ -144,7 +245,7 @@ export class PineLabsCloudProvider implements PaymentProvider {
 
     logger.info('pinelabs.status.start', { ptrid })
 
-    const resp = await plPost<StatusResponse>(url, body)
+    const resp = await plPost<StatusResponse>(url, body, { retryOnConnectionError: true, retryOnServerError: true })
 
     logger.info('pinelabs.status.response', {
       ptrid,
@@ -195,7 +296,7 @@ export class PineLabsCloudProvider implements PaymentProvider {
 
     logger.info('pinelabs.cancel.start', { ptrid, amtPaisa: amountPaisa })
 
-    const resp = await plPost<StatusResponse>(url, body)
+    const resp = await plPost<StatusResponse>(url, body, { retryOnConnectionError: true, retryOnServerError: true })
 
     logger.info('pinelabs.cancel.response', { ptrid, code: resp.ResponseCode, msg: resp.ResponseMessage })
 

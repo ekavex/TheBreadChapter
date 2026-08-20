@@ -7,14 +7,18 @@ function normalizePhone(raw: string | null | undefined): string | null {
   return digits.length === 10 ? digits : null
 }
 
+// `exec` lets a caller run this inside an open transaction (see
+// lib/payment/finalize.ts) so customer capture commits atomically with the
+// payment. Defaults to the shared pool.
 export async function upsertCustomer(
   phone: string | null | undefined,
-  name: string | null | undefined
+  name: string | null | undefined,
+  exec?: ReturnType<typeof getDb>
 ): Promise<string | null> {
   const normalized = normalizePhone(phone)
   if (!normalized) return null
 
-  const sql = getDb()
+  const sql = exec ?? getDb()
   const rows = await sql`
     SELECT id FROM customers
     WHERE cafe_id = ${DEMO_CAFE_ID} AND phone = ${normalized}

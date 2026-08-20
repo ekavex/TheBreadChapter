@@ -468,7 +468,8 @@ CREATE TABLE public.orders (
     kot_sent_at timestamp with time zone,
     billed_at timestamp with time zone,
     stock_deducted_at timestamp with time zone,
-    CONSTRAINT orders_pos_status_check CHECK ((pos_status = ANY (ARRAY['OPEN'::text, 'KOT_SENT'::text, 'BILLED'::text, 'AWAITING_PAYMENT'::text, 'PAID'::text, 'PAYMENT_FAILED'::text, 'CANCELLED'::text])))
+    last_reconciled_at timestamp with time zone,
+    CONSTRAINT orders_pos_status_check CHECK ((pos_status = ANY (ARRAY['OPEN'::text, 'KOT_SENT'::text, 'BILLED'::text, 'AWAITING_PAYMENT'::text, 'PAID'::text, 'PAYMENT_FAILED'::text, 'REQUIRES_VERIFICATION'::text, 'CANCELLED'::text])))
 );
 
 
@@ -1090,6 +1091,39 @@ ALTER TABLE ONLY public.tables
 
 ALTER TABLE ONLY public.terminals
     ADD CONSTRAINT terminals_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id);
+
+
+--
+-- Phase 1 payment reliability: audit trail, de-duplication and the
+-- constraints that make double-charge bookkeeping impossible.
+--
+
+CREATE TABLE IF NOT EXISTS public.payment_events (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    payment_id uuid,
+    order_id uuid,
+    source text NOT NULL,
+    ptrid text,
+    dedupe_key text,
+    reported text,
+    verified text,
+    detail jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT payment_events_pkey PRIMARY KEY (id),
+    CONSTRAINT payment_events_source_check CHECK ((source = ANY (ARRAY['webhook'::text, 'poll'::text, 'reconciler'::text, 'cancel'::text]))),
+    CONSTRAINT payment_events_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE SET NULL,
+    CONSTRAINT payment_events_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_payment_event_dedupe ON public.payment_events USING btree (dedupe_key) WHERE (dedupe_key IS NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_payment_events_order_created ON public.payment_events USING btree (order_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_live_order_per_table ON public.orders USING btree (table_id) WHERE (pos_status <> ALL (ARRAY['PAID'::text, 'CANCELLED'::text]));
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_approved_payment_per_order ON public.payments USING btree (order_id) WHERE (status = 'approved'::text);
+
+CREATE INDEX IF NOT EXISTS idx_orders_unsettled ON public.orders USING btree (pos_status, updated_at) WHERE (pos_status = ANY (ARRAY['AWAITING_PAYMENT'::text, 'REQUIRES_VERIFICATION'::text]));
 
 
 --

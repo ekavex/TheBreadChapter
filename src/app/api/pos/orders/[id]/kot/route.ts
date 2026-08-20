@@ -104,12 +104,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const now = new Date().toISOString()
 
     if (!isAddon) {
-      await sql`UPDATE tables SET status = 'kot_sent' WHERE id = ${order.table_id}`
-      await sql`
-        UPDATE orders
-        SET pos_status = 'KOT_SENT', kot_sent_at = ${now}, status = 'confirmed', confirmed_at = ${now}
-        WHERE id = ${params.id}
-      `
+      await sql.begin(async (tx) => {
+        await tx`UPDATE tables SET status = 'kot_sent' WHERE id = ${order.table_id}`
+        await tx`
+          UPDATE orders
+          SET pos_status = 'KOT_SENT', kot_sent_at = ${now}, status = 'confirmed', confirmed_at = ${now}
+          WHERE id = ${params.id} AND pos_status = 'OPEN'
+        `
+      })
     } else {
       // Add-on: just advance the kot_sent_at watermark so the next add-on batch starts fresh
       await sql`UPDATE orders SET kot_sent_at = ${now} WHERE id = ${params.id}`
