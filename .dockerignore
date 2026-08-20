@@ -12,3 +12,7 @@ docs
 .dockerignore
 Dockerfile
 scripts
+backups
+tests
+vitest.config.ts
+ci

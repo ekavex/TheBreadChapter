@@ -1,5 +1,4 @@
 import type { PaymentProvider, PaymentResult, ChargeInput, TerminalContext } from './types'
-import { PineLabsCloudProvider } from './PineLabsCloudProvider'
 
 // In-memory only — fine for a single long-running dev/prod Node process.
 // Real state of truth once M6 lands is Pine Labs + our `payments` table.
@@ -54,16 +53,6 @@ export class MockPaymentProvider implements PaymentProvider {
   }
 }
 
-// Use PineLabsCloudProvider when all three required credentials are present;
-// fall back to the mock for development. No code changes needed to switch.
-function createPaymentProvider(): PaymentProvider {
-  const mid   = process.env.PINELABS_MERCHANT_ID
-  const token = process.env.PINELABS_SECURITY_TOKEN
-  const store = process.env.PINELABS_STORE_ID
-  if (mid && token && store) {
-    return new PineLabsCloudProvider()
-  }
-  return new MockPaymentProvider()
-}
-
-export const paymentProvider: PaymentProvider = createPaymentProvider()
+// Provider selection lives in ./provider.ts — importing `paymentProvider` from
+// this file used to silently enable the mock in production (P0). Import from
+// '@/lib/payment/provider' instead.

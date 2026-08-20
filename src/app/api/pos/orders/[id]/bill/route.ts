@@ -43,22 +43,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const totalAmount = subtotal + taxAmount + serviceCharge
     const totalPaisa = rupeesToPaisa(totalAmount)
 
-    if (order.pos_status === 'KOT_SENT' && order.table_id) {
-      await sql`UPDATE tables SET status = 'billed' WHERE id = ${order.table_id}`
-    }
-
+    // Totals and table status move together — a crash between them would
+    // leave a billed table with a stale total.
     const now = new Date().toISOString()
-    await sql`
-      UPDATE orders
-      SET subtotal = ${subtotal},
-          tax_amount = ${taxAmount},
-          service_charge = ${serviceCharge},
-          total_amount = ${totalAmount},
-          total_paisa = ${totalPaisa},
-          pos_status = 'BILLED',
-          billed_at = ${now}
-      WHERE id = ${params.id}
-    `
+    await sql.begin(async (tx) => {
+      if (order.pos_status === 'KOT_SENT' && order.table_id) {
+        await tx`UPDATE tables SET status = 'billed' WHERE id = ${order.table_id}`
+      }
+      await tx`
+        UPDATE orders
+        SET subtotal = ${subtotal},
+            tax_amount = ${taxAmount},
+            service_charge = ${serviceCharge},
+            total_amount = ${totalAmount},
+            total_paisa = ${totalPaisa},
+            pos_status = 'BILLED',
+            billed_at = ${now}
+        WHERE id = ${params.id} AND pos_status IN ('KOT_SENT', 'BILLED')
+      `
+    })
 
     const updatedOrder = await fetchOrderWithItems(params.id)
     return NextResponse.json({ data: updatedOrder, error: null })

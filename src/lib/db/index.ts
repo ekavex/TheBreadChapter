@@ -1,4 +1,5 @@
 import postgres from 'postgres'
+import { startReconcilerOnce } from '@/lib/payment/scheduler'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -45,5 +46,7 @@ export function getDb(): postgres.Sql {
       },
     })
   }
+  // First DB use in this process also arms the payment reconciliation sweep.
+  startReconcilerOnce()
   return global.__db
 }

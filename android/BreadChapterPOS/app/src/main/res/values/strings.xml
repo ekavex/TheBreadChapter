@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bread Chapter POS</string>
+    <string name="title_settings">Print Bridge Settings</string>
+
+    <string name="label_server_url">Server URL</string>
+    <string name="hint_server_url">https://automation.thebreadchapter.in</string>
+    <string name="label_station">This device\'s station</string>
+    <string name="label_printer_mac">Bluetooth Printer MAC</string>
+    <string name="hint_printer_mac">AA:BB:CC:DD:EE:FF</string>
+    <string name="label_bridge_token">Print Bridge Token</string>
+    <string name="hint_bridge_token">From PRINT_BRIDGE_TOKEN in .env</string>
+    <string name="btn_save">Save &amp; Restart Bridge</string>
+
+    <string-array name="station_entries">
+        <item>Kitchen</item>
+        <item>Beverage Counter</item>
+    </string-array>
+    <string-array name="station_values">
+        <item>kitchen</item>
+        <item>beverage_counter</item>
+    </string-array>
+</resources>

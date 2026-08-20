@@ -4,6 +4,8 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    # Not published to the host: the app reaches it over the compose network.
+    # Use `docker compose exec db psql ...` for maintenance.
     environment:
       POSTGRES_DB:       breadchapter
       POSTGRES_USER:     breaduser
@@ -12,11 +14,20 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./docker/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+      - ./backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U breaduser -d breadchapter"]
       interval: 5s
       timeout: 5s
       retries: 10
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEMORY_LIMIT:-1g}
 
   # ── Next.js app ─────────────────────────────────────────────────────────────
   app:
@@ -27,18 +38,44 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Container-level liveness: /api/health also verifies the database, so an
+    # app that cannot serve orders is restarted instead of quietly failing.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # Give in-flight payments a chance to finish before the process is killed.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    deploy:
+      resources:
+        limits:
+          memory: ${APP_MEMORY_LIMIT:-768m}
     environment:
       DATABASE_URL: postgresql://breaduser:${POSTGRES_PASSWORD}@db:5432/breadchapter
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-The Bread Chapter}
 
-      # Payment — leave blank to use mock payment in development
+      # Payment — PAYMENT_PROVIDER=pinelabs is mandatory in production.
+      PAYMENT_PROVIDER:        ${PAYMENT_PROVIDER:-mock}
       PINELABS_MERCHANT_ID:    ${PINELABS_MERCHANT_ID:-}
       PINELABS_SECURITY_TOKEN: ${PINELABS_SECURITY_TOKEN:-}
       PINELABS_STORE_ID:       ${PINELABS_STORE_ID:-}
-      PINELABS_BASE_URL:       ${PINELABS_BASE_URL:-https://api.pinelabs.com}
+      PINELABS_BASE_URL:       ${PINELABS_BASE_URL:-https://www.plutuscloudserviceuat.in:8201}
+      PINELABS_WEBHOOK_SECRET: ${PINELABS_WEBHOOK_SECRET:-}
+      PINELABS_TIMEOUT_MS:     ${PINELABS_TIMEOUT_MS:-15000}
       MOCK_PAYMENT_OUTCOME:    ${MOCK_PAYMENT_OUTCOME:-approved}
+
+      # Reconciliation sweep
+      RECONCILER_INTERVAL_MS:  ${RECONCILER_INTERVAL_MS:-60000}
+      RECONCILER_DISABLED:     ${RECONCILER_DISABLED:-false}
+      CRON_SECRET:             ${CRON_SECRET:-}
+      ALLOW_DEFAULT_CREDENTIALS: ${ALLOW_DEFAULT_CREDENTIALS:-false}
 
       # Android print bridge — set to a random secret, then configure the same
       # value in the APK's Settings screen. Leave blank to disable the bridge.
@@ -47,8 +84,8 @@ services:
       # Thermal printers — leave blank if not connected
       PRINTER_KITCHEN_USB_DEVICE:  ${PRINTER_KITCHEN_USB_DEVICE:-}
       PRINTER_BEVERAGE_USB_DEVICE: ${PRINTER_BEVERAGE_USB_DEVICE:-}
-      PRINTER_KITCHEN_BT_MAC:      ${PRINTER_KITCHEN_BT_MAC:-66:32:F7:C5:B7:05}
-      PRINTER_KITCHEN_BT_DEVICE:   ${PRINTER_KITCHEN_BT_DEVICE:-/dev/rfcomm0}
+      PRINTER_KITCHEN_BT_MAC:      ${PRINTER_KITCHEN_BT_MAC:-}
+      PRINTER_KITCHEN_BT_DEVICE:   ${PRINTER_KITCHEN_BT_DEVICE:-}
       PRINTER_BEVERAGE_BT_MAC:     ${PRINTER_BEVERAGE_BT_MAC:-}
       PRINTER_BEVERAGE_BT_DEVICE:  ${PRINTER_BEVERAGE_BT_DEVICE:-}
       PRINTER_KITCHEN_IP:          ${PRINTER_KITCHEN_IP:-}
@@ -66,5 +103,56 @@ services:
     # devices:
     #   - /dev/rfcomm0:/dev/rfcomm0
 
+  # ── Nightly database backup ─────────────────────────────────────────────────
+  # A payment system without a restorable backup is one disk failure from
+  # losing its books. Writes a compressed dump to ./backups and prunes old ones.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup-db.sh:/usr/local/bin/backup-db.sh:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      "while true; do
+         sh /usr/local/bin/backup-db.sh || echo 'backup failed';
+         sleep 86400;
+       done"
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+
+  # ── HTTPS reverse proxy (optional) ──────────────────────────────────────────
+  # Pine Labs pushes the Post Back URL to a public HTTPS endpoint, so a real
+  # deployment needs TLS. Enable with:  docker compose --profile tls up -d
+  # Set DOMAIN and ACME_EMAIL in .env first.
+  proxy:
+    image: caddy:2-alpine
+    profiles: ["tls"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

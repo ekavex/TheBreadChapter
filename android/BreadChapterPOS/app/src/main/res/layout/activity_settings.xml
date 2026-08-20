@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="24dp"
+    android:background="#FAFAFA">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:text="Print Bridge Settings"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <!-- Server URL -->
+        <TextView android:text="@string/label_server_url"
+            android:textSize="14sp" android:textStyle="bold"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etServerUrl"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="@string/hint_server_url"
+            android:inputType="textUri"
+            android:singleLine="true"/>
+
+        <!-- Station -->
+        <TextView android:text="@string/label_station"
+            android:textSize="14sp" android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <Spinner android:id="@+id/spStation"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+        <!-- Printer MAC -->
+        <TextView android:text="@string/label_printer_mac"
+            android:textSize="14sp" android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etPrinterMac"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="@string/hint_printer_mac"
+            android:inputType="text"
+            android:singleLine="true"/>
+
+        <!-- Bridge Token -->
+        <TextView android:text="@string/label_bridge_token"
+            android:textSize="14sp" android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etBridgeToken"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="@string/hint_bridge_token"
+            android:inputType="textPassword"
+            android:singleLine="true"/>
+
+        <Button android:id="@+id/btnSave"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/btn_save"/>
+
+    </LinearLayout>
+</ScrollView>

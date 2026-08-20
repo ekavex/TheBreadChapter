@@ -8,8 +8,13 @@ node_modules/
 next/
 tsconfig.tsbuildinfo
 .env
-backups
-./android
-/android
-android
-android/
+
+# Database dumps — may contain customer and payment data
+backups/
+
+# Android Gradle build caches
+android/**/.gradle/
+android/**/build/
+android/**/.idea/caches/
+android/**/local.properties
+android/**/build/reports/
