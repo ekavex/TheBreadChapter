@@ -15,6 +15,6 @@ backups/
 # Android Gradle build caches
 android/**/.gradle/
 android/**/build/
-android/**/.idea/caches/
+android/**/.idea/
 android/**/local.properties
 android/**/build/reports/
