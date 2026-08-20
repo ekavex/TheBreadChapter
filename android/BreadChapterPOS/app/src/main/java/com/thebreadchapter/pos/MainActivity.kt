@@ -2,11 +2,14 @@ package com.thebreadchapter.pos
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.bluetooth.BluetoothManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.view.View
 import android.webkit.*
 import android.widget.ImageButton
@@ -67,6 +70,26 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
             }
+        }
+
+        // Hand file downloads (CSV / Excel / PDF exports) to Android DownloadManager.
+        // Without this, WebView navigates to the URL and shows a blank page.
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                setMimeType(mimeType)
+                // Pass the session cookie so the server accepts the authenticated request.
+                val cookie = CookieManager.getInstance().getCookie(url)
+                if (!cookie.isNullOrBlank()) addRequestHeader("Cookie", cookie)
+                addRequestHeader("User-Agent", userAgent)
+                setTitle(fileName)
+                setDescription("Downloading…")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            }
+            val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            dm.enqueue(request)
+            Toast.makeText(this, "Downloading $fileName…", Toast.LENGTH_SHORT).show()
         }
 
         val prefs = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE)
