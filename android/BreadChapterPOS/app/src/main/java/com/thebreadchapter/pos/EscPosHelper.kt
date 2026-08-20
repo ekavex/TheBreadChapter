@@ -72,4 +72,27 @@ object EscPosHelper {
 
         return out.toByteArray()
     }
+
+    fun buildTestTicket(printerName: String): ByteArray {
+        val out = ByteArrayOutputStream()
+        fun w(b: ByteArray) = out.write(b)
+        val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+
+        w(INIT)
+        w(ALIGN_CENTER)
+        w(BOLD_ON)
+        w(DOUBLE_HEIGHT)
+        w(text("TEST PRINT"))
+        w(NORMAL_SIZE)
+        w(BOLD_OFF)
+        w(text("Printer: $printerName"))
+        w(text("Time: $time"))
+        w(text(DIV.trimEnd()))
+        w(text("Connectivity check successful!"))
+        w(text(DIV.trimEnd()))
+        w(feed())
+        w(FULL_CUT)
+
+        return out.toByteArray()
+    }
 }

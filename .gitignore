@@ -18,3 +18,4 @@ android/**/build/
 android/**/.idea/
 android/**/local.properties
 android/**/build/reports/
+.sample.env

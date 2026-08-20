@@ -12,13 +12,14 @@
     <!-- Semi-transparent settings cog — top-right corner, auto-hides after 5s -->
     <ImageButton
         android:id="@+id/btnSettings"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
         android:layout_gravity="top|end"
-        android:layout_margin="8dp"
+        android:layout_margin="16dp"
         android:src="@android:drawable/ic_menu_manage"
-        android:background="@android:color/transparent"
-        android:alpha="0.4"
+        android:backgroundTint="@color/colorPrimary"
+        android:elevation="4dp"
+        android:alpha="0.8"
         android:contentDescription="Settings" />
 
 </FrameLayout>

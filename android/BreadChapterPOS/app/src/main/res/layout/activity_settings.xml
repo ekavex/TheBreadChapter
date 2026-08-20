@@ -2,8 +2,8 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp"
-    android:background="#FAFAFA">
+    android:background="@color/background"
+    android:padding="24dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -11,57 +11,115 @@
         android:orientation="vertical">
 
         <TextView
-            android:text="Print Bridge Settings"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:text="Print Bridge Settings"
+            android:textColor="@color/colorPrimary"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
         <!-- Server URL -->
-        <TextView android:text="@string/label_server_url"
-            android:textSize="14sp" android:textStyle="bold"
-            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-        <EditText android:id="@+id/etServerUrl"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
+        <TextView
+            style="@style/SettingsLabel"
+            android:text="@string/label_server_url" />
+
+        <EditText
+            android:id="@+id/etServerUrl"
+            style="@style/SettingsEditText"
             android:hint="@string/hint_server_url"
-            android:inputType="textUri"
-            android:singleLine="true"/>
-
-        <!-- Station -->
-        <TextView android:text="@string/label_station"
-            android:textSize="14sp" android:textStyle="bold"
-            android:layout_marginTop="8dp"
-            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-        <Spinner android:id="@+id/spStation"
-            android:layout_width="match_parent" android:layout_height="wrap_content"/>
-
-        <!-- Printer MAC -->
-        <TextView android:text="@string/label_printer_mac"
-            android:textSize="14sp" android:textStyle="bold"
-            android:layout_marginTop="8dp"
-            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-        <EditText android:id="@+id/etPrinterMac"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="@string/hint_printer_mac"
-            android:inputType="text"
-            android:singleLine="true"/>
+            android:inputType="textUri" />
 
         <!-- Bridge Token -->
-        <TextView android:text="@string/label_bridge_token"
-            android:textSize="14sp" android:textStyle="bold"
-            android:layout_marginTop="8dp"
-            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-        <EditText android:id="@+id/etBridgeToken"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="@string/hint_bridge_token"
-            android:inputType="textPassword"
-            android:singleLine="true"/>
+        <TextView
+            style="@style/SettingsLabel"
+            android:text="@string/label_bridge_token" />
 
-        <Button android:id="@+id/btnSave"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/btn_save"/>
+        <EditText
+            android:id="@+id/etBridgeToken"
+            style="@style/SettingsEditText"
+            android:hint="@string/hint_bridge_token"
+            android:inputType="textPassword" />
+
+        <!-- Station (Job Filter) -->
+        <TextView
+            style="@style/SettingsLabel"
+            android:text="Job Source Station (e.g. 'all' or 'kitchen')" />
+
+        <EditText
+            android:id="@+id/etStationFilter"
+            style="@style/SettingsEditText"
+            android:hint="Station name for API polling"
+            android:inputType="text" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="16dp"
+            android:background="@color/divider" />
+
+        <!-- Kitchen Printer -->
+        <TextView
+            style="@style/SettingsLabel"
+            android:text="Select Kitchen Printer" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Spinner
+                android:id="@+id/spKitchenPrinter"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:background="@android:drawable/btn_dropdown" />
+
+            <Button
+                android:id="@+id/btnTestKitchen"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:text="Test"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Beverage Printer -->
+        <TextView
+            style="@style/SettingsLabel"
+            android:text="Select Beverage Printer" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Spinner
+                android:id="@+id/spBeveragePrinter"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:background="@android:drawable/btn_dropdown" />
+
+            <Button
+                android:id="@+id/btnTestBeverage"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:text="Test"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="32dp"
+            android:backgroundTint="@color/colorPrimary"
+            android:text="@string/btn_save"
+            android:textAllCaps="true"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
 
     </LinearLayout>
 </ScrollView>

@@ -71,12 +71,14 @@ class PrintBridgeService : Service() {
 
         while (isActive) {
             val serverUrl   = prefs.getString(SettingsActivity.KEY_SERVER_URL, "") ?: ""
-            val station     = prefs.getString(SettingsActivity.KEY_STATION, "kitchen") ?: "kitchen"
-            val printerMac  = prefs.getString(SettingsActivity.KEY_PRINTER_MAC, "") ?: ""
+            val station     = prefs.getString(SettingsActivity.KEY_STATION, "all") ?: "all"
             val token       = prefs.getString(SettingsActivity.KEY_BRIDGE_TOKEN, "") ?: ""
+            
+            val kitchenMac  = prefs.getString(SettingsActivity.KEY_KITCHEN_MAC, "") ?: ""
+            val beverageMac = prefs.getString(SettingsActivity.KEY_BEVERAGE_MAC, "") ?: ""
 
-            if (serverUrl.isBlank() || printerMac.isBlank() || token.isBlank()) {
-                updateNotification("⚙ Settings not configured — open Settings")
+            if (serverUrl.isBlank() || token.isBlank() || (kitchenMac.isBlank() && beverageMac.isBlank())) {
+                updateNotification("⚙ Settings missing — configure in Settings")
                 delay(5000.milliseconds)
                 continue
             }
@@ -84,14 +86,14 @@ class PrintBridgeService : Service() {
             try {
                 val jobs = fetchPendingJobs(serverUrl, station, token)
                 if (jobs.length() > 0) {
-                    updateNotification("Printing ${jobs.length()} job(s)…")
+                    updateNotification("Processing ${jobs.length()} job(s)…")
                     for (i in 0 until jobs.length()) {
                         val job = jobs.getJSONObject(i)
-                        processJob(job, printerMac, serverUrl, token)
+                        processJob(job, serverUrl, token, kitchenMac, beverageMac)
                     }
-                    updateNotification("✓ Bridge active · station: $station")
+                    updateNotification("✓ Bridge active · listening: $station")
                 } else {
-                    updateNotification("✓ Bridge active · station: $station")
+                    updateNotification("✓ Bridge active · listening: $station")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Poll error: ${e.message}")
@@ -125,12 +127,32 @@ class PrintBridgeService : Service() {
 
     // ── Print one job ─────────────────────────────────────────────────────────
 
-    private fun processJob(job: JSONObject, printerMac: String, serverUrl: String, token: String) {
+    private fun processJob(
+        job: JSONObject,
+        serverUrl: String,
+        token: String,
+        kitchenMac: String,
+        beverageMac: String,
+    ) {
         val jobId      = job.getString("id")
         val tableLabel = job.getString("tableLabel")
         val orderId    = job.getString("orderId")
         val station    = job.getString("station")
         val itemsJson  = job.getJSONArray("items")
+
+        val targetMac = when (station.lowercase()) {
+            "kitchen" -> kitchenMac
+            "beverage", "beverages" -> beverageMac
+            else -> {
+                Log.w(TAG, "Unknown station '$station' for job $jobId, skipping")
+                return
+            }
+        }
+
+        if (targetMac.isBlank()) {
+            Log.w(TAG, "No MAC configured for station '$station', job $jobId skipped")
+            return
+        }
 
         val items = (0 until itemsJson.length()).map { i ->
             val obj = itemsJson.getJSONObject(i)
@@ -139,12 +161,11 @@ class PrintBridgeService : Service() {
 
         try {
             val payload = EscPosHelper.buildKotTicket(tableLabel, orderId, station, items)
-            sendViaBluetooth(printerMac, payload)
+            sendViaBluetooth(targetMac, payload)
             markJobDone(serverUrl, jobId, token)
-            Log.i(TAG, "Printed job $jobId for table $tableLabel")
+            Log.i(TAG, "Printed job $jobId for table $tableLabel at $station ($targetMac)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to print job $jobId: ${e.message}")
-            // Job stays 'queued' — will be retried on next poll
         }
     }
 
