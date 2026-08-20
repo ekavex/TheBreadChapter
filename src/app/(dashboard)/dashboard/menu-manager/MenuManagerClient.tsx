@@ -1,13 +1,54 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChefHat, Plus, Pencil, Trash2, Eye, EyeOff, UtensilsCrossed, Coffee, Search, X } from 'lucide-react'
+import { ChefHat, Plus, Pencil, Trash2, Eye, EyeOff, UtensilsCrossed, Coffee, Search, X, AlertTriangle } from 'lucide-react'
 import type { MenuCategory, MenuItem, Ingredient } from '@/lib/types'
 import { formatPaisa, rupeesToPaisa } from '@/lib/money'
 import toast from 'react-hot-toast'
 import RecipeModal from './RecipeModal'
 import ItemModal from './ItemModal'
 import CategoryModal from './CategoryModal'
+
+interface ConfirmState {
+  title: string
+  message: string
+  onConfirm: () => void
+}
+
+function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmState & { onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-red-50 shrink-0">
+              <AlertTriangle size={18} className="text-red-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-ink text-base">{title}</h3>
+              <p className="text-ink-muted text-sm mt-1 leading-relaxed">{message}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex border-t border-ink/8">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-3.5 text-sm font-medium text-ink-muted hover:bg-surface-overlay transition-colors"
+          >
+            Cancel
+          </button>
+          <div className="w-px bg-ink/8" />
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-3.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface Props {
   categories: MenuCategory[]
@@ -149,6 +190,11 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
   const [activeModal, setActiveModal] = useState<ModalKind | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [search, setSearch] = useState('')
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
+
+  function askConfirm(state: ConfirmState) {
+    setConfirmState(state)
+  }
 
   const totalItems = categories.reduce((s, c) => s + (c.items?.length ?? 0), 0)
   const unavailable = categories.reduce(
@@ -174,36 +220,48 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
     }
   }
 
-  async function deleteCategory(cat: MenuCategory) {
-    if (!confirm(`Delete category "${cat.name}"?`)) return
-    setDeleting(true)
-    try {
-      const res = await fetch(`/api/menu/categories/${cat.id}`, { method: 'DELETE' })
-      const { error } = await res.json()
-      if (error) throw new Error(error)
-      toast.success('Category deleted')
-      router.refresh()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Delete failed')
-    } finally {
-      setDeleting(false)
-    }
+  function deleteCategory(cat: MenuCategory) {
+    askConfirm({
+      title: `Delete "${cat.name}"?`,
+      message: 'This will permanently delete the category. All items must be removed first.',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setDeleting(true)
+        try {
+          const res = await fetch(`/api/menu/categories/${cat.id}`, { method: 'DELETE' })
+          const { error } = await res.json()
+          if (error) throw new Error(error)
+          toast.success('Category deleted')
+          router.refresh()
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Delete failed')
+        } finally {
+          setDeleting(false)
+        }
+      },
+    })
   }
 
-  async function deleteItem(item: MenuItem) {
-    if (!confirm(`Delete "${item.name}"?`)) return
-    setDeleting(true)
-    try {
-      const res = await fetch(`/api/menu/items/${item.id}`, { method: 'DELETE' })
-      const { error } = await res.json()
-      if (error) throw new Error(error)
-      toast.success('Item deleted')
-      router.refresh()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Delete failed')
-    } finally {
-      setDeleting(false)
-    }
+  function deleteItem(item: MenuItem) {
+    askConfirm({
+      title: `Delete "${item.name}"?`,
+      message: 'This item will be permanently removed from the menu.',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setDeleting(true)
+        try {
+          const res = await fetch(`/api/menu/items/${item.id}`, { method: 'DELETE' })
+          const { error } = await res.json()
+          if (error) throw new Error(error)
+          toast.success('Item deleted')
+          router.refresh()
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Delete failed')
+        } finally {
+          setDeleting(false)
+        }
+      },
+    })
   }
 
   function refresh() {
@@ -447,6 +505,13 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
           categories={categories}
           onClose={() => setActiveModal(null)}
           onSaved={refresh}
+        />
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          {...confirmState}
+          onCancel={() => setConfirmState(null)}
         />
       )}
     </div>
