@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyCredentials } from '@/lib/auth/credentials'
-import { createSession, SESSION_COOKIE_NAME, ROLE_COOKIE_NAME, DASHBOARD_SESSION_TTL_SECONDS } from '@/lib/auth/session'
+import { createSession, SESSION_COOKIE_NAME, ROLE_COOKIE_NAME, DASHBOARD_SESSION_TTL_SECONDS, REMEMBER_ME_TTL_SECONDS } from '@/lib/auth/session'
 import { checkRateLimit, clearRateLimit, pruneRateLimits } from '@/lib/auth/rateLimit'
 import { logger } from '@/lib/logger'
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   pruneRateLimits()
 
   const body = await req.json().catch(() => ({}))
-  const { userId, password } = body as { userId?: string; password?: string }
+  const { userId, password, rememberMe } = body as { userId?: string; password?: string; rememberMe?: boolean }
   if (!userId || !password) {
     return NextResponse.json({ error: 'userId and password required' }, { status: 400 })
   }
@@ -49,14 +49,15 @@ export async function POST(req: NextRequest) {
   clearRateLimit(`user:${userId.toLowerCase()}`)
 
   const { role, displayName } = result
-  const token = await createSession(userId, role, displayName)
-  logger.info('auth.login.success', { userId, role, ip })
+  const ttl = rememberMe ? REMEMBER_ME_TTL_SECONDS : DASHBOARD_SESSION_TTL_SECONDS
+  const token = await createSession(userId, role, displayName, ttl)
+  logger.info('auth.login.success', { userId, role, ip, rememberMe: !!rememberMe })
 
   const cookieOpts = {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax' as const,
     path: '/',
-    maxAge: DASHBOARD_SESSION_TTL_SECONDS,
+    maxAge: ttl,
   }
 
   const res = NextResponse.json({ data: { role, displayName }, error: null })

@@ -5,7 +5,8 @@ import type { UserRole } from '@/lib/types'
 
 export const SESSION_COOKIE_NAME = 'sc_session'
 export const ROLE_COOKIE_NAME = 'sc_role'
-export const DASHBOARD_SESSION_TTL_SECONDS = 12 * 60 * 60 // 12h
+export const DASHBOARD_SESSION_TTL_SECONDS = 12 * 60 * 60        // 12h  (default)
+export const REMEMBER_ME_TTL_SECONDS       = 30 * 24 * 60 * 60  // 30 days
 
 interface TokenPayload {
   userId: string
@@ -66,8 +67,13 @@ async function verify(token: string | undefined | null): Promise<TokenPayload | 
   }
 }
 
-export async function createSession(userId: string, role: UserRole, displayName: string): Promise<string> {
-  return sign({ userId, role, displayName, exp: Math.floor(Date.now() / 1000) + DASHBOARD_SESSION_TTL_SECONDS })
+export async function createSession(
+  userId: string,
+  role: UserRole,
+  displayName: string,
+  ttlSeconds: number = DASHBOARD_SESSION_TTL_SECONDS,
+): Promise<string> {
+  return sign({ userId, role, displayName, exp: Math.floor(Date.now() / 1000) + ttlSeconds })
 }
 
 export async function getSession(

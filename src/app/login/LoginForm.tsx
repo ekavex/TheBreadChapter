@@ -13,6 +13,7 @@ export default function LoginForm() {
   const searchParams = useSearchParams()
   const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -24,7 +25,7 @@ export default function LoginForm() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, password }),
+        body: JSON.stringify({ userId, password, rememberMe }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -64,6 +65,15 @@ export default function LoginForm() {
           required
         />
       </div>
+      <label className="flex items-center gap-2.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={rememberMe}
+          onChange={(e) => setRememberMe(e.target.checked)}
+          className="w-4 h-4 rounded border-ink/20 accent-ink cursor-pointer"
+        />
+        <span className="text-sm text-ink-muted">Keep me signed in for 30 days</span>
+      </label>
       {error && <p className="text-sm text-status-overdue">{error}</p>}
       <button
         type="submit"
