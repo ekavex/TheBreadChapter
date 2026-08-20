@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Bread Chapter POS</string>
+    <string name="app_name">TBC POS</string>
     <string name="title_settings">Print Bridge Settings</string>
 
     <string name="label_server_url">Server URL</string>
