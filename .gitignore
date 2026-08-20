@@ -8,3 +8,8 @@ node_modules/
 next/
 tsconfig.tsbuildinfo
 .env
+backups
+./android
+/android
+android
+android/
