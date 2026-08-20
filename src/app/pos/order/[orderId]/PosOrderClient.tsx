@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
-import { printBill } from '@/lib/printer/billPrint'
 
 interface Props {
   initialOrder: Order | null
@@ -525,14 +524,6 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         </div>
       )}
 
-      {order && ['BILLED', 'AWAITING_PAYMENT', 'PAYMENT_FAILED', 'PAID'].includes(posStatus) && (
-        <button
-          onClick={() => printBill(order, { paid: posStatus === 'PAID', mode: payment?.mode ?? order.payment_method })}
-          className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl border border-ink/15 text-ink py-2.5 text-sm font-medium"
-        >
-          <Receipt size={15} /> Print customer bill
-        </button>
-      )}
 
       {(posStatus === 'BILLED' || posStatus === 'PAYMENT_FAILED') && (
         <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
