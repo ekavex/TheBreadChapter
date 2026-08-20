@@ -6,11 +6,6 @@ import { logger } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-// Seeded demo passwords (supabase/migrations/005_rbac.sql). A production
-// deployment must not accept these — rotate them, or set
-// ALLOW_DEFAULT_CREDENTIALS=true to deliberately keep them (dev/UAT only).
-const DEFAULT_PASSWORDS = new Set(['admin123', 'manager123', 'staff123'])
-
 const RATE_LIMIT = { windowMs: 5 * 60_000, maxAttempts: 8, blockMs: 15 * 60_000 }
 
 function clientIp(req: NextRequest): string {
@@ -48,21 +43,6 @@ export async function POST(req: NextRequest) {
   if (!result) {
     logger.warn('auth.login.failed', { userId, ip })
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
-  }
-
-  if (
-    process.env.NODE_ENV === 'production' &&
-    process.env.ALLOW_DEFAULT_CREDENTIALS !== 'true' &&
-    DEFAULT_PASSWORDS.has(password)
-  ) {
-    logger.error('auth.login.default_password_blocked', { userId })
-    return NextResponse.json(
-      {
-        error:
-          'This account still uses the seeded demo password. Change it before using the system in production.',
-      },
-      { status: 403 }
-    )
   }
 
   clearRateLimit(`ip:${ip}`)
