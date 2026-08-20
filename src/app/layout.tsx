@@ -5,8 +5,13 @@ import '@fontsource-variable/playfair-display'
 import '@/styles/globals.css'
 
 export const metadata: Metadata = {
-  title: { default: 'Cafe Menu', template: '%s | Cafe' },
-  description: 'Order from your table',
+  title: { default: 'The Bread Chapter', template: '%s | The Bread Chapter' },
+  description: 'The Bread Chapter — Smart Cafe Management',
+  icons: {
+    icon: '/tbc-logo.ico',
+    shortcut: '/tbc-logo-small.ico',
+    apple: '/tbc-log-bg.png',
+  },
 }
 
 export const viewport: Viewport = {

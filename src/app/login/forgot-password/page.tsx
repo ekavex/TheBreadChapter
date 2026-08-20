@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
 export default function ForgotPasswordPage() {
@@ -61,8 +62,15 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4">
       <div className="mb-8 text-center">
-        <h1 className="font-display text-2xl font-bold text-ink">The Bread Chapter</h1>
-        <p className="text-ink-muted mt-1">Admin password reset</p>
+        <Image
+          src="/tbc-log-bg.png"
+          alt="The Bread Chapter"
+          width={140}
+          height={140}
+          className="mx-auto mb-2"
+          priority
+        />
+        <p className="text-ink-muted text-sm">Admin password reset</p>
       </div>
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
