@@ -306,6 +306,48 @@ async function ensureNoOpenTransaction(
   return null
 }
 
+// Cash is collected in person — no terminal push or Pine Labs call needed.
+async function handleCashPayment(
+  order: Order,
+  orderId: string,
+  customerPhone: string | null | undefined,
+  customerName: string | null | undefined,
+): Promise<NextResponse> {
+  const sql = getDb()
+  const claimedRows = await sql`
+    UPDATE orders SET pos_status = 'AWAITING_PAYMENT'
+    WHERE id = ${orderId}
+      AND pos_status = ANY(${sql.array(['BILLED', 'PAYMENT_FAILED'])})
+    RETURNING *
+  `
+  if (!claimedRows.length) {
+    const freshOrder = await fetchOrderWithItemsAndTable(orderId)
+    if (freshOrder?.pos_status === 'PAID') {
+      const payment = await latestPaymentFor(orderId)
+      return ok(freshOrder, payment, 'paid')
+    }
+    return NextResponse.json(
+      { data: null, error: 'Payment already in progress on this order — refresh and retry' },
+      { status: 409 },
+    )
+  }
+  const claimed = { ...claimedRows[0], items: order.items, table: order.table } as Order
+  const transactionNumber = `CASH-${claimed.order_number}-${Date.now()}`
+  const [paymentRow] = await sql`
+    INSERT INTO payments (order_id, transaction_number, plutus_ptrid, status, mode, amount_paisa, raw_response)
+    VALUES (${orderId}, ${transactionNumber}, NULL, 'initiated', 'cash', ${claimed.total_paisa}, ${sql.json({})})
+    RETURNING *
+  `
+  const payment = paymentRow as Payment
+  const cashResult: PaymentResult = {
+    status: 'approved',
+    ptrid: `CASH-${transactionNumber}`,
+    mode: 'CASH',
+    amountPaisa: Number(claimed.total_paisa),
+  }
+  return finalizeOrFlag(claimed, payment, cashResult, customerPhone, customerName)
+}
+
 // POST /api/pos/orders/[id]/pay
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
@@ -323,6 +365,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const order = await fetchOrderWithItemsAndTable(params.id)
     if (!order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
 
+    if (order.pos_status === 'PAID') {
+      const payment = await latestPaymentFor(order.id)
+      return ok(order, payment, 'paid')
+    }
+
+    if (!['BILLED', 'PAYMENT_FAILED', 'AWAITING_PAYMENT', 'REQUIRES_VERIFICATION'].includes(order.pos_status ?? '')) {
+      return NextResponse.json({ data: null, error: `Cannot take payment on an order that is ${order.pos_status}` }, { status: 409 })
+    }
+    if (!mode || !['card', 'cash', 'upi'].includes(mode)) {
+      return NextResponse.json({ data: null, error: 'mode must be "card", "cash" or "upi"' }, { status: 400 })
+    }
+    if (!order.total_paisa || Number(order.total_paisa) <= 0) {
+      return NextResponse.json({ data: null, error: 'Order total is zero — regenerate the bill before taking payment' }, { status: 409 })
+    }
+
+    // Cash is settled by hand — no terminal or Pine Labs required.
+    if (mode === 'cash') {
+      return handleCashPayment(order, params.id, customer_phone, customer_name)
+    }
+
     // Route the bill to the terminal serving this table's section.
     let terminal: Terminal
     try {
@@ -334,24 +396,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       throw err
     }
 
-    if (order.pos_status === 'PAID') {
-      const payment = await latestPaymentFor(order.id)
-      return ok(order, payment, 'paid')
-    }
-
     if (order.pos_status === 'AWAITING_PAYMENT' || order.pos_status === 'REQUIRES_VERIFICATION') {
       // Re-verification only — this path never starts a new charge.
       return resolveAwaitingPayment(order, terminal, customer_phone, customer_name)
-    }
-
-    if (!['BILLED', 'PAYMENT_FAILED'].includes(order.pos_status)) {
-      return NextResponse.json({ data: null, error: `Cannot take payment on an order that is ${order.pos_status}` }, { status: 409 })
-    }
-    if (!mode || !['card', 'cash', 'upi'].includes(mode)) {
-      return NextResponse.json({ data: null, error: 'mode must be "card", "cash" or "upi"' }, { status: 400 })
-    }
-    if (!order.total_paisa || Number(order.total_paisa) <= 0) {
-      return NextResponse.json({ data: null, error: 'Order total is zero — regenerate the bill before taking payment' }, { status: 409 })
     }
 
     // Never start a second charge while an earlier one may still be live.

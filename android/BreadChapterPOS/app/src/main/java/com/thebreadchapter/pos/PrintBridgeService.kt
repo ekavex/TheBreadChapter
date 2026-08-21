@@ -142,7 +142,7 @@ class PrintBridgeService : Service() {
 
         val targetMac = when (station.lowercase()) {
             "kitchen" -> kitchenMac
-            "beverage", "beverages" -> beverageMac
+            "beverage_counter", "beverage", "beverages" -> beverageMac
             else -> {
                 Log.w(TAG, "Unknown station '$station' for job $jobId, skipping")
                 return

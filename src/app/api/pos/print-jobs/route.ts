@@ -37,9 +37,9 @@ export async function GET(req: NextRequest) {
     FROM kot_tickets kt
     JOIN orders o ON o.id = kt.order_id
     LEFT JOIN tables t ON t.id = o.table_id
-    WHERE kt.station = ${station}
+    WHERE (${station} = 'all' OR kt.station = ${station})
       AND kt.print_status = 'queued'
-    ORDER BY kt.printed_at ASC
+    ORDER BY kt.created_at ASC
     LIMIT 10
   `
 
