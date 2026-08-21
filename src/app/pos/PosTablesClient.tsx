@@ -163,15 +163,14 @@ function RectangleTable({ capacity, tc, tb, sc, label }: { capacity: number; tc:
   )
 }
 
-function TableShapeIcon({ shape, status, capacity, tableNumber }: {
+function TableShapeIcon({ shape, status, capacity, displayLabel }: {
   shape: TableShape
   status: TableStatus
   capacity: number
-  tableNumber: number
+  displayLabel: string
 }) {
   const s = STATUS[status]
-  const label = String(tableNumber)
-  const props = { capacity, tc: s.tableColor, tb: s.tableBorder, sc: s.seatColor, label }
+  const props = { capacity, tc: s.tableColor, tb: s.tableBorder, sc: s.seatColor, label: displayLabel }
   if (shape === 'round')     return <RoundTable {...props} />
   if (shape === 'rectangle') return <RectangleTable {...props} />
   return <SquareTable {...props} />
@@ -222,17 +221,12 @@ function TableCard({
             shape={shape}
             status={table.status}
             capacity={table.capacity ?? 4}
-            tableNumber={table.number}
+            displayLabel={table.label || String(table.number)}
           />
         </div>
 
         {/* Info row */}
         <div className="px-1.5 pb-1.5">
-          {/* Label */}
-          {table.label && (
-            <p className="text-[10px] text-ink-faint truncate text-center mb-1">{table.label}</p>
-          )}
-
           {/* Capacity + status */}
           <div className="flex items-center justify-between gap-1">
             <span className="flex items-center gap-0.5 text-[10px] text-ink-faint">
@@ -288,12 +282,13 @@ function TableModal({ table, sections, onClose, onSaved }: {
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
-    if (!number || isNaN(Number(number))) return toast.error('Enter a valid table number')
+    if (!label.trim()) return toast.error('Enter a table name (e.g. T1, A, S2)')
+    if (!number || isNaN(Number(number))) return toast.error('Enter a sort order number')
     setSaving(true)
     try {
       const body = {
         number:     Number(number),
-        label:      label.trim() || null,
+        label:      label.trim(),
         capacity:   Number(capacity) || 4,
         shape,
         section_id: Number(sectionId),
@@ -320,7 +315,7 @@ function TableModal({ table, sections, onClose, onSaved }: {
 
         <div className="flex items-center justify-between px-5 py-4 border-b border-ink/5 sticky top-0 bg-white">
           <h2 className="font-display font-semibold text-ink">
-            {table ? `Edit Table ${table.number}` : 'Add Table'}
+            {table ? `Edit ${table.label || 'Table ' + table.number}` : 'Add Table'}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-overlay">
             <X size={16} />
@@ -357,22 +352,35 @@ function TableModal({ table, sections, onClose, onSaved }: {
                   shape={shape}
                   status="free"
                   capacity={previewCap}
-                  tableNumber={Number(number) || 1}
+                  displayLabel={label.trim() || String(Number(number) || 1)}
                 />
               </div>
             </div>
           </div>
 
+          <div>
+            <label className="text-xs font-medium text-ink-muted block mb-1.5">Table name *</label>
+            <input
+              type="text"
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+              placeholder="e.g. T1, A, S2, Window"
+              className="w-full rounded-xl border border-ink/10 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
+            />
+            <p className="text-[10px] text-ink-faint mt-1">Shown on the table and KOT tickets</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-ink-muted block mb-1.5">Table number *</label>
+              <label className="text-xs font-medium text-ink-muted block mb-1.5">Sort order</label>
               <input
                 type="number"
                 value={number}
                 onChange={e => setNumber(e.target.value)}
-                placeholder="e.g. 5"
+                placeholder="e.g. 1"
                 className="w-full rounded-xl border border-ink/10 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
               />
+              <p className="text-[10px] text-ink-faint mt-1">Controls display order</p>
             </div>
             <div>
               <label className="text-xs font-medium text-ink-muted block mb-1.5">Seats</label>
@@ -384,19 +392,6 @@ function TableModal({ table, sections, onClose, onSaved }: {
                 className="w-full rounded-xl border border-ink/10 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-ink-muted block mb-1.5">
-              Label <span className="text-ink-faint font-normal">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={label}
-              onChange={e => setLabel(e.target.value)}
-              placeholder="e.g. Window seat, Corner"
-              className="w-full rounded-xl border border-ink/10 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-400"
-            />
           </div>
 
           <div>
@@ -479,13 +474,14 @@ export default function PosTablesClient({ bySection }: Props) {
   }
 
   async function deleteTable(table: Table) {
-    if (!confirm(`Remove Table ${table.number}? This cannot be undone.`)) return
+    const name = table.label || `Table ${table.number}`
+    if (!confirm(`Remove ${name}? This cannot be undone.`)) return
     setDeletingId(table.id)
     try {
       const res = await fetch(`/api/pos/tables/${table.id}`, { method: 'DELETE' })
       const { error } = await res.json()
       if (error) throw new Error(error)
-      toast.success(`Table ${table.number} removed`)
+      toast.success(`${name} removed`)
       router.refresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not remove table')

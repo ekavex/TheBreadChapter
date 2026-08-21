@@ -47,7 +47,7 @@ export class NetworkPrinterService implements PrinterService {
       text(ticket.station === 'kitchen' ? '** KITCHEN **' : '** BEVERAGE **'),
       CMD.NORMAL_SIZE,
       CMD.BOLD_OFF,
-      text(`Table: ${ticket.tableNumber}   ${time}`),
+      text(`Table: ${ticket.tableLabel}   ${time}`),
       text(`Order: #${shortId}`),
       text(div),
       CMD.ALIGN_LEFT,

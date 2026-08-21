@@ -71,7 +71,7 @@ export function buildPrinterService(cfg: PrinterConfig): PrinterService {
   return {
     async printTicket(ticket) {
       const lines = ticket.items.map(i => `  ${i.quantity}x ${i.name}`).join('\n')
-      console.log(`[MOCK PRINT → ${ticket.station}] Table ${ticket.tableNumber}\n${lines}`)
+      console.log(`[MOCK PRINT → ${ticket.station}] Table ${ticket.tableLabel}\n${lines}`)
     },
   }
 }

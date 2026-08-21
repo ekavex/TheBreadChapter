@@ -99,9 +99,9 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const trackingRef = useRef(false)
 
   // Table info — use joined order.table once order exists, fall back to initialTable prop
-  const tableNumber = order?.table?.number ?? initialTable?.number
-  const sectionName = (order?.table as (Table & { section?: { name: string } }) | undefined)?.section?.name
-    ?? (initialTable as (Table & { section?: { name: string } }) | undefined)?.section?.name
+  const rawTable = (order?.table ?? initialTable) as (Table & { section?: { name: string } }) | undefined
+  const tableLabel = rawTable?.label || (rawTable?.number != null ? String(rawTable.number) : null)
+  const sectionName = rawTable?.section?.name
 
   async function ensureOrder(): Promise<string> {
     if (order) return order.id
@@ -341,7 +341,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             ← Back to tables
           </button>
           <h1 className="font-display text-2xl font-bold text-ink">
-            Table {tableNumber} · {sectionName}
+            {tableLabel} · {sectionName}
           </h1>
           <p className="text-ink-muted text-sm mt-0.5">
             {order ? `Order ${order.order_number}` : 'New order'}

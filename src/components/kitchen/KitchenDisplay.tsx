@@ -211,12 +211,8 @@ export default function KitchenDisplay({ cafeId }: Props) {
                           {order.order_number}
                         </p>
                         <p className="text-white font-display font-bold text-base leading-tight">
-                          Table {(order.table as { number?: number })?.number ?? '—'}
-                          {(order.table as { label?: string })?.label && (
-                            <span className="text-slate-400 font-normal text-sm">
-                              {' '}· {(order.table as { label?: string }).label}
-                            </span>
-                          )}
+                          {(order.table as { label?: string; number?: number })?.label
+                            || `Table ${(order.table as { number?: number })?.number ?? '—'}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-slate-500">

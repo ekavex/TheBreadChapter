@@ -10,7 +10,7 @@ export interface KotTicketItem {
 }
 
 export interface KotTicket {
-  tableNumber: number
+  tableLabel: string
   orderId: string
   station: KotStation
   items: KotTicketItem[]

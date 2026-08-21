@@ -27,7 +27,7 @@ export default function RecentOrders({ orders }: Props) {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-ink">{order.order_number}</span>
                   <span className="text-xs text-ink-muted">
-                    Table {(order as any).table?.number ?? '—'}
+                    {(order as any).table?.label || ((order as any).table?.number != null ? `Table ${(order as any).table.number}` : '—')}
                   </span>
                 </div>
                 <div className="text-xs text-ink-faint mt-0.5">

@@ -8,7 +8,7 @@ vi.mock('child_process', () => ({ execFile: (...args: unknown[]) => (execFile as
 import { BluetoothPrinterService } from '@/lib/printer/BluetoothPrinterService'
 
 const ticket = {
-  tableNumber: 4,
+  tableLabel: 'T4',
   orderId: 'order-1',
   station: 'kitchen' as const,
   items: [{ name: 'Flat White', quantity: 1 }],

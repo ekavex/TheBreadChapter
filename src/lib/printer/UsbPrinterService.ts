@@ -37,7 +37,7 @@ function buildPayload(ticket: KotTicket): Buffer {
     text(label),
     CMD.NORMAL_SIZE,
     CMD.BOLD_OFF,
-    text(`Table: ${ticket.tableNumber}  ${time}`),
+    text(`Table: ${ticket.tableLabel}  ${time}`),
     text(`Order #${shortId}`),
     text(DIV),
     CMD.ALIGN_LEFT,

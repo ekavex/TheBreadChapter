@@ -86,7 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       logger.info('kot.print.start', { orderId: order.id, station, itemCount: items.length, isAddon })
       try {
         await printerService.printTicket({
-          tableNumber: table!.number,
+          tableLabel: table?.label || String(table?.number ?? 'Takeaway'),
           orderId: order.id,
           station,
           items,

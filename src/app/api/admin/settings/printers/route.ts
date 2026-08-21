@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     if (!usedMethod && stationCfg.ip) {
       const { NetworkPrinterService } = await import('@/lib/printer/NetworkPrinterService')
       const svc = new NetworkPrinterService({ [station]: stationCfg.ip })
-      await svc.printTicket({ tableNumber: 0, orderId: 'test-print', station: station as 'kitchen' | 'beverage_counter', items: [{ name: 'Test Item', quantity: 1 }] })
+      await svc.printTicket({ tableLabel: 'Test', orderId: 'test-print', station: station as 'kitchen' | 'beverage_counter', items: [{ name: 'Test Item', quantity: 1 }] })
       usedMethod = `Network (${stationCfg.ip})`
     }
 

@@ -35,7 +35,7 @@ export default function LiveTableGrid({ sections }: Props) {
                   className={`px-3 py-1.5 rounded-xl border text-xs font-medium ${STATUS_STYLES[table.status]}`}
                   title={STATUS_LABELS[table.status]}
                 >
-                  T{table.number} · {STATUS_LABELS[table.status]}
+                  {table.label || `T${table.number}`} · {STATUS_LABELS[table.status]}
                 </div>
               ))}
               {tables.length === 0 && <p className="text-xs text-ink-faint">No tables</p>}
