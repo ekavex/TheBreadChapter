@@ -48,7 +48,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const note: string | null = customisation || null
 
-    const [existingLine] = note
+    // When KOT is already sent, never merge into an existing line — always create
+    // a new row with a fresh created_at so the frontend can diff "sent vs add-on".
+    const [existingLine] = (note || order.pos_status === 'KOT_SENT')
       ? [undefined]
       : await sql`SELECT * FROM order_items WHERE order_id = ${params.id} AND menu_item_id = ${menu_item_id} AND customisation IS NULL LIMIT 1`
 

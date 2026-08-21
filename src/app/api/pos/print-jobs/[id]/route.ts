@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const [row] = await sql`
     UPDATE kot_tickets
     SET print_status = 'printed', printed_at = now()
-    WHERE id = ${params.id} AND print_status = 'queued'
+    WHERE id = ${params.id} AND print_status IN ('queued', 'processing')
     RETURNING id
   `
 

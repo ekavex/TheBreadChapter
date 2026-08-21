@@ -15,12 +15,36 @@ function daysToExpiry(expiryDate: string | null): number | null {
   return Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
 }
 
+function DeleteModal({ name, onConfirm, onCancel }: { name: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-red-50 shrink-0"><AlertTriangle size={18} className="text-red-600" /></div>
+            <div>
+              <h3 className="font-semibold text-ink text-base">Delete ingredient?</h3>
+              <p className="text-ink-muted text-sm mt-1">Delete &quot;{name}&quot;? This cannot be undone.</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex border-t border-ink/8">
+          <button onClick={onCancel} className="flex-1 py-3.5 text-sm font-medium text-ink-muted hover:bg-surface-overlay transition-colors">Cancel</button>
+          <div className="w-px bg-ink/8" />
+          <button onClick={onConfirm} className="flex-1 py-3.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">Delete</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function InventoryClient({ ingredients }: Props) {
   const router = useRouter()
   const [addOpen, setAddOpen] = useState(false)
   const [editing, setEditing] = useState<Ingredient | null>(null)
   const [stockFor, setStockFor] = useState<Ingredient | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Ingredient | null>(null)
 
   const lowStockCount = ingredients.filter((i) => i.current_stock <= i.low_stock_threshold).length
   const expiringCount = ingredients.filter((i) => {
@@ -36,10 +60,15 @@ export default function InventoryClient({ ingredients }: Props) {
   }
 
   async function handleDelete(ingredient: Ingredient) {
-    if (!confirm(`Delete "${ingredient.name}"? This cannot be undone.`)) return
-    setDeleting(ingredient.id)
+    setDeleteTarget(ingredient)
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(deleteTarget.id)
+    setDeleteTarget(null)
     try {
-      const res = await fetch(`/api/ingredients/${ingredient.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/ingredients/${deleteTarget.id}`, { method: 'DELETE' })
       const { error } = await res.json()
       if (error) throw new Error(error)
       toast.success('Ingredient deleted')
@@ -219,6 +248,13 @@ export default function InventoryClient({ ingredients }: Props) {
       {addOpen && <IngredientModal onClose={() => setAddOpen(false)} onSaved={refresh} />}
       {editing && <IngredientModal ingredient={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
       {stockFor && <StockUpdateModal ingredient={stockFor} onClose={() => setStockFor(null)} onSaved={refresh} />}
+      {deleteTarget && (
+        <DeleteModal
+          name={deleteTarget.name}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,8 +1,33 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, Wifi, Usb, HardDrive, CreditCard } from 'lucide-react'
+import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, CreditCard, AlertTriangle, Percent } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 import toast from 'react-hot-toast'
+
+function ConfirmModal({ title, message, confirmLabel = 'Delete', onConfirm, onCancel }: {
+  title: string; message: string; confirmLabel?: string; onConfirm: () => void; onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-red-50 shrink-0"><AlertTriangle size={18} className="text-red-600" /></div>
+            <div>
+              <h3 className="font-semibold text-ink text-base">{title}</h3>
+              <p className="text-ink-muted text-sm mt-1">{message}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex border-t border-ink/8">
+          <button onClick={onCancel} className="flex-1 py-3.5 text-sm font-medium text-ink-muted hover:bg-surface-overlay transition-colors">Cancel</button>
+          <div className="w-px bg-ink/8" />
+          <button onClick={onConfirm} className="flex-1 py-3.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface TerminalRow {
   id: string
@@ -31,21 +56,21 @@ const ROLE_ICONS: Record<UserRole, React.ReactNode> = {
   staff:   <Users size={12} />,
 }
 
-interface PrinterStationCfg {
-  btDevice?: string
-  usbDevice?: string
-  ip?: string
-}
-interface PrinterCfg {
-  kitchen: PrinterStationCfg
-  beverage_counter: PrinterStationCfg
-}
-
 export default function AdminClient() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
+
+  // ── Delete modals ────────────────────────────────────────────────
+  const [deleteUser, setDeleteUser] = useState<UserRow | null>(null)
+  const [deleteTerminal, setDeleteTerminal] = useState<TerminalRow | null>(null)
+
+  // ── Tax settings ─────────────────────────────────────────────────
+  const [taxPercent, setTaxPercent] = useState('')
+  const [serviceChargePercent, setServiceChargePercent] = useState('')
+  const [taxLoading, setTaxLoading] = useState(true)
+  const [taxSaving, setTaxSaving] = useState(false)
 
   // ── Terminal (A910S) management ──────────────────────────────────
   const [terminals, setTerminals] = useState<TerminalRow[]>([])
@@ -88,23 +113,16 @@ export default function AdminClient() {
     }
   }
 
-  async function handleDeleteTerminal(t: TerminalRow) {
-    if (!confirm(`Remove terminal "${t.label}" (Client ID: ${t.client_id})?`)) return
+  async function confirmDeleteTerminal() {
+    if (!deleteTerminal) return
+    const t = deleteTerminal
+    setDeleteTerminal(null)
     const res = await fetch(`/api/admin/terminals/${t.id}`, { method: 'DELETE' })
     const json = await res.json()
     if (!res.ok) { toast.error(json.error ?? 'Failed to delete'); return }
     toast.success('Terminal removed')
     await fetchTerminals()
   }
-
-  // ── Printer settings ────────────────────────────────────────────
-  const [printerCfg, setPrinterCfg] = useState<PrinterCfg>({
-    kitchen:          { btDevice: '', usbDevice: '', ip: '' },
-    beverage_counter: { btDevice: '', usbDevice: '', ip: '' },
-  })
-  const [printerLoading, setPrinterLoading] = useState(true)
-  const [printerSaving, setPrinterSaving] = useState(false)
-  const [testing, setTesting] = useState<string | null>(null)
 
   // Add form state
   const [newUserId, setNewUserId] = useState('')
@@ -132,45 +150,37 @@ export default function AdminClient() {
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
-  // Printer config load
+  // Tax settings load
   useEffect(() => {
-    fetch('/api/admin/settings/printers')
+    fetch('/api/admin/settings/cafe')
       .then(r => r.json())
-      .then(j => { if (j.data) setPrinterCfg(j.data) })
-      .finally(() => setPrinterLoading(false))
+      .then(j => {
+        if (j.data) {
+          setTaxPercent(String(j.data.tax_percent ?? 0))
+          setServiceChargePercent(String(j.data.service_charge_percent ?? 0))
+        }
+      })
+      .finally(() => setTaxLoading(false))
   }, [])
 
-  async function savePrinters(e: React.FormEvent) {
+  async function saveTaxSettings(e: React.FormEvent) {
     e.preventDefault()
-    setPrinterSaving(true)
+    setTaxSaving(true)
     try {
-      const res = await fetch('/api/admin/settings/printers', {
+      const res = await fetch('/api/admin/settings/cafe', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(printerCfg),
+        body: JSON.stringify({
+          tax_percent: parseFloat(taxPercent) || 0,
+          service_charge_percent: parseFloat(serviceChargePercent) || 0,
+        }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Failed to save'); return }
-      toast.success('Printer settings saved')
+      toast.success('Tax settings saved')
     } finally {
-      setPrinterSaving(false)
+      setTaxSaving(false)
     }
-  }
-
-  async function testPrint(station: string) {
-    setTesting(station)
-    try {
-      const res = await fetch(`/api/admin/settings/printers?action=test&station=${station}`, { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok) toast.error(json.error ?? 'Test failed')
-      else toast.success(`Test sent via ${json.data?.method}`)
-    } finally {
-      setTesting(null)
-    }
-  }
-
-  function updateStation(station: keyof PrinterCfg, field: keyof PrinterStationCfg, value: string) {
-    setPrinterCfg(prev => ({ ...prev, [station]: { ...prev[station], [field]: value } }))
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -220,8 +230,10 @@ export default function AdminClient() {
     }
   }
 
-  async function handleDelete(u: UserRow) {
-    if (!confirm(`Delete user "${u.user_id}"? This cannot be undone.`)) return
+  async function confirmDeleteUser() {
+    if (!deleteUser) return
+    const u = deleteUser
+    setDeleteUser(null)
     const res = await fetch(`/api/admin/users/${u.id}`, { method: 'DELETE' })
     const json = await res.json()
     if (!res.ok) { toast.error(json.error ?? 'Failed to delete user'); return }
@@ -391,7 +403,7 @@ export default function AdminClient() {
                         <Edit2 size={14} />
                       </button>
                       <button
-                        onClick={() => handleDelete(u)}
+                        onClick={() => setDeleteUser(u)}
                         className="p-1.5 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 transition-colors"
                         title="Delete"
                       >
@@ -429,96 +441,6 @@ export default function AdminClient() {
             <span>POS + Menu manager only — menu changes are logged as notifications to managers</span>
           </div>
         </div>
-      </div>
-
-      {/* ── Printer Settings ───────────────────────────────────────────────── */}
-      <div className="mt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <Printer size={18} className="text-ink-muted" />
-          <h2 className="font-display text-xl font-bold text-ink">Thermal Printer Settings</h2>
-        </div>
-        <p className="text-sm text-ink-muted mb-4">
-          Configure device paths for kitchen and beverage printers. On each print the app tries
-          Bluetooth first, falls back to USB automatically. Leave a field blank to skip that method.
-        </p>
-
-        {printerLoading ? (
-          <div className="p-6 text-center text-sm text-ink-faint">Loading…</div>
-        ) : (
-          <form onSubmit={savePrinters} className="space-y-4">
-            {(
-              [
-                { key: 'kitchen' as const,          label: 'Kitchen Printer',   color: 'bg-orange-50 border-orange-200 text-orange-700' },
-                { key: 'beverage_counter' as const, label: 'Beverage Printer',  color: 'bg-blue-50 border-blue-200 text-blue-700' },
-              ] as const
-            ).map(({ key, label, color }) => (
-              <div key={key} className="p-4 bg-surface-raised rounded-2xl border border-ink/8">
-                <div className="flex items-center justify-between mb-3">
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${color}`}>
-                    <Printer size={11} /> {label}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={testing === key}
-                    onClick={() => testPrint(key)}
-                    className="text-xs px-3 py-1.5 rounded-lg border border-ink/12 text-ink-muted hover:bg-surface-overlay disabled:opacity-50 transition-colors"
-                  >
-                    {testing === key ? 'Printing…' : 'Test print'}
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-ink-muted mb-1">
-                      <Wifi size={11} /> Bluetooth device
-                    </label>
-                    <input
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
-                      placeholder="/dev/rfcomm0"
-                      value={printerCfg[key].btDevice ?? ''}
-                      onChange={e => updateStation(key, 'btDevice', e.target.value)}
-                    />
-                    <p className="text-[10px] text-ink-faint mt-0.5">Tried first. Requires rfcomm bind.</p>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-ink-muted mb-1">
-                      <Usb size={11} /> USB device
-                    </label>
-                    <input
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
-                      placeholder="/dev/usb/lp0"
-                      value={printerCfg[key].usbDevice ?? ''}
-                      onChange={e => updateStation(key, 'usbDevice', e.target.value)}
-                    />
-                    <p className="text-[10px] text-ink-faint mt-0.5">Fallback when BT is unavailable.</p>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-ink-muted mb-1">
-                      <HardDrive size={11} /> Network IP
-                    </label>
-                    <input
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
-                      placeholder="192.168.1.100"
-                      value={printerCfg[key].ip ?? ''}
-                      onChange={e => updateStation(key, 'ip', e.target.value)}
-                    />
-                    <p className="text-[10px] text-ink-faint mt-0.5">TCP port 9100. Used if BT+USB absent.</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                type="submit"
-                disabled={printerSaving}
-                className="px-5 py-2 rounded-xl bg-ink text-surface text-sm font-medium disabled:opacity-50"
-              >
-                {printerSaving ? 'Saving…' : 'Save printer settings'}
-              </button>
-              <p className="text-xs text-ink-faint">Changes apply immediately — no restart needed.</p>
-            </div>
-          </form>
-        )}
       </div>
 
       {/* ── Payment Terminals (Pine Labs A910S) ───────────────────────────── */}
@@ -593,7 +515,7 @@ export default function AdminClient() {
                     <span className="ml-2 font-mono text-xs text-ink-muted">Client ID: {t.client_id}</span>
                   </div>
                   <button
-                    onClick={() => handleDeleteTerminal(t)}
+                    onClick={() => setDeleteTerminal(t)}
                     className="p-1.5 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 transition-colors"
                     title="Remove terminal"
                   >
@@ -605,6 +527,90 @@ export default function AdminClient() {
           )}
         </div>
       </div>
+
+      {/* ── Tax & Service Charge Settings ──────────────────────────────────── */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Percent size={18} className="text-ink-muted" />
+          <h2 className="font-display text-xl font-bold text-ink">Tax &amp; Service Charge</h2>
+        </div>
+        <p className="text-sm text-ink-muted mb-4">
+          Applied automatically when generating a bill. Set to 0 to disable.
+        </p>
+        {taxLoading ? (
+          <div className="p-6 text-center text-sm text-ink-faint">Loading…</div>
+        ) : (
+          <form onSubmit={saveTaxSettings} className="p-4 bg-surface-raised rounded-2xl border border-ink/8 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-ink-muted mb-1">GST / Tax %</label>
+                <div className="relative">
+                  <input
+                    type="number" min="0" max="100" step="0.01"
+                    className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400 pr-8"
+                    value={taxPercent}
+                    onChange={e => setTaxPercent(e.target.value)}
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint text-sm">%</span>
+                </div>
+                <p className="text-[10px] text-ink-faint mt-0.5">e.g. 5 for 5% GST</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink-muted mb-1">Service Charge %</label>
+                <div className="relative">
+                  <input
+                    type="number" min="0" max="100" step="0.01"
+                    className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400 pr-8"
+                    value={serviceChargePercent}
+                    onChange={e => setServiceChargePercent(e.target.value)}
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint text-sm">%</span>
+                </div>
+                <p className="text-[10px] text-ink-faint mt-0.5">e.g. 10 for 10% service charge</p>
+              </div>
+            </div>
+            <button
+              type="submit" disabled={taxSaving}
+              className="px-5 py-2 rounded-xl bg-ink text-surface text-sm font-medium disabled:opacity-50"
+            >
+              {taxSaving ? 'Saving…' : 'Save tax settings'}
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* ── Printer Settings ──────────────────────────────────────────────── */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-3">
+          <Printer size={18} className="text-ink-muted" />
+          <h2 className="font-display text-xl font-bold text-ink">Thermal Printers</h2>
+        </div>
+        <div className="p-4 bg-surface-raised rounded-2xl border border-ink/8 text-sm text-ink-muted space-y-2">
+          <p>Printing is handled by the <strong className="text-ink">Android APK print bridge</strong> on the tablet — no server-side configuration needed.</p>
+          <p>To configure printers: open the APK → long-press anywhere → tap the gear icon → enter the Bluetooth MAC address for each printer.</p>
+          <p className="text-xs text-ink-faint">Kitchen printer and beverage counter printer are configured separately in the APK settings.</p>
+        </div>
+      </div>
+
+      {deleteUser && (
+        <ConfirmModal
+          title="Delete user?"
+          message={`Delete user "${deleteUser.user_id}"? This cannot be undone.`}
+          onConfirm={confirmDeleteUser}
+          onCancel={() => setDeleteUser(null)}
+        />
+      )}
+      {deleteTerminal && (
+        <ConfirmModal
+          title="Remove terminal?"
+          message={`Remove terminal "${deleteTerminal.label}" (Client ID: ${deleteTerminal.client_id})?`}
+          confirmLabel="Remove"
+          onConfirm={confirmDeleteTerminal}
+          onCancel={() => setDeleteTerminal(null)}
+        />
+      )}
     </div>
   )
 }

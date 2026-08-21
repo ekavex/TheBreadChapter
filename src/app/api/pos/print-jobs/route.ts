@@ -27,20 +27,31 @@ export async function GET(req: NextRequest) {
   }
 
   const sql = getDb()
+  // Atomically claim queued jobs by marking them 'processing' so a second poll
+  // within the same 3-second window cannot pick up the same ticket again.
   const rows = await sql`
+    WITH claimed AS (
+      UPDATE kot_tickets
+      SET print_status = 'processing'
+      WHERE id IN (
+        SELECT id FROM kot_tickets
+        WHERE (${station} = 'all' OR station = ${station})
+          AND print_status = 'queued'
+        ORDER BY printed_at ASC
+        LIMIT 10
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id, order_id, station, items_json
+    )
     SELECT
-      kt.id,
-      kt.order_id          AS "orderId",
-      kt.station,
-      kt.items_json        AS items,
+      c.id,
+      c.order_id           AS "orderId",
+      c.station,
+      c.items_json         AS items,
       COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"
-    FROM kot_tickets kt
-    JOIN orders o ON o.id = kt.order_id
+    FROM claimed c
+    JOIN orders o ON o.id = c.order_id
     LEFT JOIN tables t ON t.id = o.table_id
-    WHERE (${station} = 'all' OR kt.station = ${station})
-      AND kt.print_status = 'queued'
-    ORDER BY kt.printed_at ASC
-    LIMIT 10
   `
 
   return NextResponse.json({ data: rows, error: null })

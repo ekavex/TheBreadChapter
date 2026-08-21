@@ -66,12 +66,16 @@ class MainActivity : AppCompatActivity() {
                 view: WebView, request: WebResourceRequest, error: WebResourceError,
             ) {
                 if (request.isForMainFrame) {
+                    val targetUrl = request.url.toString()
                     view.loadData(
-                        """<html><body style='font-family:sans-serif;padding:40px;'>
-                            <h2>Cannot reach server</h2>
-                            <p>${error.description}</p>
-                            <p>Check your network and tap <b>Reload</b>.</p>
-                            <button onclick='location.reload()'>Reload</button>
+                        """<html><body style='font-family:sans-serif;padding:40px;text-align:center;'>
+                            <h2 style='color:#333'>Cannot reach server</h2>
+                            <p style='color:#666'>${error.description}</p>
+                            <p style='color:#666'>Check your network connection and tap Reload.</p>
+                            <button onclick='window.location.href="$targetUrl"'
+                              style='margin-top:16px;padding:12px 28px;font-size:16px;background:#1a1a1a;color:#fff;border:none;border-radius:12px;cursor:pointer;'>
+                              Reload
+                            </button>
                         </body></html>""",
                         "text/html", "utf-8",
                     )

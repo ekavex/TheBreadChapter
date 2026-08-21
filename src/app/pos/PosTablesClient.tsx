@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import {
   Loader2, UtensilsCrossed, Receipt, CheckCircle2,
-  ArrowLeft, Settings, Pencil, Trash2, Plus, X, Users,
+  ArrowLeft, Settings, Pencil, Trash2, Plus, X, Users, AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
 import type { Section, Table, TableStatus } from '@/lib/types'
@@ -446,6 +446,7 @@ export default function PosTablesClient({ bySection }: Props) {
   const [editingTable, setEditingTable] = useState<(Table & { shape?: string }) | null | undefined>(undefined)
   const [addToSection, setAddToSection] = useState<Section | null>(null)
   const [deletingId,   setDeletingId]   = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Table | null>(null)
 
   const allSections = bySection.map(({ section }) => section)
   const allTables   = bySection.flatMap(({ tables }) => tables)
@@ -474,11 +475,16 @@ export default function PosTablesClient({ bySection }: Props) {
   }
 
   async function deleteTable(table: Table) {
-    const name = table.label || `Table ${table.number}`
-    if (!confirm(`Remove ${name}? This cannot be undone.`)) return
-    setDeletingId(table.id)
+    setDeleteTarget(table)
+  }
+
+  async function confirmDeleteTable() {
+    if (!deleteTarget) return
+    const name = deleteTarget.label || `Table ${deleteTarget.number}`
+    setDeletingId(deleteTarget.id)
+    setDeleteTarget(null)
     try {
-      const res = await fetch(`/api/pos/tables/${table.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/pos/tables/${deleteTarget.id}`, { method: 'DELETE' })
       const { error } = await res.json()
       if (error) throw new Error(error)
       toast.success(`${name} removed`)
@@ -646,6 +652,29 @@ export default function PosTablesClient({ bySection }: Props) {
           onClose={() => { setEditingTable(undefined); setAddToSection(null) }}
           onSaved={() => { setEditingTable(undefined); setAddToSection(null); router.refresh() }}
         />
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="p-2 rounded-xl bg-red-50 shrink-0"><AlertTriangle size={18} className="text-red-600" /></div>
+                <div>
+                  <h3 className="font-semibold text-ink text-base">Remove table?</h3>
+                  <p className="text-ink-muted text-sm mt-1">
+                    Remove &quot;{deleteTarget.label || `Table ${deleteTarget.number}`}&quot;? This cannot be undone.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex border-t border-ink/8">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3.5 text-sm font-medium text-ink-muted hover:bg-surface-overlay transition-colors">Cancel</button>
+              <div className="w-px bg-ink/8" />
+              <button onClick={confirmDeleteTable} className="flex-1 py-3.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">Remove</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

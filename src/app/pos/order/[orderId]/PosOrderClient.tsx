@@ -93,6 +93,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [busy, setBusy] = useState(false)
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   // True while the terminal still has the transaction open — the screen tracks
   // it automatically so the cashier never has to poll by hand.
   const [autoTracking, setAutoTracking] = useState(false)
@@ -316,12 +317,16 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const posStatus = order?.pos_status ?? 'OPEN'
   const isOpen = posStatus === 'OPEN'
   const isKotSent = posStatus === 'KOT_SENT'
+  const isBilledOrAfter = ['BILLED', 'AWAITING_PAYMENT', 'PAID', 'PAYMENT_FAILED'].includes(posStatus)
   const canAddItems = isOpen || isKotSent
   // AWAITING_PAYMENT stays cancellable — the server force-cancels the open
   // transaction and refuses if the money was actually taken.
   const canCancel = !['PAID', 'CANCELLED', 'REQUIRES_VERIFICATION'].includes(posStatus)
   const tableIsFree = !order || order.table?.status === 'free'
-  const activeCategoryItems = categories.find((c) => c.id === activeCategory)?.items ?? []
+  const allCategoryItems = categories.flatMap((c) => c.items ?? [])
+  const activeCategoryItems = searchQuery.trim()
+    ? allCategoryItems.filter((i) => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : (categories.find((c) => c.id === activeCategory)?.items ?? [])
 
   // Split items into already-sent vs add-on (added after last kot_sent_at)
   const kotSentAt = order?.kot_sent_at ? new Date(order.kot_sent_at as string) : null
@@ -369,19 +374,28 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       {/* Menu browser — shown while order is open or KOT_SENT (add-on mode) */}
       {canAddItems && (
         <div className="mb-6">
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  activeCategory === cat.id ? 'bg-ink text-surface' : 'bg-surface-overlay text-ink-muted hover:text-ink'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search menu items…"
+            className="w-full rounded-xl border border-ink/10 px-4 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-ink/20"
+          />
+          {!searchQuery.trim() && (
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    activeCategory === cat.id ? 'bg-ink text-surface' : 'bg-surface-overlay text-ink-muted hover:text-ink'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {activeCategoryItems.map((item) => (
               <button
@@ -492,6 +506,25 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         {/* Empty state for KOT_SENT with no add-ons yet */}
         {isKotSent && sentItems.length === 0 && addonItems.length === 0 && (
           <p className="px-5 py-4 text-sm text-ink-faint">No items yet.</p>
+        )}
+
+        {/* Bill view — all items shown read-only when billed/paying/paid */}
+        {isBilledOrAfter && (
+          <div className="divide-y divide-ink/5">
+            {items.length === 0 && <p className="px-5 py-4 text-sm text-ink-faint">No items.</p>}
+            {items.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 px-5 py-3">
+                <span className="text-xs uppercase tracking-wide text-ink-faint bg-surface-overlay px-1.5 py-0.5 rounded shrink-0">
+                  {item.category}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-ink">{item.name} × {item.quantity}</p>
+                  {item.customisation && <p className="text-xs text-ink-faint">{item.customisation}</p>}
+                </div>
+                <span className="text-sm font-semibold text-ink shrink-0">₹{item.subtotal}</span>
+              </div>
+            ))}
+          </div>
         )}
 
         {items.length > 0 && (
