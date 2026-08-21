@@ -52,6 +52,12 @@
             android:exported="false"
             android:label="@string/title_settings" />
 
+        <activity
+            android:name=".LogActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:label="System Logs" />
+
         <service
             android:name=".PrintBridgeService"
             android:exported="false"

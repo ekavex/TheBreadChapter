@@ -101,20 +101,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSettingsButton() {
-        val btn = findViewById<ImageButton>(R.id.btnSettings)
-        btn.setOnClickListener {
+        val layout = findViewById<View>(R.id.layoutControls)
+        val btnSettings = findViewById<ImageButton>(R.id.btnSettings)
+        val btnLogs = findViewById<ImageButton>(R.id.btnLogs)
+
+        btnSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
-        // Hide button after 5 seconds — reduces distraction during service
-        btn.postDelayed({ btn.visibility = View.GONE }, 5_000)
-        // Triple-tap anywhere on screen reveals settings (for staff)
+
+        btnLogs.setOnClickListener {
+            startActivity(Intent(this, LogActivity::class.java))
+        }
+
+        // Hide controls after 5 seconds
+        layout.postDelayed({ layout.visibility = View.GONE }, 5_000)
+
+        // Triple-tap reveals controls
         var tapCount = 0
         webView.setOnLongClickListener {
             tapCount++
             if (tapCount >= 1) {
                 tapCount = 0
-                btn.visibility = View.VISIBLE
-                btn.postDelayed({ btn.visibility = View.GONE }, 5_000)
+                layout.visibility = View.VISIBLE
+                layout.postDelayed({ layout.visibility = View.GONE }, 5_000)
             }
             true
         }

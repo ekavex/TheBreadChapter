@@ -79,13 +79,16 @@ class PrintBridgeService : Service() {
 
             if (serverUrl.isBlank() || token.isBlank() || (kitchenMac.isBlank() && beverageMac.isBlank())) {
                 updateNotification("⚙ Settings missing — configure in Settings")
+                AppLogManager.log("Bridge waiting for configuration...")
                 delay(5000.milliseconds)
                 continue
             }
 
             try {
+                AppLogManager.log("Polling for jobs ($station)...")
                 val jobs = fetchPendingJobs(serverUrl, station, token)
                 if (jobs.length() > 0) {
+                    AppLogManager.log("Found ${jobs.length()} pending jobs")
                     updateNotification("Processing ${jobs.length()} job(s)…")
                     for (i in 0 until jobs.length()) {
                         val job = jobs.getJSONObject(i)
@@ -96,7 +99,9 @@ class PrintBridgeService : Service() {
                     updateNotification("✓ Bridge active · listening: $station")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Poll error: ${e.message}")
+                val msg = "Poll error: ${e.message}"
+                Log.e(TAG, msg)
+                AppLogManager.log("⚠ $msg")
                 updateNotification("⚠ Server unreachable — retrying…")
             }
 
@@ -110,9 +115,13 @@ class PrintBridgeService : Service() {
         val url = "$serverUrl/api/pos/print-jobs?station=$station&token=$token"
         val req = Request.Builder().url(url).get().build()
         val resp = http.newCall(req).execute()
+        
         if (!resp.isSuccessful) {
-            throw IOException("Server returned ${resp.code}")
+            val code = resp.code
+            AppLogManager.log("⚠ API Error $code for $station")
+            throw IOException("Server returned $code")
         }
+        
         val body = resp.body?.string() ?: "[]"
         val json = JSONObject(body)
         return json.optJSONArray("data") ?: JSONArray()
@@ -144,13 +153,13 @@ class PrintBridgeService : Service() {
             "kitchen" -> kitchenMac
             "beverage_counter", "beverage", "beverages" -> beverageMac
             else -> {
-                Log.w(TAG, "Unknown station '$station' for job $jobId, skipping")
+                AppLogManager.log("⚠ Job $jobId station '$station' unknown, skipping")
                 return
             }
         }
 
         if (targetMac.isBlank()) {
-            Log.w(TAG, "No MAC configured for station '$station', job $jobId skipped")
+            AppLogManager.log("⚠ Job $jobId: No MAC for station '$station', skipped")
             return
         }
 
@@ -160,12 +169,15 @@ class PrintBridgeService : Service() {
         }
 
         try {
+            AppLogManager.log("Printing $jobId ($station) to $targetMac")
             val payload = EscPosHelper.buildKotTicket(tableLabel, orderId, station, items)
             sendViaBluetooth(targetMac, payload)
             markJobDone(serverUrl, jobId, token)
-            Log.i(TAG, "Printed job $jobId for table $tableLabel at $station ($targetMac)")
+            AppLogManager.log("✓ Printed $jobId for table $tableLabel")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to print job $jobId: ${e.message}")
+            val err = "Failed job $jobId: ${e.message}"
+            Log.e(TAG, err)
+            AppLogManager.log("✖ $err")
         }
     }
 

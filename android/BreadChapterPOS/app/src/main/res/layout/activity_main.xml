@@ -10,16 +10,34 @@
         android:layout_height="match_parent" />
 
     <!-- Semi-transparent settings cog — top-right corner, auto-hides after 5s -->
-    <ImageButton
-        android:id="@+id/btnSettings"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+    <LinearLayout
+        android:id="@+id/layoutControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_gravity="top|end"
         android:layout_margin="16dp"
-        android:src="@android:drawable/ic_menu_manage"
-        android:backgroundTint="@color/colorPrimary"
-        android:elevation="4dp"
-        android:alpha="0.8"
-        android:contentDescription="Settings" />
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/btnLogs"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="8dp"
+            android:src="@android:drawable/ic_menu_info_details"
+            android:backgroundTint="#444444"
+            android:elevation="4dp"
+            android:alpha="0.8"
+            android:contentDescription="Logs" />
+
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:src="@android:drawable/ic_menu_manage"
+            android:backgroundTint="@color/colorPrimary"
+            android:elevation="4dp"
+            android:alpha="0.8"
+            android:contentDescription="Settings" />
+    </LinearLayout>
 
 </FrameLayout>

@@ -151,16 +151,20 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
+            AppLogManager.log("Testing $name printer ($mac)...")
             val success = withContext(Dispatchers.IO) {
                 try {
                     performTestPrint(mac, name)
                     true
                 } catch (e: Exception) {
-                    Log.e("Settings", "Test failed: ${e.message}")
+                    val err = "Test failed: ${e.message}"
+                    Log.e("Settings", err)
+                    AppLogManager.log("✖ $err")
                     false
                 }
             }
             if (success) {
+                AppLogManager.log("✓ $name Printer: OK")
                 Toast.makeText(this@SettingsActivity, "$name Printer: OK", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this@SettingsActivity, "$name Printer: Connection Failed", Toast.LENGTH_LONG).show()
