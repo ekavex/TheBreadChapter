@@ -41,6 +41,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupWebView() {
         webView = findViewById(R.id.webView)
+
+        // Accept cookies and persist them to disk so "keep me signed in" survives app restarts.
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(webView, true)
+        }
+
         webView.settings.apply {
             @SuppressLint("SetJavaScriptEnabled")
             javaScriptEnabled     = true
@@ -161,6 +168,12 @@ class MainActivity : AppCompatActivity() {
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack()
         else super.onBackPressed()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Write cookies to disk so the 30-day session survives app restarts.
+        CookieManager.getInstance().flush()
     }
 
     override fun onDestroy() {
