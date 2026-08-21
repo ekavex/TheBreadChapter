@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     LEFT JOIN tables t ON t.id = o.table_id
     WHERE (${station} = 'all' OR kt.station = ${station})
       AND kt.print_status = 'queued'
-    ORDER BY kt.created_at ASC
+    ORDER BY kt.printed_at ASC
     LIMIT 10
   `
 
