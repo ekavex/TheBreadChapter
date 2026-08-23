@@ -10,6 +10,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Pine Labs billing SDK — local Maven bundle (AppToApp transport)
+        maven {
+            url = uri("app/libs/pine-billing-sdk-android-maven")
+        }
     }
 }
 rootProject.name = "BreadChapterPOS"

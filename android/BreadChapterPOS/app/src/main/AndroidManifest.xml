@@ -27,7 +27,13 @@
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
+    <!-- Required for AppToApp transport — lets our app resolve Pine Labs MasterApp -->
+    <queries>
+        <package android:name="com.pinelabs.masterapp" />
+    </queries>
+
     <application
+        android:name=".BreadChapterApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"

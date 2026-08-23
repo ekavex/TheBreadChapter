@@ -20,12 +20,14 @@ import java.util.UUID
 class SettingsActivity : AppCompatActivity() {
 
     companion object {
-        const val PREFS            = "pos_prefs"
-        const val KEY_SERVER_URL   = "server_url"
-        const val KEY_STATION      = "station"
-        const val KEY_KITCHEN_MAC  = "kitchen_mac"
-        const val KEY_BEVERAGE_MAC = "beverage_mac"
-        const val KEY_BRIDGE_TOKEN = "bridge_token"
+        const val PREFS              = "pos_prefs"
+        const val KEY_SERVER_URL     = "server_url"
+        const val KEY_STATION        = "station"
+        const val KEY_KITCHEN_MAC    = "kitchen_mac"
+        const val KEY_BEVERAGE_MAC   = "beverage_mac"
+        const val KEY_BRIDGE_TOKEN   = "bridge_token"
+        // Pine Labs Application ID — provisioned by Pine Labs for this billing app
+        const val KEY_PINE_APP_ID    = "pine_app_id"
 
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
@@ -49,6 +51,7 @@ class SettingsActivity : AppCompatActivity() {
         val spKitchen = findViewById<Spinner>(R.id.spKitchenPrinter)
         val spBev     = findViewById<Spinner>(R.id.spBeveragePrinter)
         val etToken   = findViewById<EditText>(R.id.etBridgeToken)
+        val etPineAppId = findViewById<EditText>(R.id.etPineAppId)
 
         val btnTestKitchen = findViewById<Button>(R.id.btnTestKitchen)
         val btnTestBev     = findViewById<Button>(R.id.btnTestBeverage)
@@ -65,6 +68,7 @@ class SettingsActivity : AppCompatActivity() {
         etUrl.setText(prefs.getString(KEY_SERVER_URL, "https://automation.thebreadchapter.in"))
         etStation.setText(prefs.getString(KEY_STATION, "all"))
         etToken.setText(prefs.getString(KEY_BRIDGE_TOKEN, ""))
+        etPineAppId.setText(prefs.getString(KEY_PINE_APP_ID, ""))
 
         val savedKitchenMac = prefs.getString(KEY_KITCHEN_MAC, DEFAULT_KITCHEN_MAC) ?: DEFAULT_KITCHEN_MAC
         val savedBevMac     = prefs.getString(KEY_BEVERAGE_MAC, DEFAULT_BEVERAGE_MAC) ?: DEFAULT_BEVERAGE_MAC
@@ -88,6 +92,7 @@ class SettingsActivity : AppCompatActivity() {
             val kitchen = spKitchen.selectedItem as? PrinterDevice
             val beverage = spBev.selectedItem as? PrinterDevice
             val token   = etToken.text.toString().trim()
+            val pineAppId = etPineAppId.text.toString().trim()
 
             if (url.isBlank() || token.isBlank()) {
                 Toast.makeText(this, "URL and Token are required", Toast.LENGTH_SHORT).show()
@@ -100,7 +105,11 @@ class SettingsActivity : AppCompatActivity() {
                 putString(KEY_KITCHEN_MAC, kitchen?.mac ?: "")
                 putString(KEY_BEVERAGE_MAC, beverage?.mac ?: "")
                 putString(KEY_BRIDGE_TOKEN, token)
+                putString(KEY_PINE_APP_ID, pineAppId)
             }
+
+            // Re-initialise Pine SDK if the Application ID was just set.
+            (application as? BreadChapterApp)?.tryInitPineSdk()
 
             stopService(Intent(this, PrintBridgeService::class.java))
             startService(Intent(this, PrintBridgeService::class.java))

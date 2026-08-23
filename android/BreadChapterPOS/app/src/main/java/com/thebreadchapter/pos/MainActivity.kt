@@ -61,6 +61,12 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
+        // Expose Pine Labs AppToApp bridge to the web app.
+        webView.addJavascriptInterface(
+            PinePaymentBridge(webView, application as BreadChapterApp),
+            "AndroidPinePayment",
+        )
+
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(
                 view: WebView, request: WebResourceRequest, error: WebResourceError,

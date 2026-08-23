@@ -41,6 +41,17 @@
             android:hint="@string/hint_bridge_token"
             android:inputType="textPassword" />
 
+        <!-- Pine Labs Application ID (AppToApp payment) -->
+        <TextView
+            style="@style/SettingsLabel"
+            android:text="Pine Labs Application ID" />
+
+        <EditText
+            android:id="@+id/etPineAppId"
+            style="@style/SettingsEditText"
+            android:hint="Provisioned by Pine Labs (leave blank until received)"
+            android:inputType="text" />
+
         <!-- Station (Job Filter) -->
         <TextView
             style="@style/SettingsLabel"

@@ -355,10 +355,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { mode, customer_phone, customer_name } = body as {
+    const { mode, customer_phone, customer_name, native_result } = body as {
       mode?: string
       customer_phone?: string | null
       customer_name?: string | null
+      // Supplied when the APK handled payment on-device via Pine Labs AppToApp.
+      native_result?: { ok: boolean; txnId?: string | null; status?: string }
     }
 
     const sql = getDb()
@@ -383,6 +385,46 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Cash is settled by hand — no terminal or Pine Labs required.
     if (mode === 'cash') {
       return handleCashPayment(order, params.id, customer_phone, customer_name)
+    }
+
+    // On-device AppToApp payment: the Android APK handled the charge locally and
+    // already received a SUCCESS from Pine Labs MasterApp. We trust the result
+    // and record it directly — no terminal upload or status poll needed.
+    if (native_result?.ok === true) {
+      const claimedRows = await sql`
+        UPDATE orders SET pos_status = 'AWAITING_PAYMENT'
+        WHERE id = ${params.id}
+          AND pos_status = ANY(${sql.array(['BILLED', 'PAYMENT_FAILED'])})
+        RETURNING *
+      `
+      const claimed: Order = claimedRows.length
+        ? { ...claimedRows[0], items: order.items, table: order.table } as Order
+        : order
+
+      const txnId = native_result.txnId ?? null
+      const transactionNumber = txnId ?? `NATIVE-${claimed.order_number}-${Date.now()}`
+      logger.info('payment.native.received', {
+        orderId: claimed.id, transactionNumber, amountPaisa: claimed.total_paisa, txnId,
+      })
+
+      const [paymentRow] = await sql`
+        INSERT INTO payments (
+          order_id, transaction_number, plutus_ptrid, status, mode, amount_paisa, raw_response
+        ) VALUES (
+          ${params.id}, ${transactionNumber}, ${txnId},
+          'initiated', ${mode ?? 'card'}, ${claimed.total_paisa},
+          ${sql.json({ source: 'apk_apptoapp', native_result })}
+        )
+        RETURNING *
+      `
+      const nativePayment = paymentRow as Payment
+      const nativeResult: PaymentResult = {
+        status: 'approved',
+        ptrid: txnId ?? transactionNumber,
+        mode: (mode === 'upi' ? 'UPI' : 'CARD'),
+        amountPaisa: Number(claimed.total_paisa),
+      }
+      return finalizeOrFlag(claimed, nativePayment, nativeResult, customer_phone, customer_name)
     }
 
     // Route the bill to the terminal serving this table's section.

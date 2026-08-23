@@ -190,13 +190,14 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   // The server decides which it is from the order state, so the client can
   // never accidentally start a second charge.
   const submitPayment = useCallback(
-    async (opts: { announce: boolean }): Promise<PaymentState | null> => {
+    async (opts: { announce: boolean; nativeResult?: { ok: boolean; txnId?: string | null; status?: string } }): Promise<PaymentState | null> => {
       if (!order) return null
       try {
         const result = await api<PaymentResponse>(`/api/pos/orders/${order.id}/pay`, 'POST', {
           mode: paymentMode,
           customer_phone: customerPhone.trim() || null,
           customer_name: customerName.trim() || null,
+          ...(opts.nativeResult ? { native_result: opts.nativeResult } : {}),
         })
         setOrder(result.order)
         setPayment(result.payment)
@@ -231,8 +232,50 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   )
 
   async function pay() {
+    if (!order) return
     setBusy(true)
     try {
+      // When running inside the Android APK on a Pine Labs A190S, use the
+      // native AppToApp bridge instead of the server-side Pine Labs API.
+      const bridge = (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).AndroidPinePayment) as
+        | { isAvailable(): boolean; isSdkReady(): boolean; startPayment(orderId: string, amountPaise: number, mode: string): void }
+        | undefined
+
+      if (bridge?.isAvailable() && (paymentMode === 'card' || paymentMode === 'upi')) {
+        if (!bridge.isSdkReady()) {
+          toast.error('Pine Billing SDK not ready — set Application ID in the APK Settings', { duration: 8000 })
+          setBusy(false)
+          return
+        }
+        // Install a one-shot callback that the APK fires after the transaction settles.
+        await new Promise<void>((resolve) => {
+          ;(window as unknown as Record<string, unknown>).onPineLabsResult = async (result: { ok: boolean; txnId?: string | null; status?: string; message?: string | null }) => {
+            ;(window as unknown as Record<string, unknown>).onPineLabsResult = undefined
+            if (!result.ok) {
+              const msg = result.message ?? `Payment ${result.status ?? 'failed'} on the terminal`
+              if (result.status === 'sdk_error' || result.status === 'not_configured') {
+                toast.error(msg, { duration: 8000 })
+              } else if (result.status === 'busy') {
+                toast(msg, { icon: '⏳' })
+              } else {
+                toast.error('Payment declined on the terminal — you can retry')
+              }
+              resolve()
+              return
+            }
+            try {
+              await submitPayment({ announce: true, nativeResult: result })
+            } catch {
+              // submitPayment already shows a toast on error
+            }
+            resolve()
+          }
+          bridge.startPayment(order.id, Number(order.total_paisa), paymentMode)
+        })
+        return
+      }
+
+      // Default: server-side Pine Labs payment (cloud/webhook) or cash.
       await submitPayment({ announce: true })
     } finally {
       setBusy(false)
