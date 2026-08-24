@@ -15,7 +15,9 @@ backups/
 # Android Gradle build caches
 android/**/.gradle/
 android/**/build/
+android/**/app/release/
 android/**/.idea/
 android/**/local.properties
 android/**/build/reports/
 .sample.env
+breadchapter.jks
