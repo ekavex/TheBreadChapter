@@ -6,6 +6,25 @@ declare global {
   var __db: postgres.Sql | undefined
 }
 
+// Runs once per process to apply any pending in-code migrations.
+// Safe to call on every startup — all statements use IF NOT EXISTS / idempotent DDL.
+let migrationRan = false
+async function runMigrations(sql: postgres.Sql) {
+  if (migrationRan) return
+  migrationRan = true
+  try {
+    // 007: job_type column for UPI QR bill print jobs
+    await sql`
+      ALTER TABLE public.kot_tickets
+        ADD COLUMN IF NOT EXISTS job_type text NOT NULL DEFAULT 'kot'
+          CONSTRAINT kot_tickets_job_type_check
+          CHECK (job_type IN ('kot', 'bill_qr'))
+    `
+  } catch {
+    // Non-fatal: column may already exist or constraint name may differ
+  }
+}
+
 export function getDb(): postgres.Sql {
   if (!global.__db) {
     const url = process.env.DATABASE_URL
@@ -46,7 +65,8 @@ export function getDb(): postgres.Sql {
       },
     })
   }
-  // First DB use in this process also arms the payment reconciliation sweep.
+  // First DB use also arms the reconciler and runs pending migrations.
   startReconcilerOnce()
+  void runMigrations(global.__db)
   return global.__db
 }
