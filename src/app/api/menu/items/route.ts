@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 
 async function recordStaffAction(userId: string, action: string, description: string) {
@@ -8,9 +8,9 @@ async function recordStaffAction(userId: string, action: string, description: st
   await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
 }
 
-// POST /api/menu/items — Add menu item (any authenticated role; staff action is logged)
+// POST /api/menu/items — Add menu item (manager or admin only; change is logged to admin)
 export async function POST(req: NextRequest) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     `
 
     const user = await getSessionUser(req)
-    if (user?.role === 'staff') {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       await recordStaffAction(user.userId, 'item_added', `${who} added a new menu item: "${name}"`)
     }

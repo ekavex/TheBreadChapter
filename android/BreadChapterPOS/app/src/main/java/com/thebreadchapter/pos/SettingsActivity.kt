@@ -28,6 +28,9 @@ class SettingsActivity : AppCompatActivity() {
         const val KEY_BRIDGE_TOKEN   = "bridge_token"
         // Pine Labs Application ID — provisioned by Pine Labs for this billing app
         const val KEY_PINE_APP_ID    = "pine_app_id"
+        // Auto-login credentials stored for POS kiosk convenience
+        const val KEY_AUTO_LOGIN_USER = "auto_login_user"
+        const val KEY_AUTO_LOGIN_PASS = "auto_login_pass"
 
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
@@ -52,6 +55,8 @@ class SettingsActivity : AppCompatActivity() {
         val spBev     = findViewById<Spinner>(R.id.spBeveragePrinter)
         val etToken   = findViewById<EditText>(R.id.etBridgeToken)
         val etPineAppId = findViewById<EditText>(R.id.etPineAppId)
+        val etAutoLoginUser = findViewById<EditText>(R.id.etAutoLoginUser)
+        val etAutoLoginPass = findViewById<EditText>(R.id.etAutoLoginPass)
 
         val btnTestKitchen = findViewById<Button>(R.id.btnTestKitchen)
         val btnTestBev     = findViewById<Button>(R.id.btnTestBeverage)
@@ -69,6 +74,8 @@ class SettingsActivity : AppCompatActivity() {
         etStation.setText(prefs.getString(KEY_STATION, "all"))
         etToken.setText(prefs.getString(KEY_BRIDGE_TOKEN, ""))
         etPineAppId.setText(prefs.getString(KEY_PINE_APP_ID, "f99c338e6c444900a36c1a3a6303872b"))
+        etAutoLoginUser.setText(prefs.getString(KEY_AUTO_LOGIN_USER, ""))
+        etAutoLoginPass.setText(prefs.getString(KEY_AUTO_LOGIN_PASS, ""))
 
         val savedKitchenMac = prefs.getString(KEY_KITCHEN_MAC, DEFAULT_KITCHEN_MAC) ?: DEFAULT_KITCHEN_MAC
         val savedBevMac     = prefs.getString(KEY_BEVERAGE_MAC, DEFAULT_BEVERAGE_MAC) ?: DEFAULT_BEVERAGE_MAC
@@ -93,6 +100,8 @@ class SettingsActivity : AppCompatActivity() {
             val beverage = spBev.selectedItem as? PrinterDevice
             val token   = etToken.text.toString().trim()
             val pineAppId = etPineAppId.text.toString().trim()
+            val autoUser  = etAutoLoginUser.text.toString().trim()
+            val autoPass  = etAutoLoginPass.text.toString()
 
             if (url.isBlank() || token.isBlank()) {
                 Toast.makeText(this, "URL and Token are required", Toast.LENGTH_SHORT).show()
@@ -106,6 +115,8 @@ class SettingsActivity : AppCompatActivity() {
                 putString(KEY_BEVERAGE_MAC, beverage?.mac ?: "")
                 putString(KEY_BRIDGE_TOKEN, token)
                 putString(KEY_PINE_APP_ID, pineAppId)
+                putString(KEY_AUTO_LOGIN_USER, autoUser)
+                putString(KEY_AUTO_LOGIN_PASS, autoPass)
             }
 
             // Re-initialise Pine SDK if the Application ID was just set.

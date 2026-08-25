@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin } from '@/lib/auth/requireDashboardSession'
 
 async function fetchRecipeWithDetails(recipeId: string) {
   const sql = getDb()
@@ -35,7 +35,7 @@ async function fetchRecipeWithDetails(recipeId: string) {
 // (simplest correct approach: delete then reinsert; the recompute trigger
 // fires on each step but converges to the right final cost).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 // cascade; the menu item's cost_price_paisa recompute trigger only fires on
 // recipe_ingredients changes, so we zero the cost explicitly here too).
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {

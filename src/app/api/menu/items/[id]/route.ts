@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { MenuItem } from '@/lib/types'
 
@@ -20,7 +20,7 @@ async function recordStaffAction(userId: string, action: string, description: st
 
 // PATCH /api/menu/items/[id] — Edit menu item (staff action logged)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const [data] = await sql`UPDATE menu_items SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
 
     const user = await getSessionUser(req)
-    if (user?.role === 'staff') {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       const itemName = (data as { name?: string })?.name ?? params.id
       await recordStaffAction(user.userId, 'item_updated', `${who} updated menu item: "${itemName}"`)
@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 // DELETE /api/menu/items/[id] — Delete menu item (staff action logged)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -73,7 +73,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     await sql`DELETE FROM menu_items WHERE id = ${params.id}`
 
     const user = await getSessionUser(req)
-    if (user?.role === 'staff') {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       const itemName = (existing as { name?: string } | undefined)?.name ?? params.id
       await recordStaffAction(user.userId, 'item_deleted', `${who} deleted menu item: "${itemName}"`)

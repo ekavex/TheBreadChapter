@@ -121,6 +121,35 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="16dp"
+            android:background="@color/divider" />
+
+        <!-- Auto-login credentials (POS kiosk convenience — stored in SharedPreferences) -->
+        <TextView
+            style="@style/SettingsLabel"
+            android:text="Auto-login User ID (leave blank to disable)" />
+
+        <EditText
+            android:id="@+id/etAutoLoginUser"
+            style="@style/SettingsEditText"
+            android:hint="Staff user ID"
+            android:inputType="text"
+            android:autofillHints="" />
+
+        <TextView
+            style="@style/SettingsLabel"
+            android:text="Auto-login Password" />
+
+        <EditText
+            android:id="@+id/etAutoLoginPass"
+            style="@style/SettingsEditText"
+            android:hint="Leave blank to disable auto-login"
+            android:inputType="textPassword"
+            android:autofillHints="" />
+
         <Button
             android:id="@+id/btnSave"
             android:layout_width="match_parent"

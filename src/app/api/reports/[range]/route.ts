@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin } from '@/lib/auth/requireDashboardSession'
 import { getReportData, type ReportRange } from '@/lib/reports'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/reports/daily|weekly|monthly — JSON report for the reports page.
 export async function GET(req: NextRequest, { params }: { params: { range: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   if (!['daily', 'weekly', 'monthly'].includes(params.range)) {

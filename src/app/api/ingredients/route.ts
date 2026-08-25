@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { Ingredient } from '@/lib/types'
 
@@ -38,9 +38,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/ingredients — add a new ingredient (Module 1: "Add Ingredient")
+// POST /api/ingredients — add a new ingredient (manager or admin only)
 export async function POST(req: NextRequest) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     `
 
     const user = await getSessionUser(req)
-    if (user) {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       await recordStaffAction(user.userId, 'ingredient_added', `${who} added ingredient: "${name}"`)
     }

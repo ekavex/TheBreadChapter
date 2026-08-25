@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await getSessionUser(req)
     const isManagerOrAdmin = user?.role === 'admin' || user?.role === 'manager'
+    const isAdmin = user?.role === 'admin'
 
     const sql = getDb()
     const today = new Date().toISOString().split('T')[0]
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
           AND status = ANY(${sql.array(['pending', 'confirmed'])}::order_status[])
           AND created_at <= ${stuckCutoff}
       `,
-      isManagerOrAdmin
+      isAdmin
         ? sql`
             SELECT * FROM staff_notifications
             WHERE cafe_id = ${DEMO_CAFE_ID} AND is_read = false

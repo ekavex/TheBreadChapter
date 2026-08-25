@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { Ingredient } from '@/lib/types'
 
@@ -18,7 +18,7 @@ type IngredientPatch = Partial<
 // NOT editable here — it only ever changes through a stock_transactions entry
 // (see POST .../stock) so there's always an audit trail (Module 1).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -39,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const [data] = await sql`UPDATE ingredients SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
 
     const user = await getSessionUser(req)
-    if (user) {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       const ingredientName = (data as { name?: string })?.name ?? params.id
       await recordStaffAction(user.userId, 'ingredient_updated', `${who} updated ingredient: "${ingredientName}"`)
@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 // DELETE /api/ingredients/[id]
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -63,7 +63,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     await sql`DELETE FROM ingredients WHERE id = ${params.id}`
 
     const user = await getSessionUser(req)
-    if (user) {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       const ingredientName = (existing as { name?: string } | undefined)?.name ?? params.id
       await recordStaffAction(user.userId, 'ingredient_deleted', `${who} deleted ingredient: "${ingredientName}"`)

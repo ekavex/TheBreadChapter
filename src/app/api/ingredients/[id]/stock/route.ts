@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { StockTxnType } from '@/lib/types'
 
@@ -14,7 +14,7 @@ async function recordStaffAction(userId: string, action: string, description: st
 // goes through this ledger (stock_transactions) — a DB trigger applies it to
 // ingredients.current_stock, so this route never writes current_stock directly.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const [ingredient] = await sql`SELECT * FROM ingredients WHERE id = ${params.id}`
 
     const user = await getSessionUser(req)
-    if (user) {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       const ingName = (ingredient as { name?: string })?.name ?? params.id
       const sign = signedQuantity > 0 ? '+' : ''

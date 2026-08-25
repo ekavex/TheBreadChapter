@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 
 async function recordStaffAction(userId: string, action: string, description: string) {
@@ -10,7 +10,7 @@ async function recordStaffAction(userId: string, action: string, description: st
 
 // POST /api/menu/categories — Add menu category (staff action logged)
 export async function POST(req: NextRequest) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     `
 
     const user = await getSessionUser(req)
-    if (user?.role === 'staff') {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       await recordStaffAction(user.userId, 'category_added', `${who} added a new menu category: "${name}"`)
     }

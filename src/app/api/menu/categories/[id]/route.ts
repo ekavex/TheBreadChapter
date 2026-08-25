@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession, getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { MenuCategory } from '@/lib/types'
 
@@ -13,7 +13,7 @@ async function recordStaffAction(userId: string, action: string, description: st
 
 // PATCH /api/menu/categories/[id] — Edit menu category (staff action logged)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const [data] = await sql`UPDATE menu_categories SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
 
     const user = await getSessionUser(req)
-    if (user?.role === 'staff') {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       const catName = (data as { name?: string })?.name ?? params.id
       await recordStaffAction(user.userId, 'category_updated', `${who} updated menu category: "${catName}"`)
@@ -48,7 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 // DELETE /api/menu/categories/[id] — Delete menu category (staff action logged)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {
@@ -67,7 +67,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     await sql`DELETE FROM menu_categories WHERE id = ${params.id}`
 
     const user = await getSessionUser(req)
-    if (user?.role === 'staff') {
+    if (user && user.role !== 'admin') {
       const who = user.displayName || user.userId
       const catName = (existing as { name?: string } | undefined)?.name ?? params.id
       await recordStaffAction(user.userId, 'category_deleted', `${who} deleted menu category: "${catName}"`)

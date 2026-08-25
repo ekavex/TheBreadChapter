@@ -14,6 +14,7 @@ import android.view.View
 import android.webkit.*
 import android.widget.ImageButton
 import android.widget.Toast
+import org.json.JSONObject
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -68,6 +69,34 @@ class MainActivity : AppCompatActivity() {
         )
 
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String) {
+                super.onPageFinished(view, url)
+                if (url.contains("/login")) {
+                    val p = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE)
+                    val user = p.getString(SettingsActivity.KEY_AUTO_LOGIN_USER, "").orEmpty().trim()
+                    val pass = p.getString(SettingsActivity.KEY_AUTO_LOGIN_PASS, "").orEmpty()
+                    if (user.isNotEmpty() && pass.isNotEmpty()) {
+                        val body = JSONObject()
+                        body.put("userId", user)
+                        body.put("password", pass)
+                        body.put("rememberMe", true)
+                        val bodyJson = body.toString()
+                        val script = """
+                            (function(){
+                                fetch('/api/auth/login',{
+                                    method:'POST',
+                                    headers:{'Content-Type':'application/json'},
+                                    body:${JSONObject.quote(bodyJson)}
+                                }).then(function(r){return r.json();}).then(function(d){
+                                    if(d&&d.data&&d.data.role)window.location.href='/pos';
+                                }).catch(function(){});
+                            })();
+                        """.trimIndent()
+                        view.evaluateJavascript(script, null)
+                    }
+                }
+            }
+
             override fun onReceivedError(
                 view: WebView, request: WebResourceRequest, error: WebResourceError,
             ) {
