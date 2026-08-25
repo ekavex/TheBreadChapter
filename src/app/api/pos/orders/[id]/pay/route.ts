@@ -306,12 +306,13 @@ async function ensureNoOpenTransaction(
   return null
 }
 
-// Cash is collected in person — no terminal push or Pine Labs call needed.
+// Cash / UPI-QR collected in person — no terminal push or Pine Labs call needed.
 async function handleCashPayment(
   order: Order,
   orderId: string,
   customerPhone: string | null | undefined,
   customerName: string | null | undefined,
+  payMode: string = 'cash',
 ): Promise<NextResponse> {
   const sql = getDb()
   const claimedRows = await sql`
@@ -332,20 +333,21 @@ async function handleCashPayment(
     )
   }
   const claimed = { ...claimedRows[0], items: order.items, table: order.table } as Order
-  const transactionNumber = `CASH-${claimed.order_number}-${Date.now()}`
+  const prefix = payMode === 'upi_qr' ? 'UPI' : 'CASH'
+  const transactionNumber = `${prefix}-${claimed.order_number}-${Date.now()}`
   const [paymentRow] = await sql`
     INSERT INTO payments (order_id, transaction_number, plutus_ptrid, status, mode, amount_paisa, raw_response)
-    VALUES (${orderId}, ${transactionNumber}, NULL, 'initiated', 'cash', ${claimed.total_paisa}, ${sql.json({})})
+    VALUES (${orderId}, ${transactionNumber}, NULL, 'initiated', ${payMode}, ${claimed.total_paisa}, ${sql.json({})})
     RETURNING *
   `
   const payment = paymentRow as Payment
-  const cashResult: PaymentResult = {
+  const result: PaymentResult = {
     status: 'approved',
-    ptrid: `CASH-${transactionNumber}`,
-    mode: 'CASH',
+    ptrid: `${prefix}-${transactionNumber}`,
+    mode: prefix,
     amountPaisa: Number(claimed.total_paisa),
   }
-  return finalizeOrFlag(claimed, payment, cashResult, customerPhone, customerName)
+  return finalizeOrFlag(claimed, payment, result, customerPhone, customerName)
 }
 
 // POST /api/pos/orders/[id]/pay
@@ -375,16 +377,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!['BILLED', 'PAYMENT_FAILED', 'AWAITING_PAYMENT', 'REQUIRES_VERIFICATION'].includes(order.pos_status ?? '')) {
       return NextResponse.json({ data: null, error: `Cannot take payment on an order that is ${order.pos_status}` }, { status: 409 })
     }
-    if (!mode || !['card', 'cash', 'upi'].includes(mode)) {
-      return NextResponse.json({ data: null, error: 'mode must be "card", "cash" or "upi"' }, { status: 400 })
+    if (!mode || !['card', 'cash', 'upi', 'upi_qr'].includes(mode)) {
+      return NextResponse.json({ data: null, error: 'mode must be "card", "cash", "upi", or "upi_qr"' }, { status: 400 })
     }
     if (!order.total_paisa || Number(order.total_paisa) <= 0) {
       return NextResponse.json({ data: null, error: 'Order total is zero — regenerate the bill before taking payment' }, { status: 409 })
     }
 
-    // Cash is settled by hand — no terminal or Pine Labs required.
-    if (mode === 'cash') {
-      return handleCashPayment(order, params.id, customer_phone, customer_name)
+    // Cash and UPI QR are both settled manually — no terminal required.
+    if (mode === 'cash' || mode === 'upi_qr') {
+      return handleCashPayment(order, params.id, customer_phone, customer_name, mode)
     }
 
     // On-device AppToApp payment: the Android APK handled the charge locally and

@@ -3,6 +3,15 @@ import { getDb } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
+// UPI merchant details for the QR bill.
+const UPI_BASE =
+  'upi://pay?pa=anv.ltd986@kotak&pn=ANV%20HOSPITALITY%20PVT%20LTD&mc=0000&mode=02&purpose=00'
+
+function buildUpiUrl(amountPaisa: number): string {
+  const rupees = (amountPaisa / 100).toFixed(2)
+  return `${UPI_BASE}&am=${rupees}&cu=INR&orgId=400043`
+}
+
 // Shared secret auth — no session cookie needed, this is device-to-server.
 function isAuthorized(req: NextRequest): boolean {
   const expected = process.env.PRINT_BRIDGE_TOKEN?.trim()
@@ -41,18 +50,28 @@ export async function GET(req: NextRequest) {
         LIMIT 10
         FOR UPDATE SKIP LOCKED
       )
-      RETURNING id, order_id, station, items_json
+      RETURNING id, order_id, station, items_json, job_type
     )
     SELECT
       c.id,
       c.order_id           AS "orderId",
       c.station,
       c.items_json         AS items,
+      c.job_type           AS "jobType",
+      o.total_paisa        AS "amountPaisa",
       COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"
     FROM claimed c
     JOIN orders o ON o.id = c.order_id
     LEFT JOIN tables t ON t.id = o.table_id
   `
 
-  return NextResponse.json({ data: rows, error: null })
+  // For bill_qr jobs, attach the pre-built UPI URL with the order total.
+  const data = (rows as Record<string, unknown>[]).map((row) => {
+    if (row['jobType'] === 'bill_qr') {
+      return { ...row, upiUrl: buildUpiUrl(Number(row['amountPaisa'])) }
+    }
+    return row
+  })
+
+  return NextResponse.json({ data, error: null })
 }

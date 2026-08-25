@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle } from 'lucide-react'
+import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
 
 function ConfirmDialog({ title, message, confirmLabel = 'Confirm', onConfirm, onCancel }: {
@@ -87,10 +87,11 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [order, setOrder] = useState<Order | null>(initialOrder)
   const [payment, setPayment] = useState<Payment | null>(null)
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? '')
-  const [paymentMode, setPaymentMode] = useState<'upi' | 'card' | 'cash'>('upi')
+  const [paymentMode, setPaymentMode] = useState<'upi' | 'card' | 'cash' | 'upi_qr'>('upi_qr')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [qrBillSent, setQrBillSent] = useState(false)
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -181,6 +182,20 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       setOrder(updated)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to generate bill')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function printQrBill() {
+    if (!order) return
+    setBusy(true)
+    try {
+      await api(`/api/pos/orders/${order.id}/qr-bill`, 'POST')
+      setQrBillSent(true)
+      toast.success('QR bill sent to printer at billing counter')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send QR bill to printer')
     } finally {
       setBusy(false)
     }
@@ -649,41 +664,79 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             </p>
           )}
           <p className="text-sm font-medium text-ink-muted mb-2">Payment method</p>
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            {(['upi', 'card', 'cash'] as const).map((m) => (
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {([
+              { mode: 'upi_qr', label: 'UPI QR' },
+              { mode: 'cash',   label: 'Cash' },
+              { mode: 'upi',    label: 'UPI' },
+              { mode: 'card',   label: 'Card' },
+            ] as const).map(({ mode: m, label }) => (
               <button
                 key={m}
-                onClick={() => setPaymentMode(m)}
-                className={`px-3 py-2 rounded-xl text-sm font-medium border uppercase transition-colors ${
+                onClick={() => { setPaymentMode(m); setQrBillSent(false) }}
+                className={`px-2 py-2 rounded-xl text-sm font-medium border transition-colors ${
                   paymentMode === m ? 'bg-ink text-surface border-ink' : 'border-ink/10 text-ink-muted hover:bg-surface-overlay'
                 }`}
               >
-                {m}
+                {label}
               </button>
             ))}
           </div>
-          <p className="text-xs text-ink-faint mb-1">Customer (optional — for CRM/analytics)</p>
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <input
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              placeholder="Phone (10-digit)"
-              className="rounded-xl border border-ink/10 px-3 py-2 text-sm"
-            />
-            <input
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Name (optional)"
-              className="rounded-xl border border-ink/10 px-3 py-2 text-sm"
-            />
-          </div>
-          <button
-            onClick={pay}
-            disabled={busy}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
-          >
-            <CreditCard size={16} /> {busy ? 'Processing…' : `Pay ₹${order?.total_amount}`}
-          </button>
+
+          {paymentMode === 'upi_qr' ? (
+            // UPI QR flow: print first, then confirm.
+            <div className="space-y-2">
+              <button
+                onClick={printQrBill}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-ink/15 text-ink py-3 font-medium disabled:opacity-50 hover:bg-surface-overlay transition-colors"
+              >
+                <QrCode size={16} />
+                {busy ? 'Sending…' : qrBillSent ? 'Reprint QR Bill' : 'Print QR Bill at Counter'}
+              </button>
+              {qrBillSent && (
+                <button
+                  onClick={pay}
+                  disabled={busy}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 text-white py-3 font-medium disabled:opacity-50"
+                >
+                  <CheckCircle2 size={16} />
+                  {busy ? 'Recording…' : `Confirm UPI Received · ₹${order?.total_amount}`}
+                </button>
+              )}
+              {!qrBillSent && (
+                <p className="text-xs text-ink-faint text-center">
+                  Print the bill — the customer scans the QR and pays. Tap confirm once you see the payment.
+                </p>
+              )}
+            </div>
+          ) : (
+            // Cash / Card / UPI (Pine Labs) flow.
+            <>
+              <p className="text-xs text-ink-faint mb-1">Customer (optional — for CRM/analytics)</p>
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <input
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="Phone (10-digit)"
+                  className="rounded-xl border border-ink/10 px-3 py-2 text-sm"
+                />
+                <input
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Name (optional)"
+                  className="rounded-xl border border-ink/10 px-3 py-2 text-sm"
+                />
+              </div>
+              <button
+                onClick={pay}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
+              >
+                <CreditCard size={16} /> {busy ? 'Processing…' : `Pay ₹${order?.total_amount}`}
+              </button>
+            </>
+          )}
         </div>
       )}
 

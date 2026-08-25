@@ -147,6 +147,7 @@ class PrintBridgeService : Service() {
         val tableLabel = job.getString("tableLabel")
         val orderId    = job.getString("orderId")
         val station    = job.getString("station")
+        val jobType    = job.optString("jobType", "kot")
         val itemsJson  = job.getJSONArray("items")
 
         val targetMac = when (station.lowercase()) {
@@ -163,14 +164,29 @@ class PrintBridgeService : Service() {
             return
         }
 
-        val items = (0 until itemsJson.length()).map { i ->
-            val obj = itemsJson.getJSONObject(i)
-            mapOf("name" to obj.getString("name"), "quantity" to obj.getInt("quantity"))
-        }
-
         try {
-            AppLogManager.log("Printing $jobId ($station) to $targetMac")
-            val payload = EscPosHelper.buildKotTicket(tableLabel, orderId, station, items)
+            AppLogManager.log("Printing $jobId ($station / $jobType) to $targetMac")
+
+            val payload = if (jobType == "bill_qr") {
+                val upiUrl      = job.optString("upiUrl", "")
+                val amountPaisa = job.optLong("amountPaisa", 0L)
+                val items = (0 until itemsJson.length()).map { i ->
+                    val obj = itemsJson.getJSONObject(i)
+                    mapOf(
+                        "name"     to obj.getString("name"),
+                        "quantity" to obj.getInt("quantity"),
+                        "subtotal" to obj.optInt("subtotal", 0),
+                    )
+                }
+                EscPosHelper.buildBillWithQr(tableLabel, orderId, items, amountPaisa, upiUrl)
+            } else {
+                val items = (0 until itemsJson.length()).map { i ->
+                    val obj = itemsJson.getJSONObject(i)
+                    mapOf("name" to obj.getString("name"), "quantity" to obj.getInt("quantity"))
+                }
+                EscPosHelper.buildKotTicket(tableLabel, orderId, station, items)
+            }
+
             sendViaBluetooth(targetMac, payload)
             markJobDone(serverUrl, jobId, token)
             AppLogManager.log("✓ Printed $jobId for table $tableLabel")

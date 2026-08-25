@@ -20,6 +20,7 @@ object EscPosHelper {
     private val DOUBLE_HEIGHT = byteArrayOf(0x1B, 0x21, 0x10)
     private val NORMAL_SIZE   = byteArrayOf(0x1B, 0x21, 0x00)
     private val FULL_CUT      = byteArrayOf(0x1D, 0x56, 0x00)
+    private val LF            = byteArrayOf(0x0A)
 
     private fun feed() = byteArrayOf(0x1B, 0x64, 0x04)
     private fun text(s: String) = (s + "\n").toByteArray(Charsets.UTF_8)
@@ -28,6 +29,36 @@ object EscPosHelper {
 
     private fun padRight(s: String, len: Int): String =
         if (s.length >= len) s.substring(0, len) else s + " ".repeat(len - s.length)
+
+    // Returns a left+right row that fills exactly COLS characters.
+    private fun rowLine(left: String, right: String): String {
+        val space = COLS - left.length - right.length
+        return if (space <= 0) "${left.take(COLS - right.length - 1)} $right"
+        else left + " ".repeat(space) + right
+    }
+
+    // ESC/POS GS ( k sequence to print a QR code (Model 2, error level L).
+    private fun qrCode(data: String, moduleSize: Int = 4): ByteArray {
+        val out = ByteArrayOutputStream()
+        val bytes = data.toByteArray(Charsets.UTF_8)
+        val n = bytes.size
+
+        // Select model 2
+        out.write(byteArrayOf(0x1D, 0x28, 0x6B, 4, 0, 49, 65, 2, 0))
+        // Module size (dots per cell)
+        out.write(byteArrayOf(0x1D, 0x28, 0x6B, 3, 0, 49, 67, moduleSize.toByte(), 0))
+        // Error correction level L (lightest — smaller QR, still scannable)
+        out.write(byteArrayOf(0x1D, 0x28, 0x6B, 3, 0, 49, 69, 48, 0))
+        // Store data: pL pH = (n + 3) split across low/high byte
+        val pL = ((n + 3) and 0xFF).toByte()
+        val pH = ((n + 3) ushr 8).toByte()
+        out.write(byteArrayOf(0x1D, 0x28, 0x6B, pL, pH, 49, 80, 48))
+        out.write(bytes)
+        // Print stored symbol
+        out.write(byteArrayOf(0x1D, 0x28, 0x6B, 3, 0, 49, 81, 48))
+
+        return out.toByteArray()
+    }
 
     fun buildKotTicket(
         tableLabel: String,
@@ -90,6 +121,80 @@ object EscPosHelper {
         w(text(DIV.trimEnd()))
         w(text("Connectivity check successful!"))
         w(text(DIV.trimEnd()))
+        w(feed())
+        w(FULL_CUT)
+
+        return out.toByteArray()
+    }
+
+    // Prints a customer-facing bill with a pre-filled UPI QR code.
+    // items: each map has keys "name" (String), "quantity" (Int), "subtotal" (Int, rupees).
+    // amountPaisa: bill total in paisa (used for the display total).
+    // upiUrl: fully-built upi:// deep link with am= already set by the server.
+    fun buildBillWithQr(
+        tableLabel: String,
+        orderId: String,
+        items: List<Map<String, Any>>,
+        amountPaisa: Long,
+        upiUrl: String,
+    ): ByteArray {
+        val out = ByteArrayOutputStream()
+        fun w(b: ByteArray) = out.write(b)
+
+        val time = SimpleDateFormat("HH:mm  dd/MM/yy", Locale.getDefault()).format(Date())
+        val shortId = orderId.takeLast(6).uppercase()
+        val totalRupees = amountPaisa / 100.0
+        val totalStr = "Rs. %.2f".format(totalRupees)
+
+        // ── Header ────────────────────────────────────────────────────────────
+        w(INIT)
+        w(ALIGN_CENTER)
+        w(BOLD_ON)
+        w(DOUBLE_HEIGHT)
+        w(text("THE BREAD CHAPTER"))
+        w(NORMAL_SIZE)
+        w(BOLD_OFF)
+        w(text("ANV HOSPITALITY PVT LTD"))
+        w(text(DIV.trimEnd()))
+        w(text("Table: $tableLabel"))
+        w(text("Order #$shortId   $time"))
+        w(text(DIV.trimEnd()))
+
+        // ── Items ─────────────────────────────────────────────────────────────
+        w(ALIGN_LEFT)
+        for (item in items) {
+            val qty     = (item["quantity"] as? Number)?.toInt() ?: 1
+            val name    = (item["name"] as? String) ?: ""
+            val sub     = (item["subtotal"] as? Number)?.toInt() ?: 0
+            val right   = "Rs.%d".format(sub)
+            val prefix  = "${qty.toString().padStart(2)}x "
+            val maxName = COLS - prefix.length - right.length - 1
+            val nameTrunc = if (name.length > maxName) name.substring(0, maxName) else name
+            w(text(rowLine(prefix + nameTrunc, right)))
+        }
+
+        // ── Total ─────────────────────────────────────────────────────────────
+        w(ALIGN_CENTER)
+        w(text(DIV.trimEnd()))
+        w(BOLD_ON)
+        w(text(rowLine("TOTAL", totalStr)))
+        w(BOLD_OFF)
+        w(text(DIV.trimEnd()))
+
+        // ── QR Code ───────────────────────────────────────────────────────────
+        w(LF)
+        w(BOLD_ON)
+        w(text("Scan & Pay via UPI"))
+        w(BOLD_OFF)
+        w(LF)
+        w(qrCode(upiUrl, moduleSize = 4))
+        w(LF)
+        w(BOLD_ON)
+        w(text(totalStr))
+        w(BOLD_OFF)
+        w(text("Tell the waiter once paid"))
+        w(text(DIV.trimEnd()))
+
         w(feed())
         w(FULL_CUT)
 
