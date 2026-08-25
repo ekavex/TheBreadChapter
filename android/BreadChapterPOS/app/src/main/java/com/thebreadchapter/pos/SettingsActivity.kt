@@ -32,8 +32,8 @@ class SettingsActivity : AppCompatActivity() {
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
         // Known default printers
-        private const val DEFAULT_KITCHEN_MAC = "66:32:F7:C5:B7:05"
-        private const val DEFAULT_BEVERAGE_MAC = "66:22:34:20:A1:B3"
+        private const val DEFAULT_KITCHEN_MAC = "66:22:34:20:A1:B3"
+        private const val DEFAULT_BEVERAGE_MAC = "66:32:F7:C5:B7:05"
     }
 
     private data class PrinterDevice(val name: String, val mac: String) {
@@ -68,7 +68,7 @@ class SettingsActivity : AppCompatActivity() {
         etUrl.setText(prefs.getString(KEY_SERVER_URL, "https://automation.thebreadchapter.in"))
         etStation.setText(prefs.getString(KEY_STATION, "all"))
         etToken.setText(prefs.getString(KEY_BRIDGE_TOKEN, ""))
-        etPineAppId.setText(prefs.getString(KEY_PINE_APP_ID, ""))
+        etPineAppId.setText(prefs.getString(KEY_PINE_APP_ID, "f99c338e6c444900a36c1a3a6303872b"))
 
         val savedKitchenMac = prefs.getString(KEY_KITCHEN_MAC, DEFAULT_KITCHEN_MAC) ?: DEFAULT_KITCHEN_MAC
         val savedBevMac     = prefs.getString(KEY_BEVERAGE_MAC, DEFAULT_BEVERAGE_MAC) ?: DEFAULT_BEVERAGE_MAC
