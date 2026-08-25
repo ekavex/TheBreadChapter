@@ -47,21 +47,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     subtotal: Math.round(Number(i['subtotal'])),
   }))
 
-  // Check if job_type column exists
-  const [colCheck] = await sql`
-    SELECT count(*) as count
-    FROM information_schema.columns
-    WHERE table_name = 'kot_tickets' AND column_name = 'job_type'
-  `
-  const hasJobType = Number(colCheck?.count ?? 0) > 0
-
-  if (!hasJobType) {
-    return NextResponse.json(
-      { data: null, error: 'QR Billing is not supported on this database version (missing job_type column)' },
-      { status: 501 },
-    )
-  }
-
   await sql`
     INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type)
     VALUES (

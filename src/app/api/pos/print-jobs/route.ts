@@ -39,14 +39,6 @@ export async function GET(req: NextRequest) {
   try {
     const sql = getDb()
 
-    // Check if job_type column exists
-    const [colCheck] = await sql`
-      SELECT count(*) as count
-      FROM information_schema.columns
-      WHERE table_name = 'kot_tickets' AND column_name = 'job_type'
-    `
-    const hasJobType = Number(colCheck?.count ?? 0) > 0
-
     // Atomically claim queued jobs by marking them 'processing' so a second poll
     // within the same 3-second window cannot pick up the same ticket again.
     const rows = await sql`
@@ -61,14 +53,14 @@ export async function GET(req: NextRequest) {
           LIMIT 10
           FOR UPDATE SKIP LOCKED
         )
-        RETURNING id, order_id, station, items_json ${hasJobType ? sql`, job_type` : sql``}
+        RETURNING id, order_id, station, items_json, job_type
       )
       SELECT
         c.id,
         c.order_id           AS "orderId",
         c.station,
         c.items_json         AS items,
-        ${hasJobType ? sql`c.job_type` : sql`'kot'`} AS "jobType",
+        c.job_type           AS "jobType",
         o.total_paisa        AS "amountPaisa",
         COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"
       FROM claimed c
