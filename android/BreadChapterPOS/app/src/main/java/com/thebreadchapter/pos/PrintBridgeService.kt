@@ -118,7 +118,18 @@ class PrintBridgeService : Service() {
         
         if (!resp.isSuccessful) {
             val code = resp.code
+            val body = resp.body?.string() ?: ""
             AppLogManager.log("⚠ API Error $code for $station")
+            if (body.isNotBlank()) {
+                Log.e(TAG, "Server error body: $body")
+                try {
+                    val json = JSONObject(body)
+                    val err = json.optString("error", "Unknown error")
+                    AppLogManager.log("Server message: $err")
+                } catch (_: Exception) {
+                    AppLogManager.log("Raw error: ${body.take(100)}")
+                }
+            }
             throw IOException("Server returned $code")
         }
         

@@ -98,7 +98,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
 
       const printStatus = process.env.PRINT_BRIDGE_TOKEN ? 'queued' : 'mock_printed'
-      await sql`INSERT INTO kot_tickets (order_id, station, items_json, print_status) VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus})`
+
+      // Check if job_type column exists
+      const [colCheck] = await sql`
+        SELECT count(*) as count
+        FROM information_schema.columns
+        WHERE table_name = 'kot_tickets' AND column_name = 'job_type'
+      `
+      const hasJobType = Number(colCheck?.count ?? 0) > 0
+
+      if (hasJobType) {
+        await sql`INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type) VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus}, 'kot')`
+      } else {
+        await sql`INSERT INTO kot_tickets (order_id, station, items_json, print_status) VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus})`
+      }
     }
 
     const now = new Date().toISOString()

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,43 +36,61 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: null, error: 'station param required' }, { status: 400 })
   }
 
-  const sql = getDb()
-  // Atomically claim queued jobs by marking them 'processing' so a second poll
-  // within the same 3-second window cannot pick up the same ticket again.
-  const rows = await sql`
-    WITH claimed AS (
-      UPDATE kot_tickets
-      SET print_status = 'processing'
-      WHERE id IN (
-        SELECT id FROM kot_tickets
-        WHERE (${station} = 'all' OR station = ${station})
-          AND print_status = 'queued'
-        ORDER BY printed_at ASC
-        LIMIT 10
-        FOR UPDATE SKIP LOCKED
+  try {
+    const sql = getDb()
+
+    // Check if job_type column exists
+    const [colCheck] = await sql`
+      SELECT count(*) as count
+      FROM information_schema.columns
+      WHERE table_name = 'kot_tickets' AND column_name = 'job_type'
+    `
+    const hasJobType = Number(colCheck?.count ?? 0) > 0
+
+    // Atomically claim queued jobs by marking them 'processing' so a second poll
+    // within the same 3-second window cannot pick up the same ticket again.
+    const rows = await sql`
+      WITH claimed AS (
+        UPDATE kot_tickets
+        SET print_status = 'processing'
+        WHERE id IN (
+          SELECT id FROM kot_tickets
+          WHERE (${station} = 'all' OR station = ${station})
+            AND print_status = 'queued'
+          ORDER BY printed_at ASC
+          LIMIT 10
+          FOR UPDATE SKIP LOCKED
+        )
+        RETURNING id, order_id, station, items_json ${hasJobType ? sql`, job_type` : sql``}
       )
-      RETURNING id, order_id, station, items_json, job_type
+      SELECT
+        c.id,
+        c.order_id           AS "orderId",
+        c.station,
+        c.items_json         AS items,
+        ${hasJobType ? sql`c.job_type` : sql`'kot'`} AS "jobType",
+        o.total_paisa        AS "amountPaisa",
+        COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"
+      FROM claimed c
+      JOIN orders o ON o.id = c.order_id
+      LEFT JOIN tables t ON t.id = o.table_id
+    `
+
+    // For bill_qr jobs, attach the pre-built UPI URL with the order total.
+    const data = (rows as Record<string, unknown>[]).map((row) => {
+      if (row['jobType'] === 'bill_qr') {
+        return { ...row, upiUrl: buildUpiUrl(Number(row['amountPaisa'])) }
+      }
+      return row
+    })
+
+    return NextResponse.json({ data, error: null })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('print_jobs.poll_error', { error: message, station })
+    return NextResponse.json(
+      { data: null, error: message },
+      { status: 500 }
     )
-    SELECT
-      c.id,
-      c.order_id           AS "orderId",
-      c.station,
-      c.items_json         AS items,
-      c.job_type           AS "jobType",
-      o.total_paisa        AS "amountPaisa",
-      COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"
-    FROM claimed c
-    JOIN orders o ON o.id = c.order_id
-    LEFT JOIN tables t ON t.id = o.table_id
-  `
-
-  // For bill_qr jobs, attach the pre-built UPI URL with the order total.
-  const data = (rows as Record<string, unknown>[]).map((row) => {
-    if (row['jobType'] === 'bill_qr') {
-      return { ...row, upiUrl: buildUpiUrl(Number(row['amountPaisa'])) }
-    }
-    return row
-  })
-
-  return NextResponse.json({ data, error: null })
+  }
 }
