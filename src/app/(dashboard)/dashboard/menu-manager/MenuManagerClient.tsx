@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChefHat, Plus, Pencil, Trash2, Eye, EyeOff, UtensilsCrossed, Coffee, Search, X, AlertTriangle } from 'lucide-react'
-import type { MenuCategory, MenuItem, Ingredient } from '@/lib/types'
+import { ChefHat, Plus, Pencil, Trash2, Eye, EyeOff, UtensilsCrossed, Coffee, Search, X, AlertTriangle, Tag } from 'lucide-react'
+import type { MenuCategory, MenuItem, Ingredient, Addon } from '@/lib/types'
 import { formatPaisa, rupeesToPaisa } from '@/lib/money'
 import toast from 'react-hot-toast'
 import RecipeModal from './RecipeModal'
@@ -53,6 +53,7 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmState & {
 interface Props {
   categories: MenuCategory[]
   ingredients: Ingredient[]
+  addons: Addon[]
 }
 
 type ModalKind =
@@ -182,7 +183,13 @@ function ItemCard({
   )
 }
 
-export default function MenuManagerClient({ categories, ingredients }: Props) {
+export default function MenuManagerClient({ categories, ingredients, addons: initialAddons }: Props) {
+  const [addons, setAddons] = useState<Addon[]>(initialAddons)
+  const [addingAddon, setAddingAddon] = useState(false)
+  const [addonForm, setAddonForm] = useState({ name: '', price: '' })
+  const [editingAddon, setEditingAddon] = useState<Addon | null>(null)
+  const [editAddonForm, setEditAddonForm] = useState({ name: '', price: '' })
+  const [addonBusy, setAddonBusy] = useState(false)
   const router = useRouter()
   const [activeCategory, setActiveCategory] = useState<string | 'all'>('all')
   const [toggling, setToggling] = useState<string | null>(null)
@@ -267,6 +274,89 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
   function refresh() {
     setActiveModal(null)
     router.refresh()
+  }
+
+  async function createAddon() {
+    if (!addonForm.name.trim()) return
+    setAddonBusy(true)
+    try {
+      const res = await fetch('/api/menu/addons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: addonForm.name.trim(), price: Number(addonForm.price) || 0 }),
+      })
+      const { data, error } = await res.json()
+      if (error) throw new Error(error)
+      setAddons((prev) => [...prev, data as Addon])
+      setAddonForm({ name: '', price: '' })
+      setAddingAddon(false)
+      toast.success('Add-on created')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create add-on')
+    } finally {
+      setAddonBusy(false)
+    }
+  }
+
+  async function updateAddon() {
+    if (!editingAddon) return
+    setAddonBusy(true)
+    try {
+      const res = await fetch(`/api/menu/addons/${editingAddon.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editAddonForm.name.trim(), price: Number(editAddonForm.price) || 0 }),
+      })
+      const { data, error } = await res.json()
+      if (error) throw new Error(error)
+      setAddons((prev) => prev.map((a) => (a.id === editingAddon.id ? (data as Addon) : a)))
+      setEditingAddon(null)
+      toast.success('Add-on updated')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update add-on')
+    } finally {
+      setAddonBusy(false)
+    }
+  }
+
+  async function toggleAddon(addon: Addon) {
+    setAddonBusy(true)
+    try {
+      const res = await fetch(`/api/menu/addons/${addon.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !addon.is_active }),
+      })
+      const { data, error } = await res.json()
+      if (error) throw new Error(error)
+      setAddons((prev) => prev.map((a) => (a.id === addon.id ? (data as Addon) : a)))
+    } catch {
+      toast.error('Update failed')
+    } finally {
+      setAddonBusy(false)
+    }
+  }
+
+  function deleteAddon(addon: Addon) {
+    askConfirm({
+      title: `Delete "${addon.name}"?`,
+      message: 'This add-on will be removed from the list. Existing orders are not affected.',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setAddonBusy(true)
+        try {
+          const res = await fetch(`/api/menu/addons/${addon.id}`, { method: 'DELETE' })
+          const { error } = await res.json()
+          if (error) throw new Error(error)
+          setAddons((prev) => prev.filter((a) => a.id !== addon.id))
+          toast.success('Add-on deleted')
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Delete failed')
+        } finally {
+          setAddonBusy(false)
+        }
+      },
+    })
   }
 
   // Which categories to show in the grid
@@ -475,6 +565,110 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
         </>
       )}
 
+      {/* ── Add-ons section ── */}
+      <div className="mt-10">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Tag size={15} className="text-ink-faint" />
+            <h2 className="font-display font-semibold text-ink">Add-ons</h2>
+            <span className="text-xs text-ink-faint">{addons.length} configured</span>
+          </div>
+          <div className="flex-1 h-px bg-ink/5" />
+          <button
+            onClick={() => setAddingAddon(true)}
+            className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink px-2.5 py-1.5 rounded-lg hover:bg-surface-overlay transition-colors"
+          >
+            <Plus size={13} /> Add
+          </button>
+        </div>
+
+        {addingAddon && (
+          <div className="mb-4 flex items-center gap-2 bg-surface-raised border border-ink/8 rounded-xl p-3">
+            <input
+              type="text"
+              value={addonForm.name}
+              onChange={(e) => setAddonForm((f) => ({ ...f, name: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && createAddon()}
+              placeholder="Add-on name (e.g. Extra shot)"
+              autoFocus
+              className="flex-1 rounded-lg border border-ink/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ink/20"
+            />
+            <div className="relative w-24">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-ink-faint">₹</span>
+              <input
+                type="number"
+                min="0"
+                value={addonForm.price}
+                onChange={(e) => setAddonForm((f) => ({ ...f, price: e.target.value }))}
+                placeholder="0"
+                className="w-full rounded-lg border border-ink/10 pl-6 pr-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ink/20"
+              />
+            </div>
+            <button
+              onClick={createAddon}
+              disabled={addonBusy || !addonForm.name.trim()}
+              className="px-3 py-2 rounded-lg bg-ink text-surface text-xs font-medium disabled:opacity-40"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => { setAddingAddon(false); setAddonForm({ name: '', price: '' }) }}
+              className="p-2 rounded-lg text-ink-faint hover:text-ink"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {addons.length === 0 && !addingAddon && (
+          <div className="border-2 border-dashed border-ink/8 rounded-2xl p-8 text-center">
+            <Tag size={20} className="mx-auto text-ink-faint mb-2" />
+            <p className="text-ink-faint text-sm">No add-ons configured yet.</p>
+            <button
+              onClick={() => setAddingAddon(true)}
+              className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              + Add first add-on
+            </button>
+          </div>
+        )}
+
+        {addons.length > 0 && (
+          <div className="space-y-2">
+            {addons.map((addon) => (
+              <div key={addon.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border bg-surface-raised transition-colors ${addon.is_active ? 'border-ink/8' : 'border-ink/5 opacity-50'}`}>
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-ink">{addon.name}</span>
+                  {addon.price > 0 && <span className="ml-2 text-xs text-ink-muted">+₹{addon.price}</span>}
+                  {!addon.is_active && <span className="ml-2 text-xs text-ink-faint">(inactive)</span>}
+                </div>
+                <button
+                  onClick={() => toggleAddon(addon)}
+                  disabled={addonBusy}
+                  title={addon.is_active ? 'Deactivate' : 'Activate'}
+                  className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${addon.is_active ? 'text-green-600 hover:bg-red-50 hover:text-red-500' : 'text-ink-faint hover:bg-green-50 hover:text-green-600'}`}
+                >
+                  {addon.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
+                </button>
+                <button
+                  onClick={() => { setEditingAddon(addon); setEditAddonForm({ name: addon.name, price: String(addon.price) }) }}
+                  className="p-1.5 rounded-lg text-ink-faint hover:bg-surface-overlay hover:text-ink transition-colors"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => deleteAddon(addon)}
+                  disabled={addonBusy}
+                  className="p-1.5 rounded-lg text-ink-faint hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* ── Modals ── */}
       {recipeFor && (
         <RecipeModal
@@ -513,6 +707,42 @@ export default function MenuManagerClient({ categories, ingredients }: Props) {
           {...confirmState}
           onCancel={() => setConfirmState(null)}
         />
+      )}
+
+      {/* ── Edit addon modal ── */}
+      {editingAddon && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-5 border-b border-ink/5">
+              <h3 className="font-display font-semibold text-ink">Edit Add-on</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <input
+                type="text"
+                value={editAddonForm.name}
+                onChange={(e) => setEditAddonForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Add-on name"
+                className="w-full rounded-xl border border-ink/10 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink/20"
+              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-faint">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={editAddonForm.price}
+                  onChange={(e) => setEditAddonForm((f) => ({ ...f, price: e.target.value }))}
+                  placeholder="0 for free"
+                  className="w-full rounded-xl border border-ink/10 pl-7 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink/20"
+                />
+              </div>
+            </div>
+            <div className="flex border-t border-ink/5">
+              <button onClick={() => setEditingAddon(null)} className="flex-1 py-3.5 text-sm font-medium text-ink-muted hover:bg-surface-overlay">Cancel</button>
+              <div className="w-px bg-ink/5" />
+              <button onClick={updateAddon} disabled={addonBusy} className="flex-1 py-3.5 text-sm font-semibold text-ink hover:bg-surface-overlay disabled:opacity-50">Save</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

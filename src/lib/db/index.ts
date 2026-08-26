@@ -23,6 +23,28 @@ async function runMigrations(sql: postgres.Sql) {
   } catch {
     // Non-fatal: column may already exist or constraint name may differ
   }
+  try {
+    // 008: add-ons catalog (cafe-level)
+    await sql`
+      CREATE TABLE IF NOT EXISTS public.addons (
+        id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        cafe_id    UUID        NOT NULL,
+        name       TEXT        NOT NULL,
+        price      INTEGER     NOT NULL DEFAULT 0,
+        is_active  BOOLEAN     NOT NULL DEFAULT true,
+        sort_order INTEGER     NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `
+  } catch { /* Non-fatal */ }
+  try {
+    // 009: addons snapshot per order item
+    await sql`ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS addons_json JSONB NOT NULL DEFAULT '[]'`
+  } catch { /* Non-fatal */ }
+  try {
+    // 010: customer suggestions / special requests at order level
+    await sql`ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_note TEXT`
+  } catch { /* Non-fatal */ }
 }
 
 export function getDb(): postgres.Sql {

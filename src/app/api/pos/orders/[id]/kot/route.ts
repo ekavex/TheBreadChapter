@@ -43,12 +43,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // For add-on KOT: only items added after the last kot_sent_at are included.
     const allOrderItems = await sql`SELECT * FROM order_items WHERE order_id = ${params.id} ORDER BY created_at`
-    type DbOrderItem = { category?: MenuItemCategory; name: string; quantity: number; created_at: string }
-    const allTyped = allOrderItems as unknown as DbOrderItem[]
+    type DbOrderItem = { category?: MenuItemCategory; name: string; quantity: number; created_at: string; addons_json?: { name: string }[] }
+    const allTypedFull = allOrderItems as unknown as DbOrderItem[]
 
     const orderItems = isAddon && order.kot_sent_at
-      ? allTyped.filter((i) => new Date(i.created_at) > new Date(order.kot_sent_at))
-      : allTyped
+      ? allTypedFull.filter((i) => new Date(i.created_at) > new Date(order.kot_sent_at))
+      : allTypedFull
 
     if (orderItems.length === 0) {
       return NextResponse.json({
@@ -70,12 +70,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       for (const t of ticketRows as unknown as { station: string }[]) alreadyTicketed.add(t.station)
     }
 
+    const customerNote = (order.customer_note as string | null) ?? null
+
     const stations: KotStation[] = ['kitchen', 'beverage_counter']
     let printerWarning: string | null = null
     for (const station of stations) {
       const items = orderItems
         .filter((i) => STATION_BY_CATEGORY[i.category ?? 'food'] === station)
-        .map((i) => ({ name: i.name, quantity: i.quantity }))
+        .map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          addons: (i.addons_json ?? []).map((a) => a.name).filter(Boolean),
+        }))
 
       if (items.length === 0) continue
       if (alreadyTicketed.has(station)) {
@@ -90,6 +96,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           orderId: order.id,
           station,
           items,
+          customerNote,
         })
         logger.info('kot.print.success', { orderId: order.id, station })
       } catch (printErr) {

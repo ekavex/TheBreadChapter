@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode, Plus, Minus } from 'lucide-react'
-import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
+import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode, Plus, Minus, Check, MessageSquare } from 'lucide-react'
+import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table, Addon, OrderItemAddon } from '@/lib/types'
 
 function ConfirmDialog({ title, message, confirmLabel = 'Confirm', onConfirm, onCancel }: {
   title: string
@@ -40,11 +40,92 @@ function ConfirmDialog({ title, message, confirmLabel = 'Confirm', onConfirm, on
   )
 }
 
+function AddonModal({
+  item,
+  addons,
+  onConfirm,
+  onCancel,
+}: {
+  item: MenuItem
+  addons: Addon[]
+  onConfirm: (selectedAddons: OrderItemAddon[], note: string) => void
+  onCancel: () => void
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [note, setNote] = useState('')
+
+  const selectedList: OrderItemAddon[] = addons
+    .filter((a) => selected.has(a.id))
+    .map((a) => ({ id: a.id, name: a.name, price: a.price }))
+  const addonTotal = selectedList.reduce((s, a) => s + a.price, 0)
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-ink/5">
+          <h3 className="font-display font-semibold text-ink">{item.name}</h3>
+          <p className="text-xs text-ink-muted mt-0.5">₹{item.price} · select add-ons (optional)</p>
+        </div>
+        <div className="p-4 space-y-2 max-h-56 overflow-y-auto">
+          {addons.map((addon) => (
+            <button
+              key={addon.id}
+              onClick={() => toggle(addon.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                selected.has(addon.id) ? 'border-brand-400 bg-brand-50/60' : 'border-ink/10 hover:border-ink/20'
+              }`}
+            >
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                selected.has(addon.id) ? 'border-brand-500 bg-brand-500' : 'border-ink/30'
+              }`}>
+                {selected.has(addon.id) && <Check size={9} className="text-white" />}
+              </div>
+              <span className="flex-1 text-sm text-ink">{addon.name}</span>
+              {addon.price > 0 && <span className="text-xs font-medium text-ink-muted">+₹{addon.price}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="px-4 pb-3">
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Special request for this item (optional)…"
+            rows={2}
+            className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ink/20"
+          />
+        </div>
+        <div className="flex border-t border-ink/5">
+          <button onClick={onCancel} className="flex-1 py-3.5 text-sm font-medium text-ink-muted hover:bg-surface-overlay transition-colors">
+            Cancel
+          </button>
+          <div className="w-px bg-ink/5" />
+          <button
+            onClick={() => onConfirm(selectedList, note.trim())}
+            className="flex-1 py-3.5 text-sm font-semibold text-ink hover:bg-surface-overlay transition-colors"
+          >
+            Add{addonTotal > 0 ? ` · ₹${item.price + addonTotal}` : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface Props {
   initialOrder: Order | null
   tableId?: string       // present when initialOrder is null (new order)
   initialTable?: Table   // present when initialOrder is null
   categories: MenuCategory[]
+  addons: Addon[]
 }
 
 const STATUS_LABELS: Record<PosStatus, string> = {
@@ -82,7 +163,7 @@ async function api<T>(url: string, method: string, body?: unknown): Promise<T> {
   return json.data as T
 }
 
-export default function PosOrderClient({ initialOrder, tableId, initialTable, categories }: Props) {
+export default function PosOrderClient({ initialOrder, tableId, initialTable, categories, addons }: Props) {
   const router = useRouter()
   const [order, setOrder] = useState<Order | null>(initialOrder)
   const [payment, setPayment] = useState<Payment | null>(null)
@@ -90,11 +171,13 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [paymentMode, setPaymentMode] = useState<'upi' | 'card' | 'cash' | 'upi_qr'>('upi_qr')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerName, setCustomerName] = useState('')
+  const [customerNote, setCustomerNote] = useState((initialOrder?.customer_note as string | null) ?? '')
   const [busy, setBusy] = useState(false)
   const [qrBillSent, setQrBillSent] = useState(false)
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [addonModal, setAddonModal] = useState<MenuItem | null>(null)
   // True while the terminal still has the transaction open — the screen tracks
   // it automatically so the cashier never has to poll by hand.
   const [autoTracking, setAutoTracking] = useState(false)
@@ -122,12 +205,17 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     }
   }
 
-  async function addItem(item: MenuItem) {
+  async function addItem(item: MenuItem, selectedAddons: OrderItemAddon[] = [], note = '') {
     setBusy(true)
     const isNewOrder = !order
     try {
       const orderId = await ensureOrder()
-      const updated = await api<Order>(`/api/pos/orders/${orderId}/items`, 'POST', { menu_item_id: item.id, quantity: 1 })
+      const updated = await api<Order>(`/api/pos/orders/${orderId}/items`, 'POST', {
+        menu_item_id: item.id,
+        quantity: 1,
+        addons: selectedAddons,
+        customisation: note || null,
+      })
       setOrder(updated)
       // Update URL only after the item is in the DB, so the server-rendered
       // page at the new URL already has the item when Next.js fetches it.
@@ -136,6 +224,27 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       toast.error(err instanceof Error ? err.message : 'Failed to add item')
     } finally {
       setBusy(false)
+    }
+  }
+
+  function handlePlusClick(item: MenuItem) {
+    const entry = menuItemQty.get(item.id)
+    if (entry && entry.qty > 0) {
+      // Already in order — increment directly without modal
+      void addItem(item)
+    } else if (addons.length > 0) {
+      setAddonModal(item)
+    } else {
+      void addItem(item)
+    }
+  }
+
+  async function saveNote(note: string) {
+    if (!order) return
+    try {
+      await api(`/api/pos/orders/${order.id}`, 'PATCH', { customer_note: note || null })
+    } catch {
+      // Non-critical — note save failure shouldn't block the workflow
     }
   }
 
@@ -501,7 +610,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                         </button>
                         <span className="text-sm font-bold text-ink w-4 text-center">{qty}</span>
                         <button
-                          onClick={() => addItem(item)}
+                          onClick={() => handlePlusClick(item)}
                           disabled={busy}
                           className="w-7 h-7 rounded-lg bg-ink text-surface flex items-center justify-center disabled:opacity-40 hover:opacity-80 transition-opacity"
                         >
@@ -510,7 +619,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                       </div>
                     ) : (
                       <button
-                        onClick={() => addItem(item)}
+                        onClick={() => handlePlusClick(item)}
                         disabled={busy}
                         className="ml-auto w-7 h-7 rounded-lg bg-ink text-surface flex items-center justify-center disabled:opacity-40 hover:opacity-80 transition-opacity"
                       >
@@ -523,6 +632,29 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             })}
             {activeCategoryItems.length === 0 && (
               <p className="text-sm text-ink-faint col-span-full">No available items in this category.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Customer suggestions / note */}
+      {canAddItems && (
+        <div className="mb-6 bg-surface-raised rounded-2xl border border-ink/5 overflow-hidden">
+          <div className="px-5 py-3 border-b border-ink/5 bg-surface-overlay flex items-center gap-2">
+            <MessageSquare size={13} className="text-ink-faint" />
+            <h2 className="font-display font-semibold text-ink text-sm">Customer suggestions</h2>
+          </div>
+          <div className="p-4">
+            <textarea
+              value={customerNote}
+              onChange={(e) => setCustomerNote(e.target.value)}
+              onBlur={(e) => { if (order) void saveNote(e.target.value) }}
+              placeholder="E.g. Make the coffee with less sugar, vadapav extra spicy…"
+              rows={2}
+              className="w-full rounded-xl border border-ink/10 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ink/20 bg-white dark:bg-neutral-800"
+            />
+            {customerNote.trim() && !order && (
+              <p className="text-xs text-ink-faint mt-1">Note will be saved when first item is added.</p>
             )}
           </div>
         </div>
@@ -548,7 +680,10 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-ink">{item.name} × {item.quantity}</p>
-                    {item.customisation && <p className="text-xs text-ink-faint">{item.customisation}</p>}
+                    {(item.addons_json ?? []).length > 0 && (
+                      <p className="text-xs text-ink-muted">{(item.addons_json ?? []).map((a) => a.name).join(' · ')}</p>
+                    )}
+                    {item.customisation && <p className="text-xs text-ink-faint italic">{item.customisation}</p>}
                   </div>
                   <span className="text-sm font-semibold text-ink shrink-0">₹{item.subtotal}</span>
                 </div>
@@ -571,7 +706,10 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-ink">{item.name} × {item.quantity}</p>
-                    {item.customisation && <p className="text-xs text-ink-faint">{item.customisation}</p>}
+                    {(item.addons_json ?? []).length > 0 && (
+                      <p className="text-xs text-ink-muted">{(item.addons_json ?? []).map((a) => a.name).join(' · ')}</p>
+                    )}
+                    {item.customisation && <p className="text-xs text-ink-faint italic">{item.customisation}</p>}
                   </div>
                   <span className="text-sm font-semibold text-ink shrink-0">₹{item.subtotal}</span>
                   <button
@@ -867,6 +1005,18 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
           confirmLabel="Yes, cancel order"
           onConfirm={confirmCancelOrder}
           onCancel={() => setShowCancelConfirm(false)}
+        />
+      )}
+
+      {addonModal && (
+        <AddonModal
+          item={addonModal}
+          addons={addons}
+          onConfirm={(selectedAddons, note) => {
+            setAddonModal(null)
+            void addItem(addonModal, selectedAddons, note)
+          }}
+          onCancel={() => setAddonModal(null)}
         />
       )}
     </div>

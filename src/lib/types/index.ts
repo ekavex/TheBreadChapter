@@ -78,12 +78,27 @@ export type RecipeIngredient = Tables['recipe_ingredients']['Row'] & {
 
 export type Order = Omit<Tables['orders']['Row'], 'pos_status'> & {
   pos_status: PosStatus
+  customer_note?: string | null
   // Joined
   items?: OrderItem[]
   table?: Table
 }
 
-export type OrderItem = Tables['order_items']['Row']
+export type Addon = {
+  id: string
+  cafe_id: string
+  name: string
+  price: number
+  is_active: boolean
+  sort_order: number
+  created_at: string
+}
+
+export type OrderItemAddon = { id: string; name: string; price: number }
+
+export type OrderItem = Tables['order_items']['Row'] & {
+  addons_json?: OrderItemAddon[]
+}
 
 export type KotTicket = Omit<Tables['kot_tickets']['Row'], 'station' | 'items_json'> & {
   station: KotStation

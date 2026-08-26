@@ -68,6 +68,13 @@ function buildPayload(ticket: KotTicket): Buffer {
     parts.push(CMD.BOLD_ON)
     parts.push(text(prefix + name))
     parts.push(CMD.BOLD_OFF)
+    for (const addon of item.addons ?? []) {
+      parts.push(text(`     + ${addon}`.slice(0, COLS)))
+    }
+  }
+
+  if (ticket.customerNote?.trim()) {
+    parts.push(text(DIV.trimEnd()), CMD.BOLD_ON, text('NOTE:'), CMD.BOLD_OFF, text(ticket.customerNote.trim().slice(0, COLS * 3)))
   }
 
   parts.push(CMD.ALIGN_CENTER)

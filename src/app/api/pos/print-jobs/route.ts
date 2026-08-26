@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
         c.items_json         AS items,
         c.job_type           AS "jobType",
         o.total_paisa        AS "amountPaisa",
+        o.customer_note      AS "customerNote",
         COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"
       FROM claimed c
       JOIN orders o ON o.id = c.order_id

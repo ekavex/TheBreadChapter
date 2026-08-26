@@ -66,6 +66,7 @@ object EscPosHelper {
         orderId: String,
         station: String,
         items: List<Map<String, Any>>,
+        customerNote: String? = null,
     ): ByteArray {
         val out = ByteArrayOutputStream()
 
@@ -100,6 +101,20 @@ object EscPosHelper {
             w(text(prefix + nameTrunc))
             w(NORMAL_SIZE)
             w(BOLD_OFF)
+            @Suppress("UNCHECKED_CAST")
+            val addonList = item["addons"] as? List<String> ?: emptyList()
+            for (addon in addonList) {
+                w(text("     + ${addon.take(COLS - 7)}"))
+            }
+        }
+
+        // Customer note (suggestions)
+        if (!customerNote.isNullOrBlank()) {
+            w(text(DIV.trimEnd()))
+            w(BOLD_ON)
+            w(text("NOTE:"))
+            w(BOLD_OFF)
+            w(text(customerNote.trim().take(COLS * 3)))
         }
 
         // Total item count at the bottom

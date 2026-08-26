@@ -7,6 +7,7 @@ export type KotStation = 'kitchen' | 'beverage_counter'
 export interface KotTicketItem {
   name: string
   quantity: number
+  addons?: string[]  // display names of selected add-ons
 }
 
 export interface KotTicket {
@@ -14,6 +15,7 @@ export interface KotTicket {
   orderId: string
   station: KotStation
   items: KotTicketItem[]
+  customerNote?: string | null
 }
 
 export interface PrinterService {

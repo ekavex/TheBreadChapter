@@ -4,10 +4,12 @@
 
 interface OrderForPrint {
   id: string
+  customer_note?: string | null
   items?: {
     name: string
     quantity: number
     category?: string | null
+    addons_json?: { name: string }[] | null
   }[] | null
   table?: { number?: number | null } | null
 }
@@ -23,20 +25,26 @@ export function printKot(order: OrderForPrint): void {
   const shortId  = order.id.slice(-6).toUpperCase()
   const time     = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
 
+  const note = order.customer_note?.trim() ?? ''
+
   function kotBlock(station: string, items: typeof allItems): string {
     const rows = items
-      .map(
-        (i) =>
-          `<div class="item"><span class="qty">${i.quantity}x</span>${escHtml(i.name)}</div>`
-      )
+      .map((i) => {
+        const addonNames = (i.addons_json ?? []).map((a) => a.name).filter(Boolean)
+        const addonLine = addonNames.length > 0
+          ? `<div class="addon">${addonNames.map(escHtml).join(', ')}</div>`
+          : ''
+        return `<div class="item"><span class="qty">${i.quantity}x</span>${escHtml(i.name)}</div>${addonLine}`
+      })
       .join('')
+    const noteBlock = note ? `<div class="div">--------------------------------</div><div class="note"><b>NOTE:</b> ${escHtml(note)}</div>` : ''
     return `
       <div class="kot">
-        <div class="station">${station}</div>
         <div class="meta">Table&nbsp;${tableNum}&nbsp;·&nbsp;${time}</div>
         <div class="meta">Order&nbsp;#${shortId}</div>
         <div class="div">--------------------------------</div>
         ${rows}
+        ${noteBlock}
         <div class="div">--------------------------------</div>
       </div>`
   }
@@ -110,7 +118,18 @@ function buildHtml(tableNum: number | string, body: string): string {
     .item {
       font-size: 13px;
       font-weight: bold;
-      margin: 4px 1mm;
+      margin: 4px 1mm 0;
+      word-break: break-word;
+    }
+    .addon {
+      font-size: 11px;
+      font-weight: normal;
+      margin: 0 1mm 4px 24px;
+      color: #333;
+    }
+    .note {
+      font-size: 11px;
+      margin: 3px 1mm;
       word-break: break-word;
     }
     .qty {

@@ -57,6 +57,13 @@ export class NetworkPrinterService implements PrinterService {
       parts.push(CMD.BOLD_ON)
       parts.push(text(`${String(item.quantity).padEnd(3)} ${item.name}`))
       parts.push(CMD.BOLD_OFF)
+      for (const addon of item.addons ?? []) {
+        parts.push(text(`     + ${addon}`))
+      }
+    }
+
+    if (ticket.customerNote?.trim()) {
+      parts.push(text(div), CMD.BOLD_ON, text('NOTE:'), CMD.BOLD_OFF, text(ticket.customerNote.trim()))
     }
 
     parts.push(CMD.ALIGN_CENTER)

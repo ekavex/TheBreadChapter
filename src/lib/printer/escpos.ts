@@ -43,6 +43,13 @@ export function buildKotPayload(ticket: KotTicket): Buffer {
   for (const item of ticket.items) {
     const prefix = `${String(item.quantity).padStart(2)}x  `
     parts.push(CMD.BOLD_ON, text(prefix + item.name.slice(0, COLS - prefix.length)), CMD.BOLD_OFF)
+    for (const addon of item.addons ?? []) {
+      parts.push(text(`     + ${addon}`.slice(0, COLS)))
+    }
+  }
+
+  if (ticket.customerNote?.trim()) {
+    parts.push(text(div), CMD.BOLD_ON, text('NOTE:'), CMD.BOLD_OFF, text(ticket.customerNote.trim().slice(0, COLS * 3)))
   }
 
   parts.push(CMD.ALIGN_CENTER, text(div), feed(4), CMD.FULL_CUT)

@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { getDb } from '@/lib/db'
 import { DEMO_CAFE_ID } from '@/lib/constants'
-import type { MenuCategory, Table } from '@/lib/types'
+import type { MenuCategory, Table, Addon } from '@/lib/types'
 import PosOrderClient from '../[orderId]/PosOrderClient'
 
 export const dynamic = 'force-dynamic'
@@ -22,10 +22,11 @@ export default async function NewOrderPage({ searchParams }: { searchParams: { t
   `
   if (existing[0]) redirect(`/pos/order/${existing[0].id}`)
 
-  const [tableRaw, categoriesRaw, menuItems] = await Promise.all([
+  const [tableRaw, categoriesRaw, menuItems, addonsRaw] = await Promise.all([
     sql`SELECT t.*, s.id AS section_id, s.name AS section_name, s.sort_order AS section_sort_order FROM tables t LEFT JOIN sections s ON s.id = t.section_id WHERE t.id = ${tableId}`,
     sql`SELECT * FROM menu_categories WHERE cafe_id = ${DEMO_CAFE_ID} AND is_active = true ORDER BY sort_order ASC`,
     sql`SELECT * FROM menu_items WHERE cafe_id = ${DEMO_CAFE_ID} ORDER BY sort_order ASC`,
+    sql`SELECT * FROM addons WHERE cafe_id = ${DEMO_CAFE_ID} AND is_active = true ORDER BY sort_order ASC, created_at ASC`,
   ])
 
   if (!tableRaw[0]) notFound()
@@ -50,6 +51,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: { t
       tableId={tableId}
       initialTable={table}
       categories={categories}
+      addons={addonsRaw as unknown as Addon[]}
     />
   )
 }

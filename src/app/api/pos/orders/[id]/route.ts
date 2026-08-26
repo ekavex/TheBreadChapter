@@ -4,6 +4,21 @@ import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
 
+// PATCH /api/pos/orders/[id] — update mutable order fields (customer_note).
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const sessionGuard = await requireDashboardSession(req)
+  if (sessionGuard) return sessionGuard
+
+  try {
+    const { customer_note } = await req.json()
+    const sql = getDb()
+    await sql`UPDATE orders SET customer_note = ${customer_note ?? null} WHERE id = ${params.id}`
+    return NextResponse.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    return NextResponse.json({ data: null, error: err instanceof Error ? err.message : 'Update failed' }, { status: 500 })
+  }
+}
+
 // GET /api/pos/orders/[id] — full order detail for the POS order-builder screen.
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
