@@ -23,7 +23,7 @@ export function text(s: string): Buffer { return Buffer.from(s + '\n', 'utf8') }
 export function buildKotPayload(ticket: KotTicket): Buffer {
   const time    = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   const shortId = ticket.orderId.slice(-6).toUpperCase()
-  const label   = ticket.station === 'kitchen' ? '** KITCHEN **' : '** BEVERAGE **'
+  const label   = ticket.station === 'kitchen' ? '** BARISTA **' : '** BEVERAGE **'
   const div     = '-'.repeat(COLS)
 
   const parts: Buffer[] = [
@@ -52,7 +52,7 @@ export function buildKotPayload(ticket: KotTicket): Buffer {
 export function buildTestPayload(station: string): Buffer {
   const div = '-'.repeat(COLS)
   const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-  const label = station === 'kitchen' ? '** KITCHEN **' : '** BEVERAGE **'
+  const label = station === 'kitchen' ? '** BARISTA **' : '** BEVERAGE **'
 
   return Buffer.concat([
     CMD.INIT,

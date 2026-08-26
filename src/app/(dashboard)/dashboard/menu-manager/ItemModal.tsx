@@ -151,7 +151,7 @@ export default function ItemModal({ item, categories, defaultCategoryId, onClose
                       : 'border-ink/10 text-ink-muted hover:bg-surface-overlay'
                   }`}
                 >
-                  {c === 'food' ? 'Food → Kitchen' : 'Beverage → Counter'}
+                  {c === 'food' ? 'Food → Barista' : 'Beverage → Counter'}
                 </button>
               ))}
             </div>

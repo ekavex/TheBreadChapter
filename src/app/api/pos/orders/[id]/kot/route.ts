@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (orderItems.length === 0) {
       return NextResponse.json({
         data: null,
-        error: isAddon ? 'No new items to send — add items first' : 'Add at least one item before sending to the kitchen',
+        error: isAddon ? 'No new items to send — add items first' : 'Add at least one item before sending to the barista',
       }, { status: 400 })
     }
 

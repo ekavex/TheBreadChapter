@@ -28,7 +28,7 @@ export default function DashboardMetrics({ orderCount, revenue, activeOrders, av
     {
       label: 'Active orders',
       value: activeOrders.toString(),
-      sub: 'in kitchen now',
+      sub: 'in barista now',
       accent: activeOrders > 5 ? 'text-red-500' : 'text-amber-500',
     },
   ]

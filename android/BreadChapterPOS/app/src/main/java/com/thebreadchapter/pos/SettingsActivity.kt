@@ -85,7 +85,7 @@ class SettingsActivity : AppCompatActivity() {
 
         btnTestKitchen.setOnClickListener {
             val device = spKitchen.selectedItem as? PrinterDevice
-            device?.let { testPrinter(it.mac, "Kitchen") }
+            device?.let { testPrinter(it.mac, "Barista") }
         }
 
         btnTestBev.setOnClickListener {
@@ -135,7 +135,7 @@ class SettingsActivity : AppCompatActivity() {
         val devices = mutableListOf<PrinterDevice>()
         
         // 1. Add known defaults at the top
-        devices.add(PrinterDevice("Kitchen Default", DEFAULT_KITCHEN_MAC))
+        devices.add(PrinterDevice("Barista Default", DEFAULT_KITCHEN_MAC))
         devices.add(PrinterDevice("Beverage Default", DEFAULT_BEVERAGE_MAC))
 
         // 2. Add paired devices

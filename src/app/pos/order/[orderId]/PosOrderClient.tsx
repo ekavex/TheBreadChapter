@@ -166,7 +166,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     }
   }
 
-  async function sendToKitchen() {
+  async function sendToBarista() {
     if (!order || (order.items ?? []).length === 0) return toast.error('Add at least one item first')
     setBusy(true)
     try {
@@ -179,7 +179,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       if (json.printerWarning) {
         toast(isAddon ? 'Add-on KOT sent — thermal printer offline' : 'KOT sent — thermal printer offline, check printer connection', { icon: '⚠️' })
       } else {
-        toast.success(isAddon ? 'Add-on KOT sent to kitchen' : 'Sent to kitchen — KOT printed')
+        toast.success(isAddon ? 'Add-on KOT sent to barista' : 'Sent to barista — KOT printed')
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send KOT')
@@ -534,11 +534,11 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
           <h2 className="font-display font-semibold text-ink text-sm">Order items</h2>
         </div>
 
-        {/* Items sent to kitchen (locked) */}
+        {/* Items sent to barista (locked) */}
         {isKotSent && sentItems.length > 0 && (
           <>
             <div className="px-5 py-2 bg-surface-overlay/50">
-              <p className="text-xs text-ink-faint uppercase tracking-wide font-medium">Sent to kitchen</p>
+              <p className="text-xs text-ink-faint uppercase tracking-wide font-medium">Sent to barista</p>
             </div>
             <div className="divide-y divide-ink/5">
               {sentItems.map((item) => (
@@ -679,11 +679,11 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             </button>
           )}
           <button
-            onClick={sendToKitchen}
+            onClick={sendToBarista}
             disabled={busy || items.length === 0}
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
           >
-            <Send size={16} /> Send to Kitchen
+            <Send size={16} /> Send to Barista
           </button>
         </div>
       )}
@@ -691,7 +691,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       {isKotSent && (
         <div className="space-y-2">
           <button
-            onClick={sendToKitchen}
+            onClick={sendToBarista}
             disabled={busy || addonItems.length === 0}
             className="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-400 bg-amber-50 text-amber-800 py-3 font-medium hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >

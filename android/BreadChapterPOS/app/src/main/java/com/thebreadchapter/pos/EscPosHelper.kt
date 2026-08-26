@@ -89,7 +89,7 @@ object EscPosHelper {
         w(text(DIV.trimEnd()))
         w(ALIGN_LEFT)
 
-        // Items — double-height for easy reading across the kitchen
+        // Items — double-height for easy reading across the barista station
         for (item in items) {
             val qty  = (item["quantity"] as? Number)?.toInt() ?: 1
             val name = (item["name"] as? String) ?: ""

@@ -42,7 +42,7 @@ export function printKot(order: OrderForPrint): void {
   }
 
   const blocks = [
-    ...(kitchenItems.length  > 0 ? [kotBlock('KITCHEN',  kitchenItems)]  : []),
+    ...(kitchenItems.length  > 0 ? [kotBlock('BARISTA',  kitchenItems)]  : []),
     ...(beverageItems.length > 0 ? [kotBlock('BEVERAGE', beverageItems)] : []),
   ]
   if (blocks.length === 0) return

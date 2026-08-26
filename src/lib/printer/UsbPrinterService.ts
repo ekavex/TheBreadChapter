@@ -27,7 +27,7 @@ function text(s: string): Buffer { return Buffer.from(s + '\n', 'utf8') }
 function buildPayload(ticket: KotTicket): Buffer {
   const time    = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   const shortId = ticket.orderId.slice(-6).toUpperCase()
-  const label   = ticket.station === 'kitchen' ? '** KITCHEN **' : '** BEVERAGE **'
+  const label   = ticket.station === 'kitchen' ? '** BARISTA **' : '** BEVERAGE **'
 
   const parts: Buffer[] = [
     CMD.INIT,
