@@ -21,6 +21,10 @@ export async function DELETE(req: NextRequest) {
       DELETE FROM order_items
       WHERE order_id IN (SELECT id FROM orders WHERE cafe_id = ${DEMO_CAFE_ID})
     `
+    await sql`
+      DELETE FROM stock_transactions
+      WHERE reference_order_id IN (SELECT id FROM orders WHERE cafe_id = ${DEMO_CAFE_ID})
+    `
     await sql`DELETE FROM orders WHERE cafe_id = ${DEMO_CAFE_ID}`
     await sql`UPDATE tables SET status = 'free' WHERE cafe_id = ${DEMO_CAFE_ID}`
 
