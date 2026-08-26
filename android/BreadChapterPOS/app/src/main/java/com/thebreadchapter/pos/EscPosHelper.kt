@@ -17,7 +17,8 @@ object EscPosHelper {
     private val ALIGN_LEFT    = byteArrayOf(0x1B, 0x61, 0x00)
     private val BOLD_ON       = byteArrayOf(0x1B, 0x45, 0x01)
     private val BOLD_OFF      = byteArrayOf(0x1B, 0x45, 0x00)
-    private val DOUBLE_HEIGHT = byteArrayOf(0x1B, 0x21, 0x10)
+    private val DOUBLE_HEIGHT = byteArrayOf(0x1B, 0x21, 0x10)  // tall, normal width (32 cols)
+    private val DOUBLE_SIZE   = byteArrayOf(0x1B, 0x21, 0x30)  // tall + wide (16 cols max)
     private val NORMAL_SIZE   = byteArrayOf(0x1B, 0x21, 0x00)
     private val FULL_CUT      = byteArrayOf(0x1D, 0x56, 0x00)
     private val LF            = byteArrayOf(0x0A)
@@ -72,32 +73,42 @@ object EscPosHelper {
 
         val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
         val shortId = orderId.takeLast(6).uppercase()
-        val stationLabel = if (station == "kitchen") "** KITCHEN **" else "** BEVERAGE **"
+        val totalCount = items.sumOf { (it["quantity"] as? Number)?.toInt() ?: 1 }
 
         w(INIT)
         w(ALIGN_CENTER)
+
+        // Table label — large and prominent (no station header)
         w(BOLD_ON)
-        w(DOUBLE_HEIGHT)
-        w(text(stationLabel))
+        w(DOUBLE_SIZE)
+        w(text("TABLE: $tableLabel"))
         w(NORMAL_SIZE)
         w(BOLD_OFF)
-        w(text("Table: $tableLabel  $time"))
-        w(text("Order #$shortId"))
+
+        w(text("$time  #$shortId"))
         w(text(DIV.trimEnd()))
         w(ALIGN_LEFT)
 
+        // Items — double-height for easy reading across the kitchen
         for (item in items) {
             val qty  = (item["quantity"] as? Number)?.toInt() ?: 1
             val name = (item["name"] as? String) ?: ""
             val prefix = "${qty.toString().padStart(2)}x  "
-            val namePadded = padRight(name, COLS - prefix.length)
+            val nameTrunc = name.take(COLS - prefix.length)
             w(BOLD_ON)
-            w(text(prefix + namePadded))
+            w(DOUBLE_HEIGHT)
+            w(text(prefix + nameTrunc))
+            w(NORMAL_SIZE)
             w(BOLD_OFF)
         }
 
+        // Total item count at the bottom
         w(ALIGN_CENTER)
         w(text(DIV.trimEnd()))
+        w(BOLD_ON)
+        w(text("Total: $totalCount item${if (totalCount == 1) "" else "s"}"))
+        w(BOLD_OFF)
+
         w(feed())
         w(FULL_CUT)
 
@@ -149,13 +160,20 @@ object EscPosHelper {
         // ── Header ────────────────────────────────────────────────────────────
         w(INIT)
         w(ALIGN_CENTER)
+        // Cafe name in double-width + double-height to fill 58mm paper width
         w(BOLD_ON)
-        w(DOUBLE_HEIGHT)
-        w(text("THE BREAD CHAPTER"))
+        w(DOUBLE_SIZE)
+        w(text("THE BREAD"))
+        w(text("CHAPTER"))
         w(NORMAL_SIZE)
         w(BOLD_OFF)
         w(text(DIV.trimEnd()))
+        // Table label — double-height for easy reading
+        w(BOLD_ON)
+        w(DOUBLE_HEIGHT)
         w(text("Table: $tableLabel"))
+        w(NORMAL_SIZE)
+        w(BOLD_OFF)
         w(text("Order #$shortId   $time"))
         w(text(DIV.trimEnd()))
 
@@ -169,14 +187,18 @@ object EscPosHelper {
             val prefix  = "${qty.toString().padStart(2)}x "
             val maxName = COLS - prefix.length - right.length - 1
             val nameTrunc = if (name.length > maxName) name.substring(0, maxName) else name
+            w(BOLD_ON)
             w(text(rowLine(prefix + nameTrunc, right)))
+            w(BOLD_OFF)
         }
 
         // ── Total ─────────────────────────────────────────────────────────────
         w(ALIGN_CENTER)
         w(text(DIV.trimEnd()))
         w(BOLD_ON)
+        w(DOUBLE_HEIGHT)
         w(text(rowLine("TOTAL", totalStr)))
+        w(NORMAL_SIZE)
         w(BOLD_OFF)
         w(text(DIV.trimEnd()))
 
@@ -188,10 +210,12 @@ object EscPosHelper {
         w(LF)
         w(qrCode(upiUrl, moduleSize = 6))
         w(LF)
+        // Net total below QR — large and bold
         w(BOLD_ON)
+        w(DOUBLE_HEIGHT)
         w(text(totalStr))
+        w(NORMAL_SIZE)
         w(BOLD_OFF)
-        w(text("Tell the waiter once paid"))
         w(text(DIV.trimEnd()))
 
         w(feed())
