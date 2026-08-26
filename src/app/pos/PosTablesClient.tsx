@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import {
@@ -27,17 +27,17 @@ const STATUS: Record<TableStatus, {
 }> = {
   free: {
     label: 'Available',
-    dot: 'bg-emerald-400',
-    card: 'hover:border-emerald-400 hover:shadow-lg border-slate-200',
-    badge: 'bg-emerald-50 text-emerald-700',
-    tableColor: '#f0fdf4', tableBorder: '#4ade80', seatColor: '#bbf7d0',
+    dot: 'bg-slate-400',
+    card: 'hover:border-slate-400 hover:shadow-lg border-slate-200',
+    badge: 'bg-slate-100 text-slate-600',
+    tableColor: '#f8fafc', tableBorder: '#94a3b8', seatColor: '#e2e8f0',
   },
   occupied: {
     label: 'Occupied',
-    dot: 'bg-amber-400',
-    card: 'border-amber-300 bg-amber-50/60 hover:shadow-lg',
-    badge: 'bg-amber-100 text-amber-700',
-    tableColor: '#fffbeb', tableBorder: '#f59e0b', seatColor: '#fde68a',
+    dot: 'bg-emerald-500',
+    card: 'border-emerald-300 bg-emerald-50/60 hover:shadow-lg',
+    badge: 'bg-emerald-100 text-emerald-700',
+    tableColor: '#f0fdf4', tableBorder: '#34d399', seatColor: '#a7f3d0',
   },
   kot_sent: {
     label: 'KOT Sent',
@@ -245,7 +245,7 @@ function TableCard({
 
         {/* Status pulse dot (free only) */}
         {!manageMode && table.status === 'free' && (
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-slate-400 animate-pulse" />
         )}
 
         {/* Loading overlay */}
@@ -441,6 +441,10 @@ function StatusLegend() {
 export default function PosTablesClient({ bySection }: Props) {
   const router = useRouter()
   const [opening,      setOpening]      = useState<string | null>(null)
+
+  // Force-refresh server data on mount so table statuses are always current
+  // (Next.js router cache may serve a stale RSC payload after navigation back).
+  useEffect(() => { router.refresh() }, [])
   const [activeSection, setActiveSection] = useState<number | 'all'>('all')
   const [manageMode,   setManageMode]   = useState(false)
   const [editingTable, setEditingTable] = useState<(Table & { shape?: string }) | null | undefined>(undefined)
@@ -522,10 +526,10 @@ export default function PosTablesClient({ bySection }: Props) {
           <div className="flex items-center gap-3">
             {!manageMode && (
               <div className="hidden sm:flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full">
+                <span className="flex items-center gap-1.5 text-xs font-medium bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full">
                   <CheckCircle2 size={12} /> {counts.free} Free
                 </span>
-                <span className="flex items-center gap-1.5 text-xs font-medium bg-amber-50 text-amber-700 px-3 py-1.5 rounded-full">
+                <span className="flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full">
                   <UtensilsCrossed size={12} /> {counts.occupied + counts.kot_sent} Active
                 </span>
                 <span className="flex items-center gap-1.5 text-xs font-medium bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full">

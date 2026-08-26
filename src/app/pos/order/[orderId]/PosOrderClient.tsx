@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode } from 'lucide-react'
+import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode, Plus, Minus } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table } from '@/lib/types'
 
 function ConfirmDialog({ title, message, confirmLabel = 'Confirm', onConfirm, onCancel }: {
@@ -147,6 +147,20 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       await refreshOrder()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove item')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function decreaseItem(orderItemId: string, currentQty: number) {
+    if (!order) return
+    setBusy(true)
+    try {
+      const newQty = currentQty - 1
+      const updated = await api<Order>(`/api/pos/orders/${order.id}/items/${orderItemId}`, 'PATCH', { quantity: newQty })
+      setOrder(updated)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update item')
     } finally {
       setBusy(false)
     }
@@ -386,6 +400,13 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     ? allCategoryItems.filter((i) => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : (categories.find((c) => c.id === activeCategory)?.items ?? [])
 
+  // Map menuItemId → { orderItemId, quantity } for the +/- buttons on menu cards
+  const menuItemQty = new Map<string, { id: string; qty: number }>()
+  for (const item of items) {
+    const mid = (item as unknown as { menu_item_id: string }).menu_item_id
+    if (mid) menuItemQty.set(mid, { id: item.id, qty: item.quantity })
+  }
+
   // Split items into already-sent vs add-on (added after last kot_sent_at)
   const kotSentAt = order?.kot_sent_at ? new Date(order.kot_sent_at as string) : null
   const sentItems = isKotSent && kotSentAt
@@ -455,20 +476,51 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             </div>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {activeCategoryItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => addItem(item)}
-                disabled={busy}
-                className="text-left bg-surface-raised border border-ink/5 rounded-xl p-3 hover:border-ink/20 transition-colors disabled:opacity-50"
-              >
-                <p className="text-sm font-medium text-ink leading-tight">{item.name}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-ink-faint capitalize">{item.category}</span>
-                  <span className="text-sm font-semibold text-ink">₹{item.price}</span>
+            {activeCategoryItems.map((item) => {
+              const entry = menuItemQty.get(item.id)
+              const qty = entry?.qty ?? 0
+              return (
+                <div
+                  key={item.id}
+                  className={`bg-surface-raised border rounded-xl p-3 transition-colors ${qty > 0 ? 'border-brand-300 bg-brand-50/40' : 'border-ink/5'}`}
+                >
+                  <p className="text-sm font-medium text-ink leading-tight">{item.name}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-ink-faint capitalize">{item.category}</span>
+                    <span className="text-sm font-semibold text-ink">₹{item.price}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    {qty > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => entry && decreaseItem(entry.id, entry.qty)}
+                          disabled={busy}
+                          className="w-7 h-7 rounded-lg bg-white border border-ink/15 flex items-center justify-center text-ink-muted hover:text-red-600 hover:border-red-300 disabled:opacity-40 transition-colors"
+                        >
+                          <Minus size={13} />
+                        </button>
+                        <span className="text-sm font-bold text-ink w-4 text-center">{qty}</span>
+                        <button
+                          onClick={() => addItem(item)}
+                          disabled={busy}
+                          className="w-7 h-7 rounded-lg bg-ink text-surface flex items-center justify-center disabled:opacity-40 hover:opacity-80 transition-opacity"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addItem(item)}
+                        disabled={busy}
+                        className="ml-auto w-7 h-7 rounded-lg bg-ink text-surface flex items-center justify-center disabled:opacity-40 hover:opacity-80 transition-opacity"
+                      >
+                        <Plus size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </button>
-            ))}
+              )
+            })}
             {activeCategoryItems.length === 0 && (
               <p className="text-sm text-ink-faint col-span-full">No available items in this category.</p>
             )}
@@ -684,7 +736,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
           </div>
 
           {paymentMode === 'upi_qr' ? (
-            // UPI QR flow: print first, then confirm.
+            // UPI QR flow: print bill, then confirm payment.
             <div className="space-y-2">
               <button
                 onClick={printQrBill}
@@ -694,19 +746,17 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                 <QrCode size={16} />
                 {busy ? 'Sending…' : qrBillSent ? 'Reprint QR Bill' : 'Print QR Bill at Counter'}
               </button>
-              {qrBillSent && (
-                <button
-                  onClick={pay}
-                  disabled={busy}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 text-white py-3 font-medium disabled:opacity-50"
-                >
-                  <CheckCircle2 size={16} />
-                  {busy ? 'Recording…' : `Confirm UPI Received · ₹${order?.total_amount}`}
-                </button>
-              )}
+              <button
+                onClick={pay}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 text-white py-3 font-medium disabled:opacity-50"
+              >
+                <CheckCircle2 size={16} />
+                {busy ? 'Recording…' : `Confirm UPI Received · ₹${order?.total_amount}`}
+              </button>
               {!qrBillSent && (
                 <p className="text-xs text-ink-faint text-center">
-                  Print the bill — the customer scans the QR and pays. Tap confirm once you see the payment.
+                  Print the bill first — the customer scans the QR and pays.
                 </p>
               )}
             </div>
