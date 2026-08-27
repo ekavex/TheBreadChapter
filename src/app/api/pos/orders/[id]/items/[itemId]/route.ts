@@ -14,17 +14,20 @@ async function fetchOrderWithDetails(orderId: string) {
   return { ...order, items, table }
 }
 
-// PATCH /api/pos/orders/[id]/items/[itemId] — set new quantity (decrease by 1 from client).
-// If quantity reaches 0, the item is deleted.
+// PATCH /api/pos/orders/[id]/items/[itemId]
+// Accepts { quantity } to change qty, { addons } to update add-ons, or both.
+// Deletes the item when quantity reaches 0.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string; itemId: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
 
   try {
-    const { quantity } = await req.json()
-    const newQty = Number(quantity)
-    if (!Number.isFinite(newQty) || newQty < 0) {
-      return NextResponse.json({ data: null, error: 'quantity must be a non-negative number' }, { status: 400 })
+    const body = await req.json()
+    const hasQuantity = 'quantity' in body
+    const hasAddons = 'addons' in body
+
+    if (!hasQuantity && !hasAddons) {
+      return NextResponse.json({ data: null, error: 'Provide quantity or addons to update' }, { status: 400 })
     }
 
     const sql = getDb()
@@ -34,20 +37,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ data: null, error: `Items are locked — order is already ${order.pos_status}` }, { status: 409 })
     }
 
+    const [item] = await sql`SELECT * FROM order_items WHERE id = ${params.itemId} AND order_id = ${params.id}`
+    if (!item) return NextResponse.json({ data: null, error: 'Item not found' }, { status: 404 })
+
     if (order.pos_status === 'KOT_SENT' && order.kot_sent_at) {
-      const [item] = await sql`SELECT created_at FROM order_items WHERE id = ${params.itemId} AND order_id = ${params.id}`
-      if (!item) return NextResponse.json({ data: null, error: 'Item not found' }, { status: 404 })
       if (new Date(item.created_at) <= new Date(order.kot_sent_at)) {
         return NextResponse.json({ data: null, error: 'Cannot modify items already sent to kitchen' }, { status: 409 })
       }
     }
 
+    const newQty = hasQuantity ? Number(body.quantity) : (item.quantity as number)
+    if (hasQuantity && (!Number.isFinite(newQty) || newQty < 0)) {
+      return NextResponse.json({ data: null, error: 'quantity must be a non-negative number' }, { status: 400 })
+    }
+
     if (newQty === 0) {
       await sql`DELETE FROM order_items WHERE id = ${params.itemId} AND order_id = ${params.id}`
     } else {
-      const [item] = await sql`SELECT price FROM order_items WHERE id = ${params.itemId} AND order_id = ${params.id}`
-      if (!item) return NextResponse.json({ data: null, error: 'Item not found' }, { status: 404 })
-      await sql`UPDATE order_items SET quantity = ${newQty}, subtotal = ${newQty * item.price} WHERE id = ${params.itemId} AND order_id = ${params.id}`
+      const addonsList: { id: string; name: string; price: number }[] = hasAddons && Array.isArray(body.addons)
+        ? body.addons
+        : ((item.addons_json as { id: string; name: string; price: number }[] | null) ?? [])
+      const addonTotal = addonsList.reduce((s: number, a: { price: number }) => s + (Number(a.price) || 0), 0)
+      const newSubtotal = (Number(item.price) + addonTotal) * newQty
+
+      await sql`
+        UPDATE order_items
+        SET quantity    = ${newQty},
+            addons_json = ${sql.json(addonsList)},
+            subtotal    = ${newSubtotal}
+        WHERE id = ${params.itemId} AND order_id = ${params.id}
+      `
     }
 
     const updatedOrder = await fetchOrderWithDetails(params.id)

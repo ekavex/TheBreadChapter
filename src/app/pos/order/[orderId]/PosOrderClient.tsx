@@ -98,6 +98,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [activeItemId, setActiveItemId] = useState<string | null>(null)
   // True while the terminal still has the transaction open — the screen tracks
   // it automatically so the cashier never has to poll by hand.
   const [autoTracking, setAutoTracking] = useState(false)
@@ -137,8 +138,12 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         customisation: note || null,
       })
       setOrder(updated)
-      // Update URL only after the item is in the DB, so the server-rendered
-      // page at the new URL already has the item when Next.js fetches it.
+      // Track which item is "active" for addon toggling — pick the matching
+      // item with the latest created_at (covers merge-into-existing and new lines).
+      const matches = ((updated.items ?? []) as Record<string, unknown>[])
+        .filter(i => i.menu_item_id === item.id)
+        .sort((a, b) => new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime())
+      if (matches[0]) setActiveItemId(matches[0].id as string)
       if (isNewOrder) router.replace(`/pos/order/${orderId}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add item')
@@ -188,6 +193,29 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       setOrder(updated)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update item')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleAddon(addon: Addon) {
+    if (!order || !activeItemId) {
+      toast('Tap a menu item first, then select add-ons', { icon: 'ℹ️' })
+      return
+    }
+    const activeItem = ((order.items ?? []) as Record<string, unknown>[]).find(i => i.id === activeItemId)
+    if (!activeItem) return
+    const current: { id: string; name: string; price: number }[] = (activeItem.addons_json as { id: string; name: string; price: number }[] | null) ?? []
+    const exists = current.some(a => a.id === addon.id)
+    const newAddons = exists
+      ? current.filter(a => a.id !== addon.id)
+      : [...current, { id: addon.id, name: addon.name, price: addon.price }]
+    setBusy(true)
+    try {
+      const updated = await api<Order>(`/api/pos/orders/${order.id}/items/${activeItemId}`, 'PATCH', { addons: newAddons })
+      setOrder(updated)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update add-on')
     } finally {
       setBusy(false)
     }
@@ -562,22 +590,41 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             <MessageSquare size={13} className="text-ink-faint" />
             <h2 className="font-display font-semibold text-ink text-sm">Customer suggestions</h2>
           </div>
-          {addons.filter(a => a.is_active).length > 0 && (
-            <div className="px-4 pt-3 pb-0">
-              <p className="text-xs font-medium text-ink-muted mb-2">Available add-ons</p>
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {addons.filter(a => a.is_active).map(a => (
-                  <span
-                    key={a.id}
-                    className="inline-flex items-center gap-1 text-xs bg-surface-overlay border border-ink/8 text-ink-muted px-2 py-0.5 rounded-full"
-                  >
-                    {a.name}{a.price > 0 && <span className="text-ink-faint">+₹{a.price}</span>}
-                  </span>
-                ))}
+          {addons.filter(a => a.is_active).length > 0 && (() => {
+            const activeItem = activeItemId
+              ? ((order?.items ?? []) as Record<string, unknown>[]).find(i => i.id === activeItemId)
+              : null
+            const activeAddons = new Set<string>(
+              ((activeItem?.addons_json as { id: string }[] | null) ?? []).map(a => a.id)
+            )
+            return (
+              <div className="px-4 pt-3 pb-0">
+                <p className="text-xs font-medium text-ink-muted mb-2">
+                  Add-ons{activeItem ? <span className="text-brand-500"> → {activeItem.name as string}</span> : <span className="text-ink-faint"> (tap an item first)</span>}
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {addons.filter(a => a.is_active).map(a => {
+                    const selected = activeAddons.has(a.id)
+                    return (
+                      <button
+                        key={a.id}
+                        onClick={() => toggleAddon(a)}
+                        disabled={busy}
+                        className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          selected
+                            ? 'bg-brand-500 border-brand-500 text-white font-medium'
+                            : 'bg-surface-overlay border-ink/10 text-ink-muted hover:border-brand-300 hover:text-brand-600'
+                        }`}
+                      >
+                        {a.name}{a.price > 0 && <span className={selected ? 'text-white/80' : 'text-ink-faint'}>+₹{a.price}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="border-t border-ink/5 mb-3" />
               </div>
-              <div className="border-t border-ink/5 mb-3" />
-            </div>
-          )}
+            )
+          })()}
           <div className="px-4 pb-4">
             <textarea
               value={customerNote}
