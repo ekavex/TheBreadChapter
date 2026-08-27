@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
-import { ChevronDown, ArrowRight } from 'lucide-react'
-import type { Order, OrderStatus } from '@/lib/types'
+import { ChevronDown, ArrowRight, X, Printer, FileDown, ChevronRight } from 'lucide-react'
+import type { Order, OrderStatus, OrderItem } from '@/lib/types'
 import toast from 'react-hot-toast'
 
 const STATUSES: OrderStatus[] = ['pending', 'confirmed', 'making', 'ready', 'served', 'completed', 'cancelled']
@@ -33,9 +33,265 @@ interface Props {
   activeStatus: string
 }
 
+// ─── Order detail popup print ────────────────────────────────────────────────
+
+function buildReceiptHtml(order: Order): string {
+  const tableInfo = (order as any).table
+  const tableLabel = tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : 'Takeaway')
+  const shortId = order.id.slice(-6).toUpperCase()
+  const items: OrderItem[] = (order.items ?? []) as OrderItem[]
+  const note = (order as any).customer_note as string | null | undefined
+
+  const itemRows = items.map((item) => {
+    const addons = ((item as any).addons_json ?? []) as { name: string }[]
+    const addonLine = addons.length > 0
+      ? `<div class="addon">${addons.map(a => escHtml(a.name)).join(', ')}</div>`
+      : ''
+    return `
+      <div class="item-row">
+        <span class="item-qty">${item.quantity}×</span>
+        <span class="item-name">${escHtml(item.name)}</span>
+        <span class="item-price">₹${Math.round((item as any).subtotal ?? 0)}</span>
+      </div>${addonLine}`
+  }).join('')
+
+  const noteBlock = note?.trim()
+    ? `<div class="div-line"></div><div class="note"><b>Note:</b> ${escHtml(note.trim())}</div>`
+    : ''
+
+  const payMethod = order.payment_status === 'paid' ? `Paid · ${(order as any).payment_method ?? 'UPI'}` : 'Unpaid'
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Receipt · ${order.order_number}</title>
+<style>
+  @page { size: 80mm auto; margin: 4mm 3mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; background: #fff; width: 74mm; }
+  .center { text-align: center; }
+  .cafe-name { font-size: 18px; font-weight: 900; letter-spacing: 1px; text-align: center; margin-bottom: 2px; }
+  .meta { font-size: 10px; color: #444; text-align: center; margin: 1px 0; }
+  .div-line { border-top: 1px dashed #888; margin: 4px 0; }
+  .section-label { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: .5px; color: #666; margin: 4px 0 2px; }
+  .item-row { display: flex; gap: 4px; margin: 2px 0; font-weight: bold; font-size: 12px; }
+  .item-qty { min-width: 20px; flex-shrink: 0; }
+  .item-name { flex: 1; word-break: break-word; }
+  .item-price { flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .addon { font-size: 10px; font-weight: normal; color: #444; padding-left: 24px; margin-bottom: 2px; }
+  .note { font-size: 10px; margin: 3px 0; word-break: break-word; }
+  .total-row { display: flex; justify-content: space-between; font-size: 15px; font-weight: 900; margin: 3px 0; font-variant-numeric: tabular-nums; }
+  .payment-line { font-size: 10px; text-align: center; margin-top: 4px; color: #444; }
+  .footer { font-size: 9px; text-align: center; color: #888; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="cafe-name">THE BREAD CHAPTER</div>
+  <div class="div-line"></div>
+  <div class="meta"><b>${tableLabel}</b></div>
+  <div class="meta">Order ${order.order_number} · #${shortId}</div>
+  <div class="meta">${format(new Date(order.created_at), 'd MMM yyyy, h:mm a')}</div>
+  <div class="div-line"></div>
+  <div class="section-label">Items</div>
+  ${itemRows}
+  ${noteBlock}
+  <div class="div-line"></div>
+  <div class="total-row"><span>TOTAL</span><span>₹${Math.round(order.total_amount)}</span></div>
+  <div class="div-line"></div>
+  <div class="payment-line">${payMethod}</div>
+  <div class="footer">Thank you for visiting!</div>
+</body>
+</html>`
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function printOrder(order: Order) {
+  const html = buildReceiptHtml(order)
+  const win = window.open('', '_blank', 'width=320,height=600')
+  if (!win) { toast.error('Pop-up blocked — allow pop-ups and try again'); return }
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  setTimeout(() => { win.print() }, 300)
+}
+
+function downloadPdf(order: Order) {
+  const html = buildReceiptHtml(order)
+  const win = window.open('', '_blank', 'width=320,height=600')
+  if (!win) { toast.error('Pop-up blocked — allow pop-ups and try again'); return }
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  // Print dialog → user selects "Save as PDF"
+  setTimeout(() => { win.print() }, 300)
+}
+
+// ─── Order detail drawer ─────────────────────────────────────────────────────
+
+function OrderDetailDrawer({ order, onClose, onAdvance, advancing }: {
+  order: Order
+  onClose: () => void
+  onAdvance: (order: Order) => void
+  advancing: boolean
+}) {
+  const items: OrderItem[] = (order.items ?? []) as OrderItem[]
+  const tableInfo = (order as any).table
+  const tableLabel = tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : 'Takeaway')
+  const nextStatus = NEXT_STATUS[order.status]
+  const note = (order as any).customer_note as string | null | undefined
+
+  const subtotal = items.reduce((s, i) => s + ((i as any).subtotal ?? 0), 0)
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Drawer */}
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-surface shadow-2xl flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-ink/5 bg-surface-raised shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-display font-bold text-ink text-base">{order.order_number}</span>
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${STATUS_STYLE[order.status]}`}>
+                {order.status}
+              </span>
+              {order.payment_status === 'paid' && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                  paid
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-ink-muted mt-0.5">
+              {tableLabel} · {format(new Date(order.created_at), 'd MMM, h:mm a')}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-ink-muted hover:bg-surface-overlay transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+          {/* Items */}
+          <div className="bg-surface-raised rounded-2xl border border-ink/5 overflow-hidden">
+            <div className="px-4 py-2.5 bg-surface-overlay border-b border-ink/5">
+              <p className="text-xs font-semibold text-ink-faint uppercase tracking-wide">Items</p>
+            </div>
+            <div className="divide-y divide-ink/5">
+              {items.length === 0 && (
+                <p className="px-4 py-3 text-sm text-ink-faint">No items</p>
+              )}
+              {items.map((item, i) => {
+                const addons = ((item as any).addons_json ?? []) as { name: string }[]
+                return (
+                  <div key={(item as any).id ?? i} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex gap-2 flex-1 min-w-0">
+                        <span className="text-xs font-bold text-ink-muted bg-surface-overlay px-1.5 py-0.5 rounded shrink-0 mt-0.5">
+                          ×{item.quantity}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-ink leading-tight">{item.name}</p>
+                          {addons.length > 0 && (
+                            <p className="text-xs text-ink-muted mt-0.5">{addons.map(a => a.name).join(' · ')}</p>
+                          )}
+                          {(item as any).customisation && (
+                            <p className="text-xs text-ink-faint italic mt-0.5">{(item as any).customisation}</p>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-ink shrink-0">
+                        ₹{Math.round((item as any).subtotal ?? 0)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Customer note */}
+          {note?.trim() && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl px-4 py-3">
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Customer note</p>
+              <p className="text-sm text-amber-800 dark:text-amber-300">{note.trim()}</p>
+            </div>
+          )}
+
+          {/* Total */}
+          <div className="bg-surface-raised rounded-2xl border border-ink/5 px-4 py-3 space-y-2">
+            {subtotal !== order.total_amount && (
+              <div className="flex justify-between text-sm text-ink-muted">
+                <span>Subtotal</span>
+                <span>₹{Math.round(subtotal)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-ink">
+              <span>Total</span>
+              <span>₹{Math.round(order.total_amount)}</span>
+            </div>
+            <div className="border-t border-ink/5 pt-2 flex justify-between text-xs text-ink-muted">
+              <span>Payment</span>
+              <span className="capitalize">{order.payment_status === 'paid' ? `Paid · ${(order as any).payment_method ?? 'UPI'}` : order.payment_status}</span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Footer actions */}
+        <div className="shrink-0 border-t border-ink/5 bg-surface-raised px-5 py-4 flex items-center gap-3">
+          {nextStatus && (
+            <button
+              onClick={() => onAdvance(order)}
+              disabled={advancing}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium disabled:opacity-50 hover:bg-brand-600 transition-colors"
+            >
+              <ChevronRight size={14} />
+              {advancing ? 'Updating…' : `Mark ${nextStatus}`}
+            </button>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <button
+              onClick={() => printOrder(order)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-ink/10 text-sm text-ink-muted hover:bg-surface-overlay transition-colors"
+              title="Print receipt"
+            >
+              <Printer size={14} /> Print
+            </button>
+            <button
+              onClick={() => downloadPdf(order)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-ink/10 text-sm text-ink-muted hover:bg-surface-overlay transition-colors"
+              title="Save as PDF"
+            >
+              <FileDown size={14} /> PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
+
 export default function OrdersClient({ orders, currentDate, availableDates, activeStatus }: Props) {
   const router = useRouter()
   const [updating, setUpdating] = useState<string | null>(null)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
   const filtered = activeStatus === 'all'
     ? orders
@@ -62,6 +318,8 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
       const { error } = await res.json()
       if (error) throw new Error(error)
       toast.success(`${order.order_number} → ${next}`)
+      // Update selected order state too
+      setSelectedOrder(prev => prev?.id === order.id ? { ...prev, status: next } : prev)
       router.refresh()
     } catch {
       toast.error('Status update failed')
@@ -146,13 +404,17 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
                     const nextStatus = NEXT_STATUS[order.status]
                     const tableInfo = (order as any).table
                     return (
-                      <tr key={order.id} className="hover:bg-surface-overlay/50 transition-colors">
+                      <tr
+                        key={order.id}
+                        onClick={() => setSelectedOrder(order)}
+                        className="hover:bg-surface-overlay/50 transition-colors cursor-pointer"
+                      >
                         <td className="px-5 py-3.5">
                           <span className="font-semibold text-ink">{order.order_number}</span>
                           <p className="text-xs text-ink-faint mt-0.5">{format(new Date(order.created_at), 'h:mm a')}</p>
                         </td>
                         <td className="px-4 py-3.5 text-ink-muted">
-                          {tableInfo ? `Table ${tableInfo.number}` : '—'}
+                          {tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : '—')}
                         </td>
                         <td className="px-4 py-3.5">
                           <span className="text-ink-muted">{(order.items ?? []).length} items</span>
@@ -165,7 +427,7 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
                         <td className="px-5 py-3.5 text-right font-semibold text-ink">
                           ₹{Math.round(order.total_amount)}
                         </td>
-                        <td className="px-4 py-3.5">
+                        <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                           {nextStatus && (
                             <button
                               onClick={() => advanceStatus(order)}
@@ -190,11 +452,17 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
               const nextStatus = NEXT_STATUS[order.status]
               const tableInfo = (order as any).table
               return (
-                <div key={order.id} className="bg-surface-raised rounded-2xl border border-ink/5 p-4">
+                <div
+                  key={order.id}
+                  onClick={() => setSelectedOrder(order)}
+                  className="bg-surface-raised rounded-2xl border border-ink/5 p-4 cursor-pointer active:scale-[.99] transition-transform"
+                >
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div>
                       <span className="font-semibold text-ink">{order.order_number}</span>
-                      <p className="text-xs text-ink-faint mt-0.5">{format(new Date(order.created_at), 'h:mm a')} · {tableInfo ? `Table ${tableInfo.number}` : 'No table'}</p>
+                      <p className="text-xs text-ink-faint mt-0.5">
+                        {format(new Date(order.created_at), 'h:mm a')} · {tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : 'Takeaway')}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_STYLE[order.status]}`}>
@@ -204,7 +472,7 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-ink-muted">{(order.items ?? []).length} items</span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
                       <span className="font-semibold text-ink">₹{Math.round(order.total_amount)}</span>
                       {nextStatus && (
                         <button
@@ -224,6 +492,16 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
             })}
           </div>
         </>
+      )}
+
+      {/* Order detail drawer */}
+      {selectedOrder && (
+        <OrderDetailDrawer
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onAdvance={advanceStatus}
+          advancing={updating === selectedOrder.id}
+        />
       )}
     </div>
   )
