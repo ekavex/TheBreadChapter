@@ -111,23 +111,23 @@ function escHtml(s: string): string {
 
 function printOrder(order: Order) {
   const html = buildReceiptHtml(order)
-  const win = window.open('', '_blank', 'width=320,height=600')
-  if (!win) { toast.error('Pop-up blocked — allow pop-ups and try again'); return }
-  win.document.write(html)
-  win.document.close()
-  win.focus()
-  setTimeout(() => { win.print() }, 300)
+  const existing = document.getElementById('__receipt_print_frame__')
+  if (existing) existing.remove()
+  const iframe = document.createElement('iframe')
+  iframe.id = '__receipt_print_frame__'
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;opacity:0'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentDocument ?? iframe.contentWindow?.document
+  if (!doc) { toast.error('Print not supported'); return }
+  doc.open(); doc.write(html); doc.close()
+  setTimeout(() => {
+    iframe.contentWindow?.print()
+    setTimeout(() => iframe.remove(), 2000)
+  }, 300)
 }
 
-function downloadPdf(order: Order) {
-  const html = buildReceiptHtml(order)
-  const win = window.open('', '_blank', 'width=320,height=600')
-  if (!win) { toast.error('Pop-up blocked — allow pop-ups and try again'); return }
-  win.document.write(html)
-  win.document.close()
-  win.focus()
-  // Print dialog → user selects "Save as PDF"
-  setTimeout(() => { win.print() }, 300)
+function downloadReceipt(orderId: string) {
+  window.location.assign(`/api/orders/${orderId}/receipt`)
 }
 
 // ─── Order detail drawer ─────────────────────────────────────────────────────
@@ -273,11 +273,11 @@ function OrderDetailDrawer({ order, onClose, onAdvance, advancing }: {
               <Printer size={14} /> Print
             </button>
             <button
-              onClick={() => downloadPdf(order)}
+              onClick={() => downloadReceipt(order.id)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-ink/10 text-sm text-ink-muted hover:bg-surface-overlay transition-colors"
-              title="Save as PDF"
+              title="Download receipt"
             >
-              <FileDown size={14} /> PDF
+              <FileDown size={14} /> Download
             </button>
           </div>
         </div>
