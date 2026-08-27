@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode, Plus, Minus, Check, MessageSquare } from 'lucide-react'
+import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode, Plus, Minus, MessageSquare } from 'lucide-react'
 import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table, Addon, OrderItemAddon } from '@/lib/types'
 
 function ConfirmDialog({ title, message, confirmLabel = 'Confirm', onConfirm, onCancel }: {
@@ -40,85 +40,6 @@ function ConfirmDialog({ title, message, confirmLabel = 'Confirm', onConfirm, on
   )
 }
 
-function AddonModal({
-  item,
-  addons,
-  onConfirm,
-  onCancel,
-}: {
-  item: MenuItem
-  addons: Addon[]
-  onConfirm: (selectedAddons: OrderItemAddon[], note: string) => void
-  onCancel: () => void
-}) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [note, setNote] = useState('')
-
-  const selectedList: OrderItemAddon[] = addons
-    .filter((a) => selected.has(a.id))
-    .map((a) => ({ id: a.id, name: a.name, price: a.price }))
-  const addonTotal = selectedList.reduce((s, a) => s + a.price, 0)
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-ink/5">
-          <h3 className="font-display font-semibold text-ink">{item.name}</h3>
-          <p className="text-xs text-ink-muted mt-0.5">₹{item.price} · select add-ons (optional)</p>
-        </div>
-        <div className="p-4 space-y-2 max-h-56 overflow-y-auto">
-          {addons.map((addon) => (
-            <button
-              key={addon.id}
-              onClick={() => toggle(addon.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
-                selected.has(addon.id) ? 'border-brand-400 bg-brand-50/60' : 'border-ink/10 hover:border-ink/20'
-              }`}
-            >
-              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                selected.has(addon.id) ? 'border-brand-500 bg-brand-500' : 'border-ink/30'
-              }`}>
-                {selected.has(addon.id) && <Check size={9} className="text-white" />}
-              </div>
-              <span className="flex-1 text-sm text-ink">{addon.name}</span>
-              {addon.price > 0 && <span className="text-xs font-medium text-ink-muted">+₹{addon.price}</span>}
-            </button>
-          ))}
-        </div>
-        <div className="px-4 pb-3">
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Special request for this item (optional)…"
-            rows={2}
-            className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ink/20"
-          />
-        </div>
-        <div className="flex border-t border-ink/5">
-          <button onClick={onCancel} className="flex-1 py-3.5 text-sm font-medium text-ink-muted hover:bg-surface-overlay transition-colors">
-            Cancel
-          </button>
-          <div className="w-px bg-ink/5" />
-          <button
-            onClick={() => onConfirm(selectedList, note.trim())}
-            className="flex-1 py-3.5 text-sm font-semibold text-ink hover:bg-surface-overlay transition-colors"
-          >
-            Add{addonTotal > 0 ? ` · ₹${item.price + addonTotal}` : ''}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 interface Props {
   initialOrder: Order | null
@@ -177,7 +98,6 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [addonModal, setAddonModal] = useState<MenuItem | null>(null)
   // True while the terminal still has the transaction open — the screen tracks
   // it automatically so the cashier never has to poll by hand.
   const [autoTracking, setAutoTracking] = useState(false)
@@ -232,8 +152,6 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     if (entry && entry.qty > 0) {
       // Already in order — increment directly without modal
       void addItem(item)
-    } else if (addons.length > 0) {
-      setAddonModal(item)
     } else {
       void addItem(item)
     }
@@ -1024,17 +942,6 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         />
       )}
 
-      {addonModal && (
-        <AddonModal
-          item={addonModal}
-          addons={addons}
-          onConfirm={(selectedAddons, note) => {
-            setAddonModal(null)
-            void addItem(addonModal, selectedAddons, note)
-          }}
-          onCancel={() => setAddonModal(null)}
-        />
-      )}
     </div>
   )
 }
