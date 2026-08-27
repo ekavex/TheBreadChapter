@@ -50,8 +50,8 @@ export function printKot(order: OrderForPrint): void {
   }
 
   const blocks = [
-    ...(kitchenItems.length  > 0 ? [kotBlock('BARISTA',  kitchenItems)]  : []),
-    ...(beverageItems.length > 0 ? [kotBlock('BEVERAGE', beverageItems)] : []),
+    ...(kitchenItems.length  > 0 ? [kotBlock('KITCHEN', kitchenItems)]  : []),
+    ...(beverageItems.length > 0 ? [kotBlock('BARISTA', beverageItems)] : []),
   ]
   if (blocks.length === 0) return
 

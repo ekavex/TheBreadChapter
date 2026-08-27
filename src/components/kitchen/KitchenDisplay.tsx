@@ -126,7 +126,7 @@ export default function KitchenDisplay({ cafeId }: Props) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center gap-3">
         <ChefHat size={24} className="text-slate-500 animate-pulse" />
-        <p className="text-slate-400 text-lg">Loading barista display…</p>
+        <p className="text-slate-400 text-lg">Loading kitchen display…</p>
       </div>
     )
   }
@@ -148,7 +148,7 @@ export default function KitchenDisplay({ cafeId }: Props) {
 
         <div className="flex items-center gap-2">
           <ChefHat size={18} className="text-amber-400" />
-          <span className="font-display font-bold text-white">Barista Display</span>
+          <span className="font-display font-bold text-white">Kitchen Display</span>
           <span className="text-slate-600 text-sm">· The Bread Chapter</span>
         </div>
 

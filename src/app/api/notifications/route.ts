@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
           id: `stuck-${o.id}`,
           severity: 'warning',
           title: `Order ${o.order_number} is waiting`,
-          body: `Status "${o.status}" for ${mins} min — check the barista station.`,
+          body: `Status "${o.status}" for ${mins} min — check the kitchen station.`,
           href: '/dashboard/orders',
           createdAt: now,
         })

@@ -627,7 +627,7 @@ export default function AdminClient() {
         <div className="p-4 bg-surface-raised rounded-2xl border border-ink/8 text-sm text-ink-muted space-y-2">
           <p>Printing is handled by the <strong className="text-ink">Android APK print bridge</strong> on the tablet — no server-side configuration needed.</p>
           <p>To configure printers: open the APK → long-press anywhere → tap the gear icon → enter the Bluetooth MAC address for each printer.</p>
-          <p className="text-xs text-ink-faint">Barista printer and beverage counter printer are configured separately in the APK settings.</p>
+          <p className="text-xs text-ink-faint">Kitchen printer and Barista printer are configured separately in the APK settings.</p>
         </div>
       </div>
 

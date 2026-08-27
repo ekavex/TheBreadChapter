@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const [item] = await sql`SELECT created_at FROM order_items WHERE id = ${params.itemId} AND order_id = ${params.id}`
       if (!item) return NextResponse.json({ data: null, error: 'Item not found' }, { status: 404 })
       if (new Date(item.created_at) <= new Date(order.kot_sent_at)) {
-        return NextResponse.json({ data: null, error: 'Cannot modify items already sent to barista' }, { status: 409 })
+        return NextResponse.json({ data: null, error: 'Cannot modify items already sent to kitchen' }, { status: 409 })
       }
     }
 
@@ -78,7 +78,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       const [item] = await sql`SELECT created_at FROM order_items WHERE id = ${params.itemId} AND order_id = ${params.id}`
       if (!item) return NextResponse.json({ data: null, error: 'Item not found' }, { status: 404 })
       if (new Date(item.created_at) <= new Date(order.kot_sent_at)) {
-        return NextResponse.json({ data: null, error: 'Cannot remove items already sent to barista' }, { status: 409 })
+        return NextResponse.json({ data: null, error: 'Cannot remove items already sent to kitchen' }, { status: 409 })
       }
     }
 

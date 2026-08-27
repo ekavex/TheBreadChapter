@@ -288,7 +288,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       if (json.printerWarning) {
         toast(isAddon ? 'Add-on KOT sent — thermal printer offline' : 'KOT sent — thermal printer offline, check printer connection', { icon: '⚠️' })
       } else {
-        toast.success(isAddon ? 'Add-on KOT sent to barista' : 'Sent to barista — KOT printed')
+        toast.success(isAddon ? 'Add-on KOT sent to kitchen' : 'Sent to kitchen — KOT printed')
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send KOT')
@@ -686,7 +686,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         {isKotSent && sentItems.length > 0 && (
           <>
             <div className="px-5 py-2 bg-surface-overlay/50">
-              <p className="text-xs text-ink-faint uppercase tracking-wide font-medium">Sent to barista</p>
+              <p className="text-xs text-ink-faint uppercase tracking-wide font-medium">Sent to kitchen</p>
             </div>
             <div className="divide-y divide-ink/5">
               {sentItems.map((item) => (
@@ -837,7 +837,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             disabled={busy || items.length === 0}
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink text-surface py-3 font-medium disabled:opacity-50"
           >
-            <Send size={16} /> Send to Barista
+            <Send size={16} /> Send to Kitchen
           </button>
         </div>
       )}
