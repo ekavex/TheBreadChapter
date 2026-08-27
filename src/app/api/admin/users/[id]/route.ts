@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireAdmin } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboardSession'
 import bcrypt from 'bcryptjs'
 import type { UserRole } from '@/lib/types'
 
-// PATCH /api/admin/users/[id] — Update role, display name, or password (admin only)
+// PATCH /api/admin/users/[id] — Update role, display name, or password
+// Admin: can update anyone. Manager: can only update staff accounts.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const guard = await requireAdmin(req)
+  const guard = await requireManagerOrAdmin(req)
   if (guard) return guard
+
+  const caller = await getSessionUser(req)
+  if (caller?.role !== 'admin') {
+    const sql = getDb()
+    const [target] = await sql`SELECT role FROM auth_credentials WHERE id = ${params.id}`
+    if ((target as { role?: string } | undefined)?.role !== 'staff') {
+      return NextResponse.json({ data: null, error: 'Managers can only edit staff accounts' }, { status: 403 })
+    }
+  }
 
   const { role, displayName, password } = await req.json()
 
@@ -42,19 +52,29 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/admin/users/[id] — Remove user (admin only)
+// DELETE /api/admin/users/[id] — Remove user (admin: anyone; manager: staff only)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const guard = await requireAdmin(req)
+  const guard = await requireManagerOrAdmin(req)
   if (guard) return guard
 
   try {
+    const caller = await getSessionUser(req)
     const sql = getDb()
 
-    // Prevent deleting the last admin
-    const [{ count: adminCount }] = await sql`SELECT count(*) FROM auth_credentials WHERE role = 'admin'`
     const [target] = await sql`SELECT role FROM auth_credentials WHERE id = ${params.id}`
-    if ((target as { role?: string } | undefined)?.role === 'admin' && Number(adminCount) <= 1) {
-      return NextResponse.json({ data: null, error: 'Cannot delete the last admin account' }, { status: 409 })
+    const targetRole = (target as { role?: string } | undefined)?.role
+
+    // Managers can only delete staff accounts
+    if (caller?.role !== 'admin' && targetRole !== 'staff') {
+      return NextResponse.json({ data: null, error: 'Managers can only delete staff accounts' }, { status: 403 })
+    }
+
+    // Prevent deleting the last admin
+    if (targetRole === 'admin') {
+      const [{ count: adminCount }] = await sql`SELECT count(*) FROM auth_credentials WHERE role = 'admin'`
+      if (Number(adminCount) <= 1) {
+        return NextResponse.json({ data: null, error: 'Cannot delete the last admin account' }, { status: 409 })
+      }
     }
 
     await sql`DELETE FROM auth_credentials WHERE id = ${params.id}`

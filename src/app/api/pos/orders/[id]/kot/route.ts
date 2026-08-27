@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { loadPrinterConfig, buildPrinterService } from '@/lib/printer'
 import { logger } from '@/lib/logger'
 import { DEMO_CAFE_ID } from '@/lib/constants'
@@ -25,8 +25,9 @@ async function fetchOrderWithItems(orderId: string) {
 // the order by category and print a ticket per station (food → kitchen,
 // beverage → beverage counter). Table → kot_sent.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
-  if (sessionGuard) return sessionGuard
+  const sessionUser = await getSessionUser(req)
+  if (!sessionUser) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  const takenBy = sessionUser.displayName || sessionUser.userId
 
   try {
     const sql = getDb()
@@ -97,6 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           station,
           items,
           customerNote,
+          takenBy,
         })
         logger.info('kot.print.success', { orderId: order.id, station })
       } catch (printErr) {
@@ -105,7 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
 
       const printStatus = process.env.PRINT_BRIDGE_TOKEN ? 'queued' : 'mock_printed'
-      await sql`INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type) VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus}, 'kot')`
+      await sql`INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type, taken_by) VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus}, 'kot', ${takenBy})`
     }
 
     const now = new Date().toISOString()

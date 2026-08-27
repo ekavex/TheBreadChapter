@@ -52,6 +52,10 @@ export function buildKotPayload(ticket: KotTicket): Buffer {
     parts.push(text(div), CMD.BOLD_ON, text('NOTE:'), CMD.BOLD_OFF, text(ticket.customerNote.trim().slice(0, COLS * 3)))
   }
 
+  if (ticket.takenBy?.trim()) {
+    parts.push(text(div), text(`By: ${ticket.takenBy.trim()}`.slice(0, COLS)))
+  }
+
   parts.push(CMD.ALIGN_CENTER, text(div), feed(4), CMD.FULL_CUT)
   return Buffer.concat(parts)
 }

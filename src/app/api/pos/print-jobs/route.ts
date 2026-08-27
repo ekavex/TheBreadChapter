@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
           LIMIT 10
           FOR UPDATE SKIP LOCKED
         )
-        RETURNING id, order_id, station, items_json, job_type
+        RETURNING id, order_id, station, items_json, job_type, taken_by
       )
       SELECT
         c.id,
@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
         c.station,
         c.items_json         AS items,
         c.job_type           AS "jobType",
+        c.taken_by           AS "takenBy",
         o.total_paisa        AS "amountPaisa",
         o.customer_note      AS "customerNote",
         COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"

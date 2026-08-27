@@ -161,6 +161,7 @@ class PrintBridgeService : Service() {
         val jobType      = job.optString("jobType", "kot")
         val itemsJson    = job.getJSONArray("items")
         val customerNote = if (job.has("customerNote") && !job.isNull("customerNote")) job.getString("customerNote") else null
+        val takenBy = if (job.has("takenBy") && !job.isNull("takenBy")) job.getString("takenBy") else null
 
         val targetMac = when (station.lowercase()) {
             "kitchen" -> kitchenMac
@@ -204,7 +205,7 @@ class PrintBridgeService : Service() {
                         "addons"   to addonNames,
                     )
                 }
-                EscPosHelper.buildKotTicket(tableLabel, orderId, station, items, customerNote)
+                EscPosHelper.buildKotTicket(tableLabel, orderId, station, items, customerNote, takenBy)
             }
 
             sendViaBluetooth(targetMac, payload)

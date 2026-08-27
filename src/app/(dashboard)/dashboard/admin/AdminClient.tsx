@@ -56,11 +56,22 @@ const ROLE_ICONS: Record<UserRole, React.ReactNode> = {
   staff:   <Users size={12} />,
 }
 
+function readRoleCookie(): UserRole {
+  if (typeof document === 'undefined') return 'manager'
+  const match = document.cookie.match(/(?:^|;\s*)sc_role=([^;]+)/)
+  const val = match?.[1]
+  if (val === 'admin' || val === 'manager' || val === 'staff') return val
+  return 'manager'
+}
+
 export default function AdminClient() {
+  const [viewerRole, setViewerRole] = useState<UserRole>('manager')
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
+
+  useEffect(() => { setViewerRole(readRoleCookie()) }, [])
 
   // ── Delete modals ────────────────────────────────────────────────
   const [deleteUser, setDeleteUser] = useState<UserRow | null>(null)
@@ -261,8 +272,12 @@ export default function AdminClient() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink">User Management</h1>
-          <p className="text-sm text-ink-muted mt-0.5">Manage staff logins and access levels</p>
+          <h1 className="font-display text-2xl font-bold text-ink">
+            {viewerRole === 'admin' ? 'User Management' : 'Staff Management'}
+          </h1>
+          <p className="text-sm text-ink-muted mt-0.5">
+            {viewerRole === 'admin' ? 'Manage staff logins and access levels' : 'Create and manage staff accounts'}
+          </p>
         </div>
         <button
           onClick={() => setShowAdd(v => !v)}
@@ -305,6 +320,7 @@ export default function AdminClient() {
                 required minLength={6}
               />
             </div>
+            {viewerRole === 'admin' && (
             <div>
               <label className="block text-xs font-medium text-ink-muted mb-1">Role</label>
               <select
@@ -316,6 +332,7 @@ export default function AdminClient() {
                 <option value="admin">Admin — Full access + user management</option>
               </select>
             </div>
+            )}
           </div>
           <div className="flex gap-2 pt-1">
             <button
@@ -359,6 +376,7 @@ export default function AdminClient() {
                           value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)}
                         />
                       </div>
+                      {viewerRole === 'admin' && (
                       <div>
                         <label className="block text-xs font-medium text-ink-muted mb-1">Role</label>
                         <select
@@ -370,6 +388,7 @@ export default function AdminClient() {
                           <option value="admin">Admin</option>
                         </select>
                       </div>
+                      )}
                       <div>
                         <label className="block text-xs font-medium text-ink-muted mb-1">New password (optional)</label>
                         <input
@@ -457,6 +476,9 @@ export default function AdminClient() {
           </div>
         </div>
       </div>
+
+      {/* ── Admin-only sections ─────────────────────────────────────────────── */}
+      {viewerRole === 'admin' && <>
 
       {/* ── Payment Terminals (Pine Labs A910S) ───────────────────────────── */}
       <div className="mt-8">
@@ -634,6 +656,8 @@ export default function AdminClient() {
           </div>
         </div>
       </div>
+
+      </>}
 
       {deleteUser && (
         <ConfirmModal

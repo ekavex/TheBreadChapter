@@ -16,6 +16,7 @@ export interface KotTicket {
   station: KotStation
   items: KotTicketItem[]
   customerNote?: string | null
+  takenBy?: string | null
 }
 
 export interface PrinterService {

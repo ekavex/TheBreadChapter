@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { UserRole } from '@/lib/types'
 
-function defaultRedirect(_role: UserRole): string {
-  return '/dashboard'
+function defaultRedirect(role: UserRole): string {
+  return role === 'staff' ? '/pos' : '/dashboard'
 }
 
 export default function LoginForm() {

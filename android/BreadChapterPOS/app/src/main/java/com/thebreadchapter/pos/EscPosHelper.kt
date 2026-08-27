@@ -67,6 +67,7 @@ object EscPosHelper {
         station: String,
         items: List<Map<String, Any>>,
         customerNote: String? = null,
+        takenBy: String? = null,
     ): ByteArray {
         val out = ByteArrayOutputStream()
 
@@ -117,9 +118,12 @@ object EscPosHelper {
             w(text(customerNote.trim().take(COLS * 3)))
         }
 
-        // Total item count at the bottom
+        // Staff name + total at the bottom
         w(ALIGN_CENTER)
         w(text(DIV.trimEnd()))
+        if (!takenBy.isNullOrBlank()) {
+            w(text("By: ${takenBy.trim().take(COLS - 4)}"))
+        }
         w(BOLD_ON)
         w(text("Total: $totalCount item${if (totalCount == 1) "" else "s"}"))
         w(BOLD_OFF)

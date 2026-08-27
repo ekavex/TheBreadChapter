@@ -644,7 +644,23 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
             <MessageSquare size={13} className="text-ink-faint" />
             <h2 className="font-display font-semibold text-ink text-sm">Customer suggestions</h2>
           </div>
-          <div className="p-4">
+          {addons.filter(a => a.is_active).length > 0 && (
+            <div className="px-4 pt-3 pb-0">
+              <p className="text-xs font-medium text-ink-muted mb-2">Available add-ons</p>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {addons.filter(a => a.is_active).map(a => (
+                  <span
+                    key={a.id}
+                    className="inline-flex items-center gap-1 text-xs bg-surface-overlay border border-ink/8 text-ink-muted px-2 py-0.5 rounded-full"
+                  >
+                    {a.name}{a.price > 0 && <span className="text-ink-faint">+₹{a.price}</span>}
+                  </span>
+                ))}
+              </div>
+              <div className="border-t border-ink/5 mb-3" />
+            </div>
+          )}
+          <div className="px-4 pb-4">
             <textarea
               value={customerNote}
               onChange={(e) => setCustomerNote(e.target.value)}

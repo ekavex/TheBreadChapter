@@ -45,6 +45,10 @@ async function runMigrations(sql: postgres.Sql) {
     // 010: customer suggestions / special requests at order level
     await sql`ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_note TEXT`
   } catch { /* Non-fatal */ }
+  try {
+    // 011: staff name captured at KOT print time
+    await sql`ALTER TABLE public.kot_tickets ADD COLUMN IF NOT EXISTS taken_by TEXT`
+  } catch { /* Non-fatal */ }
 }
 
 export function getDb(): postgres.Sql {
