@@ -544,7 +544,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs text-ink-faint capitalize">{item.category}</span>
                     {((item.variants as MenuItemVariant[] | null) ?? []).length > 0
-                      ? <span className="text-xs text-brand-500 font-medium">{((item.variants as MenuItemVariant[]) ?? []).map(v => v.label).join(' / ')}</span>
+                      ? <span className="text-xs text-brand-500 font-medium">₹{item.price} · {((item.variants as MenuItemVariant[]) ?? []).map(v => v.label).join(' / ')}</span>
                       : <span className="text-sm font-semibold text-ink">₹{item.price}</span>
                     }
                   </div>
@@ -1013,6 +1013,19 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
               </button>
             </div>
             <div className="space-y-2">
+              {/* Base price is always the first option — no need to add it manually */}
+              <button
+                disabled={busy}
+                onClick={() => {
+                  const item = variantPicker
+                  setVariantPicker(null)
+                  void addItem(item)
+                }}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-ink/10 hover:border-brand-300 hover:bg-brand-50/40 transition-colors disabled:opacity-50"
+              >
+                <span className="font-medium text-ink">{variantPicker.name}</span>
+                <span className="text-sm font-semibold text-ink">₹{variantPicker.price}</span>
+              </button>
               {((variantPicker.variants as MenuItemVariant[] | null) ?? []).map((v) => (
                 <button
                   key={v.label}
