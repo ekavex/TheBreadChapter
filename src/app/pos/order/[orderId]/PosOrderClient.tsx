@@ -543,10 +543,11 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                   <p className="text-sm font-medium text-ink leading-tight">{item.name}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs text-ink-faint capitalize">{item.category}</span>
-                    {((item.variants as MenuItemVariant[] | null) ?? []).length > 0
-                      ? <span className="text-xs text-brand-500 font-medium">₹{[item.price, ...((item.variants as MenuItemVariant[]) ?? []).map(v => v.price)].join('/')}</span>
-                      : <span className="text-sm font-semibold text-ink">₹{item.price}</span>
-                    }
+                    <span className="text-sm font-semibold text-ink">
+                      ₹{((item.variants as MenuItemVariant[] | null) ?? []).length > 0
+                        ? [item.price, ...((item.variants as MenuItemVariant[]) ?? []).map(v => v.price)].join('/')
+                        : item.price}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     {qty > 0 ? (
