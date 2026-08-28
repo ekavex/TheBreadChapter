@@ -3,14 +3,24 @@ import { Toaster } from 'react-hot-toast'
 import '@fontsource-variable/dm-sans'
 import '@fontsource-variable/playfair-display'
 import '@/styles/globals.css'
+import PwaRegister from '@/components/PwaRegister'
 
 export const metadata: Metadata = {
   title: { default: 'The Bread Chapter', template: '%s | The Bread Chapter' },
   description: 'The Bread Chapter — Smart Cafe Management',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'TBC POS',
+  },
   icons: {
     icon: '/tbc-logo.ico',
     shortcut: '/tbc-logo-small.ico',
-    apple: '/tbc-log-bg.png',
+    apple: [
+      { url: '/icon-152x152.png', sizes: '152x152', type: 'image/png' },
+      { url: '/icon-180x180.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
 }
 
@@ -25,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="font-body bg-surface text-ink antialiased">
+        <PwaRegister />
         {children}
         <Toaster
           position="bottom-center"
