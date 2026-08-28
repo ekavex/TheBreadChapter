@@ -58,9 +58,12 @@ export type MenuCategory = Tables['menu_categories']['Row'] & {
   items?: MenuItem[]
 }
 
+export type MenuItemVariant = { label: string; price: number }
+
 export type MenuItem = Omit<Tables['menu_items']['Row'], 'spice_level' | 'upsell_item_ids'> & {
   spice_level: 0 | 1 | 2 | 3
   upsell_item_ids: string[]
+  variants?: MenuItemVariant[] | null
 }
 
 export type Ingredient = Tables['ingredients']['Row']

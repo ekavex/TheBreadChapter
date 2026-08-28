@@ -11,7 +11,7 @@ type ItemPatch = Partial<
     | 'is_veg' | 'is_vegan' | 'is_jain' | 'contains_gluten' | 'contains_nuts'
     | 'spice_level' | 'prep_time_mins' | 'is_available' | 'is_featured'
   >
->
+> & { variants?: unknown }
 
 async function recordStaffAction(userId: string, action: string, description: string) {
   const sql = getDb()
@@ -39,12 +39,38 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (updateData.category && !['food', 'beverage'].includes(updateData.category)) {
       return NextResponse.json({ data: null, error: 'category must be "food" or "beverage"' }, { status: 400 })
     }
-    if (Object.keys(updateData).length === 0) {
+    // Handle variants separately — sql() tag can't serialize JSONB in a SET clause
+    let variantsOverride: { apply: boolean; value: unknown } = { apply: false, value: null }
+    if ('variants' in body) {
+      variantsOverride = {
+        apply: true,
+        value: Array.isArray(body.variants) && body.variants.length > 0 ? body.variants : null,
+      }
+    }
+
+    if (Object.keys(updateData).length === 0 && !variantsOverride.apply) {
       return NextResponse.json({ data: null, error: 'No valid fields to update' }, { status: 400 })
     }
 
     const sql = getDb()
-    const [data] = await sql`UPDATE menu_items SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
+    let data: unknown
+    if (Object.keys(updateData).length > 0 && variantsOverride.apply) {
+      ;[data] = await sql`
+        UPDATE menu_items
+        SET ${sql(updateData as Record<string, unknown>)}, variants = ${variantsOverride.value ? sql.json(variantsOverride.value as import('@/lib/types').MenuItemVariant[]) : null}
+        WHERE id = ${params.id}
+        RETURNING *
+      `
+    } else if (variantsOverride.apply) {
+      ;[data] = await sql`
+        UPDATE menu_items
+        SET variants = ${variantsOverride.value ? sql.json(variantsOverride.value as import('@/lib/types').MenuItemVariant[]) : null}
+        WHERE id = ${params.id}
+        RETURNING *
+      `
+    } else {
+      ;[data] = await sql`UPDATE menu_items SET ${sql(updateData as Record<string, unknown>)} WHERE id = ${params.id} RETURNING *`
+    }
 
     const user = await getSessionUser(req)
     if (user && user.role !== 'admin') {

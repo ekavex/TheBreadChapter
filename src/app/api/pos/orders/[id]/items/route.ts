@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (sessionGuard) return sessionGuard
 
   try {
-    const { menu_item_id, quantity, customisation, addons } = await req.json()
+    const { menu_item_id, quantity, customisation, addons, variant } = await req.json()
     const qty = Number(quantity) || 1
 
     if (!menu_item_id || qty <= 0) {
@@ -51,9 +51,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const addonTotal = addonsList.reduce((s, a) => s + (Number(a.price) || 0), 0)
     const hasAddons = addonsList.length > 0
 
+    // When a variant is selected, use its label (appended to name) and price
+    const hasVariant = variant && typeof variant.label === 'string' && typeof variant.price === 'number'
+    const itemName = hasVariant ? `${menuItem.name} (${variant.label})` : menuItem.name
+    const basePrice = hasVariant ? Number(variant.price) : Number(menuItem.price)
+
     // When KOT is already sent, never merge into an existing line — always create
     // a new row with a fresh created_at so the frontend can diff "sent vs add-on".
-    const [existingLine] = (note || hasAddons || order.pos_status === 'KOT_SENT')
+    // Also never merge variant items (different variants are separate lines).
+    const [existingLine] = (note || hasAddons || hasVariant || order.pos_status === 'KOT_SENT')
       ? [undefined]
       : await sql`SELECT * FROM order_items WHERE order_id = ${params.id} AND menu_item_id = ${menu_item_id} AND customisation IS NULL AND (addons_json = '[]' OR addons_json IS NULL) LIMIT 1`
 
@@ -61,14 +67,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const newQty = existingLine.quantity + qty
       await sql`UPDATE order_items SET quantity = ${newQty}, subtotal = ${newQty * existingLine.price} WHERE id = ${existingLine.id}`
     } else {
-      const unitPrice = menuItem.price + addonTotal
+      const unitPrice = basePrice + addonTotal
       await sql`
         INSERT INTO order_items (order_id, menu_item_id, name, price, quantity, customisation, subtotal, category, addons_json)
         VALUES (
           ${params.id},
           ${menu_item_id},
-          ${menuItem.name},
-          ${menuItem.price},
+          ${itemName},
+          ${basePrice},
           ${qty},
           ${note},
           ${unitPrice * qty},

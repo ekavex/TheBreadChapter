@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Plus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import type { MenuItem, MenuCategory, MenuItemCategory } from '@/lib/types'
+import type { MenuItem, MenuCategory, MenuItemCategory, MenuItemVariant } from '@/lib/types'
 
 interface Props {
   item?: MenuItem | null
@@ -23,6 +23,9 @@ export default function ItemModal({ item, categories, defaultCategoryId, onClose
   const [isVeg, setIsVeg] = useState(item?.is_veg ?? true)
   const [spiceLevel, setSpiceLevel] = useState<0 | 1 | 2 | 3>(item?.spice_level ?? 0)
   const [prepTimeMins, setPrepTimeMins] = useState(item?.prep_time_mins ?? 10)
+  const [variants, setVariants] = useState<MenuItemVariant[]>(
+    (item?.variants as MenuItemVariant[] | null | undefined) ?? []
+  )
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -40,6 +43,7 @@ export default function ItemModal({ item, categories, defaultCategoryId, onClose
         is_veg: isVeg,
         spice_level: spiceLevel,
         prep_time_mins: Number(prepTimeMins),
+        variants: variants.filter(v => v.label.trim()).map(v => ({ label: v.label.trim(), price: Number(v.price) })),
       }
 
       const res = await fetch(isEdit ? `/api/menu/items/${item!.id}` : '/api/menu/items', {
@@ -174,6 +178,52 @@ export default function ItemModal({ item, categories, defaultCategoryId, onClose
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Variants */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium text-ink-muted">Variants (optional)</label>
+              <button
+                type="button"
+                onClick={() => setVariants(v => [...v, { label: '', price: 0 }])}
+                className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium"
+              >
+                <Plus size={13} /> Add variant
+              </button>
+            </div>
+            {variants.length > 0 ? (
+              <div className="space-y-2">
+                {variants.map((v, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <input
+                      value={v.label}
+                      onChange={(e) => setVariants(vv => vv.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                      placeholder="e.g. Slice"
+                      className="flex-1 rounded-xl border border-ink/10 px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={v.price}
+                      onChange={(e) => setVariants(vv => vv.map((x, j) => j === i ? { ...x, price: Number(e.target.value) } : x))}
+                      placeholder="₹"
+                      className="w-24 rounded-xl border border-ink/10 px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setVariants(vv => vv.filter((_, j) => j !== i))}
+                      className="p-1.5 text-ink-faint hover:text-red-600"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <p className="text-xs text-ink-faint">When variants are set, staff will pick one before adding the item in POS.</p>
+              </div>
+            ) : (
+              <p className="text-xs text-ink-faint">No variants — item adds at base price.</p>
+            )}
           </div>
 
           <button

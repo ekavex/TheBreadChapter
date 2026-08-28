@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode, Plus, Minus, MessageSquare } from 'lucide-react'
-import type { Order, MenuCategory, MenuItem, Payment, PosStatus, Table, Addon, OrderItemAddon } from '@/lib/types'
+import { Trash2, Send, Receipt, CreditCard, XCircle, CheckCircle2, Users, AlertTriangle, QrCode, Plus, Minus, MessageSquare, X } from 'lucide-react'
+import type { Order, MenuCategory, MenuItem, MenuItemVariant, Payment, PosStatus, Table, Addon, OrderItemAddon } from '@/lib/types'
 
 function ConfirmDialog({ title, message, confirmLabel = 'Confirm', onConfirm, onCancel }: {
   title: string
@@ -99,6 +99,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeItemId, setActiveItemId] = useState<string | null>(null)
+  const [variantPicker, setVariantPicker] = useState<MenuItem | null>(null)
   // True while the terminal still has the transaction open — the screen tracks
   // it automatically so the cashier never has to poll by hand.
   const [autoTracking, setAutoTracking] = useState(false)
@@ -126,7 +127,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     }
   }
 
-  async function addItem(item: MenuItem, selectedAddons: OrderItemAddon[] = [], note = '') {
+  async function addItem(item: MenuItem, selectedAddons: OrderItemAddon[] = [], note = '', variant?: MenuItemVariant) {
     setBusy(true)
     const isNewOrder = !order
     try {
@@ -136,6 +137,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         quantity: 1,
         addons: selectedAddons,
         customisation: note || null,
+        ...(variant ? { variant } : {}),
       })
       setOrder(updated)
       // Track which item is "active" for addon toggling — pick the matching
@@ -153,13 +155,12 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   }
 
   function handlePlusClick(item: MenuItem) {
-    const entry = menuItemQty.get(item.id)
-    if (entry && entry.qty > 0) {
-      // Already in order — increment directly without modal
-      void addItem(item)
-    } else {
-      void addItem(item)
+    const variants = (item.variants as MenuItemVariant[] | null | undefined) ?? []
+    if (variants.length > 0) {
+      setVariantPicker(item)
+      return
     }
+    void addItem(item)
   }
 
   async function saveNote(note: string) {
@@ -542,7 +543,10 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
                   <p className="text-sm font-medium text-ink leading-tight">{item.name}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs text-ink-faint capitalize">{item.category}</span>
-                    <span className="text-sm font-semibold text-ink">₹{item.price}</span>
+                    {((item.variants as MenuItemVariant[] | null) ?? []).length > 0
+                      ? <span className="text-xs text-brand-500 font-medium">{((item.variants as MenuItemVariant[]) ?? []).map(v => v.label).join(' / ')}</span>
+                      : <span className="text-sm font-semibold text-ink">₹{item.price}</span>
+                    }
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     {qty > 0 ? (
@@ -987,6 +991,46 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
           onConfirm={confirmCancelOrder}
           onCancel={() => setShowCancelConfirm(false)}
         />
+      )}
+
+      {/* Variant picker — appears when staff taps a multi-variant item */}
+      {variantPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setVariantPicker(null)}
+        >
+          <div
+            className="bg-surface-raised rounded-t-2xl w-full max-w-md p-5 pb-8 shadow-2xl animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="font-display font-semibold text-ink text-base">{variantPicker.name}</p>
+                <p className="text-xs text-ink-muted mt-0.5">Choose a size</p>
+              </div>
+              <button onClick={() => setVariantPicker(null)} className="p-1 text-ink-faint hover:text-ink">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {((variantPicker.variants as MenuItemVariant[] | null) ?? []).map((v) => (
+                <button
+                  key={v.label}
+                  disabled={busy}
+                  onClick={() => {
+                    const item = variantPicker
+                    setVariantPicker(null)
+                    void addItem(item, [], '', v)
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-ink/10 hover:border-brand-300 hover:bg-brand-50/40 transition-colors disabled:opacity-50"
+                >
+                  <span className="font-medium text-ink">{v.label}</span>
+                  <span className="text-sm font-semibold text-ink">₹{v.price}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

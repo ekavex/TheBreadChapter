@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const {
       category_id, name, name_hi, description, price, category,
       is_veg, is_vegan, is_jain, contains_gluten, contains_nuts,
-      spice_level, prep_time_mins,
+      spice_level, prep_time_mins, variants,
     } = body
 
     if (!category_id || !name || price === undefined || price === null) {
@@ -28,11 +28,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data: null, error: 'category must be "food" or "beverage"' }, { status: 400 })
     }
 
+    const variantsList = Array.isArray(variants) && variants.length > 0 ? variants : null
+
     const sql = getDb()
     const [data] = await sql`
       INSERT INTO menu_items (
         cafe_id, category_id, name, name_hi, description, price, category,
-        is_veg, is_vegan, is_jain, contains_gluten, contains_nuts, spice_level, prep_time_mins
+        is_veg, is_vegan, is_jain, contains_gluten, contains_nuts, spice_level, prep_time_mins, variants
       )
       VALUES (
         ${DEMO_CAFE_ID},
@@ -48,7 +50,8 @@ export async function POST(req: NextRequest) {
         ${contains_gluten ?? true},
         ${contains_nuts ?? false},
         ${spice_level ?? 0},
-        ${prep_time_mins ?? 10}
+        ${prep_time_mins ?? 10},
+        ${variantsList ? sql.json(variantsList) : null}
       )
       RETURNING *
     `
