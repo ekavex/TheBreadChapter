@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth/requireDashboardSession'
-import { loadPrinterConfig, buildPrinterService } from '@/lib/printer'
 import { logger } from '@/lib/logger'
-import { DEMO_CAFE_ID } from '@/lib/constants'
 import type { KotStation, MenuItemCategory } from '@/lib/types'
 
 const STATION_BY_CATEGORY: Record<MenuItemCategory, KotStation> = {
@@ -31,8 +29,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const sql = getDb()
-    const printerCfg = await loadPrinterConfig(sql, DEMO_CAFE_ID)
-    const printerService = buildPrinterService(printerCfg)
 
     const [order] = await sql`SELECT * FROM orders WHERE id = ${params.id}`
     if (!order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
@@ -58,11 +54,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }, { status: 400 })
     }
 
-    const [tableRow] = order.table_id
-      ? await sql`SELECT * FROM tables WHERE id = ${order.table_id}`
-      : [undefined]
-    const table = tableRow ?? null
-
     // For the first KOT, skip stations already ticketed (retry-safe).
     // For add-on KOT, always insert a new ticket — different items, same station is fine.
     const alreadyTicketed = new Set<string>()
@@ -71,10 +62,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       for (const t of ticketRows as unknown as { station: string }[]) alreadyTicketed.add(t.station)
     }
 
-    const customerNote = (order.customer_note as string | null) ?? null
-
+    // Printing itself happens out-of-band: this just queues one ticket per
+    // station and the Bluetooth print bridge (running on a dedicated device
+    // near the printers) picks it up within its poll interval. There's no
+    // synchronous printer call here — the server has no physical path (BT/USB/
+    // local LAN) to a printer sitting in the cafe, so attempting one here only
+    // adds latency and a spurious "printer offline" warning that fires on every
+    // send regardless of whether the bridge actually prints it moments later.
     const stations: KotStation[] = ['kitchen', 'beverage_counter']
-    let printerWarning: string | null = null
     for (const station of stations) {
       const items = orderItems
         .filter((i) => STATION_BY_CATEGORY[i.category ?? 'food'] === station)
@@ -90,24 +85,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         continue
       }
 
-      logger.info('kot.print.start', { orderId: order.id, station, itemCount: items.length, isAddon })
-      try {
-        await printerService.printTicket({
-          tableLabel: table?.label || String(table?.number ?? 'Takeaway'),
-          orderId: order.id,
-          station,
-          items,
-          customerNote,
-          takenBy,
-        })
-        logger.info('kot.print.success', { orderId: order.id, station })
-      } catch (printErr) {
-        printerWarning = printErr instanceof Error ? printErr.message : String(printErr)
-        logger.error('kot.print.error', { orderId: order.id, station, error: printerWarning })
-      }
-
       const printStatus = process.env.PRINT_BRIDGE_TOKEN ? 'queued' : 'mock_printed'
       await sql`INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type, taken_by) VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus}, 'kot', ${takenBy})`
+      logger.info('kot.print.queued', { orderId: order.id, station, itemCount: items.length, isAddon })
     }
 
     const now = new Date().toISOString()
@@ -127,7 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const updatedOrder = await fetchOrderWithItems(params.id)
-    return NextResponse.json({ data: updatedOrder, error: null, printerWarning: printerWarning ?? null })
+    return NextResponse.json({ data: updatedOrder, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to send KOT'
     return NextResponse.json({ data: null, error: message }, { status: 500 })

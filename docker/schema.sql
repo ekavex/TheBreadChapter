@@ -350,6 +350,7 @@ CREATE TABLE public.kot_tickets (
     printed_at timestamp with time zone DEFAULT now() NOT NULL,
     print_status text DEFAULT 'mock_printed'::text NOT NULL,
     job_type text DEFAULT 'kot'::text NOT NULL,
+    taken_by text,
     CONSTRAINT kot_tickets_station_check CHECK ((station = ANY (ARRAY['kitchen'::text, 'beverage_counter'::text]))),
     CONSTRAINT kot_tickets_job_type_check CHECK ((job_type = ANY (ARRAY['kot'::text, 'bill_qr'::text])))
 );

@@ -232,11 +232,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       const updatedOrder = json.data as Order
       setOrder(updatedOrder)
       const isAddon = order.pos_status === 'KOT_SENT'
-      if (json.printerWarning) {
-        toast(isAddon ? 'Add-on KOT sent — thermal printer offline' : 'KOT sent — thermal printer offline, check printer connection', { icon: '⚠️' })
-      } else {
-        toast.success(isAddon ? 'Add-on KOT sent to kitchen' : 'Sent to kitchen — KOT printed')
-      }
+      toast.success(isAddon ? 'Add-on KOT sent to kitchen' : 'Sent to kitchen')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send KOT')
     } finally {

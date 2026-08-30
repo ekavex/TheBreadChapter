@@ -10,6 +10,10 @@ export async function register() {
       '007_menu_variants',
       `ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT NULL;`,
     ],
+    [
+      '008_kot_tickets_taken_by',
+      `ALTER TABLE kot_tickets ADD COLUMN IF NOT EXISTS taken_by TEXT;`,
+    ],
   ]
 
   try {

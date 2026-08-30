@@ -39,6 +39,18 @@ export async function GET(req: NextRequest) {
   try {
     const sql = getDb()
 
+    // Safety net: a job the bridge claimed ('processing') but never confirmed
+    // via PATCH — bridge phone rebooted, lost Bluetooth, app got killed mid-print —
+    // would otherwise sit stuck forever, since claiming is a one-way door. Anything
+    // still 'processing' well past a normal print cycle goes back to 'queued' so
+    // the next poll (from this device or another) picks it up again.
+    await sql`
+      UPDATE kot_tickets
+      SET print_status = 'queued'
+      WHERE print_status = 'processing'
+        AND printed_at < now() - interval '45 seconds'
+    `
+
     // Atomically claim queued jobs by marking them 'processing' so a second poll
     // within the same 3-second window cannot pick up the same ticket again.
     const rows = await sql`

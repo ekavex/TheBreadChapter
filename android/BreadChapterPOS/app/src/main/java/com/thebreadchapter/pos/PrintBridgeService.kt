@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothSocket
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -31,7 +32,7 @@ class PrintBridgeService : Service() {
         private const val TAG = "PrintBridge"
         private const val CHANNEL_ID = "print_bridge"
         private const val NOTIF_ID = 1001
-        private const val POLL_INTERVAL_MS = 3_000L
+        private const val POLL_INTERVAL_MS = 1_200L
         // SPP UUID — standard Serial Port Profile
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
@@ -43,6 +44,15 @@ class PrintBridgeService : Service() {
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
+
+    // One phone talks to both printers at once — a Bluetooth SPP link is
+    // exclusive per *printer*, not per phone, so this device can hold a socket
+    // to the kitchen printer and another to the beverage printer simultaneously.
+    // Kept open across jobs instead of reconnect-per-print, since establishing
+    // a fresh RFCOMM connection (SDP lookup + channel handshake) typically costs
+    // 1–4 seconds — the dominant cost in the old per-job connect/disconnect flow.
+    private val sockets = mutableMapOf<String, BluetoothSocket>()
+    private val socketLock = Any()
 
     override fun onCreate() {
         super.onCreate()
@@ -59,6 +69,7 @@ class PrintBridgeService : Service() {
     override fun onDestroy() {
         isRunning = false
         scope.cancel()
+        closeAllSockets()
         super.onDestroy()
     }
 
@@ -219,36 +230,78 @@ class PrintBridgeService : Service() {
     }
 
     // ── Bluetooth ─────────────────────────────────────────────────────────────
+    // Sockets are cached per MAC and reused across jobs. A job only pays the
+    // Bluetooth connect cost the *first* time it prints to a given printer (or
+    // after a real disconnect) — every job after that just writes to an
+    // already-open stream, which is milliseconds instead of seconds.
 
     private fun sendViaBluetooth(mac: String, payload: ByteArray) {
-        val bm = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-        val adapter: BluetoothAdapter = bm.adapter
-            ?: throw IOException("Bluetooth not available on this device")
-
-        if (!adapter.isEnabled) throw IOException("Bluetooth is disabled")
-
-        @Suppress("MissingPermission")
-        val device = adapter.getRemoteDevice(mac)
-
-        // Try SPP UUID first; fall back to reflection channel 1 for older printers
-        val socket = try {
-            @Suppress("MissingPermission")
-            device.createRfcommSocketToServiceRecord(SPP_UUID)
-        } catch (_: Exception) {
-            @Suppress("MissingPermission")
-            device.javaClass.getMethod("createRfcommSocket", Int::class.java).invoke(device, 1)
-                as android.bluetooth.BluetoothSocket
-        }
-
-        @Suppress("MissingPermission")
-        adapter.cancelDiscovery()
-
-        @Suppress("MissingPermission")
-        socket.connect()
-        socket.use {
-            it.outputStream.write(payload)
-            it.outputStream.flush()
+        val socket = getOrConnectSocket(mac)
+        try {
+            socket.outputStream.write(payload)
+            socket.outputStream.flush()
             Thread.sleep(500) // let printer buffer drain
+        } catch (e: Exception) {
+            // Stream write failed — the connection is dead (printer rebooted,
+            // walked out of range, etc). Drop the cached socket and retry once
+            // with a fresh connection before giving up on this job.
+            closeSocket(mac)
+            val fresh = getOrConnectSocket(mac)
+            fresh.outputStream.write(payload)
+            fresh.outputStream.flush()
+            Thread.sleep(500)
+        }
+    }
+
+    private fun getOrConnectSocket(mac: String): BluetoothSocket {
+        synchronized(socketLock) {
+            sockets[mac]?.let { existing ->
+                if (existing.isConnected) return existing
+                closeSocketLocked(mac)
+            }
+
+            val bm = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
+            val adapter: BluetoothAdapter = bm.adapter
+                ?: throw IOException("Bluetooth not available on this device")
+            if (!adapter.isEnabled) throw IOException("Bluetooth is disabled")
+
+            @Suppress("MissingPermission")
+            val device = adapter.getRemoteDevice(mac)
+
+            // Try SPP UUID first; fall back to reflection channel 1 for older printers
+            val socket = try {
+                @Suppress("MissingPermission")
+                device.createRfcommSocketToServiceRecord(SPP_UUID)
+            } catch (_: Exception) {
+                @Suppress("MissingPermission")
+                device.javaClass.getMethod("createRfcommSocket", Int::class.java).invoke(device, 1)
+                    as BluetoothSocket
+            }
+
+            @Suppress("MissingPermission")
+            adapter.cancelDiscovery()
+
+            @Suppress("MissingPermission")
+            socket.connect()
+            sockets[mac] = socket
+            AppLogManager.log("Connected to printer $mac")
+            return socket
+        }
+    }
+
+    private fun closeSocket(mac: String) {
+        synchronized(socketLock) { closeSocketLocked(mac) }
+    }
+
+    private fun closeSocketLocked(mac: String) {
+        sockets.remove(mac)?.let {
+            try { it.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun closeAllSockets() {
+        synchronized(socketLock) {
+            sockets.keys.toList().forEach { closeSocketLocked(it) }
         }
     }
 
