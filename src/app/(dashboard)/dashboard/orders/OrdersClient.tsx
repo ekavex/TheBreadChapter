@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
 import { ChevronDown, ArrowRight, X, Printer, FileDown, ChevronRight, Trash2 } from 'lucide-react'
 import type { Order, OrderStatus, OrderItem, UserRole } from '@/lib/types'
+import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import toast from 'react-hot-toast'
 
 function readRoleCookie(): UserRole {
@@ -314,6 +315,7 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
   const [updating, setUpdating] = useState<string | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Order | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => { setIsAdmin(readRoleCookie() === 'admin') }, [])
@@ -354,7 +356,6 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
   }
 
   async function deleteOrder(order: Order) {
-    if (!window.confirm(`Delete order ${order.order_number} permanently? This cannot be undone.`)) return
     setDeleting(order.id)
     try {
       const res = await fetch(`/api/pos/orders/${order.id}`, { method: 'DELETE' })
@@ -544,8 +545,17 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
           onAdvance={advanceStatus}
           advancing={updating === selectedOrder.id}
           isAdmin={isAdmin}
-          onDelete={deleteOrder}
+          onDelete={setPendingDelete}
           deleting={deleting === selectedOrder.id}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmModal
+          title="Delete order?"
+          message={`Delete order ${pendingDelete.order_number} permanently? This cannot be undone.`}
+          onConfirm={() => { const order = pendingDelete; setPendingDelete(null); void deleteOrder(order) }}
+          onCancel={() => setPendingDelete(null)}
         />
       )}
     </div>
