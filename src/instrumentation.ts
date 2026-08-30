@@ -14,6 +14,10 @@ export async function register() {
       '008_kot_tickets_taken_by',
       `ALTER TABLE kot_tickets ADD COLUMN IF NOT EXISTS taken_by TEXT;`,
     ],
+    [
+      '009_drop_supabase_realtime_publication',
+      `DROP PUBLICATION IF EXISTS supabase_realtime;`,
+    ],
   ]
 
   try {

@@ -2,7 +2,7 @@
 
 Inventory, recipe costing, waiter-operated POS with KOT routing, Pine Labs terminal
 payments, and analytics/reporting for a single cafe — built on top of an existing
-Next.js 14 + Supabase cafe-ordering codebase.
+Next.js 14 + PostgreSQL cafe-ordering codebase.
 
 **Start here:**
 - [`docs/Smart_Cafe_SRS (2).docx`](docs/Smart_Cafe_SRS%20%282%29.docx) — the client's requirements (Modules 1–11). Source of truth for *what*.
@@ -48,7 +48,7 @@ Check `docs/SMART_CAFE_TRACKER.md` for exactly which milestones are done.
 |---|---|
 | Frontend | Next.js 14 (App Router), TypeScript (strict), Tailwind CSS |
 | Backend | Next.js API Routes |
-| Database | Supabase (PostgreSQL + Realtime), raw SQL migrations (no ORM) |
+| Database | Self-hosted PostgreSQL (via the `postgres` npm client), raw SQL migrations (no ORM) |
 | Auth | Custom flat two-credential system (`src/lib/auth/`) — **not** Supabase Auth |
 | Payments | `PaymentProvider` interface — `MockPaymentProvider` now, Pine Labs A910S cloud integration later |
 | Printing | `PrinterService` interface — `MockPrinterService` now, real KOT thermal printers later |
@@ -64,34 +64,31 @@ Check `docs/SMART_CAFE_TRACKER.md` for exactly which milestones are done.
 npm install
 ```
 
-### 2. Local Supabase (recommended for dev)
+### 2. Database
 
-Requires [Docker Desktop](https://docs.docker.com/desktop/) running.
-
-```bash
-npx supabase start
-```
-
-This prints an API URL, DB URL, anon key, and service role key. Copy `.env.local.example`
-→ `.env.local` and fill those in (plus `AUTH_SESSION_SECRET` — any long random string).
-
-Migrations apply automatically on `supabase start` / `supabase db reset`. Seed data does
-**not** auto-apply (the seed files aren't wired into `supabase/config.toml`'s seed path)
-— run them manually against the local DB:
+A plain local PostgreSQL instance — no external service required.
 
 ```bash
-docker exec -i supabase_db_<project-name> psql -U postgres -d postgres < supabase/seed/demo_cafe.sql
-docker exec -i supabase_db_<project-name> psql -U postgres -d postgres < supabase/seed/002_smart_cafe_seed.sql
+createdb breadchapter
+psql -d breadchapter -f docker/schema.sql
+psql -d breadchapter -f supabase/seed/demo_cafe.sql
+psql -d breadchapter -f supabase/seed/002_smart_cafe_seed.sql
 ```
 
-(`<project-name>` is whatever `supabase/config.toml`'s `project_id` is — check with `docker ps`.)
+`docker/schema.sql` is the up-to-date baseline (equivalent to every file in
+`supabase/migrations/` applied in order — that folder is kept as the historical,
+one-change-per-file record, but a fresh DB doesn't need to replay it). Copy
+`.env.local.example` → `.env.local` and set `DATABASE_URL` to point at it (plus
+`AUTH_SESSION_SECRET` — any long random string).
 
-### 3. Or: a real Supabase project
+Any migration added *after* your last `docker/schema.sql` pull is applied automatically
+the first time the app starts — see `src/instrumentation.ts`.
 
-1. Create a project at [supabase.com](https://supabase.com)
-2. Copy `.env.local.example` → `.env.local`, fill in your project's URL + keys
-3. Run every file in `supabase/migrations/` (in order) via the SQL Editor or `supabase db push`
-4. Run `supabase/seed/demo_cafe.sql` then `supabase/seed/002_smart_cafe_seed.sql`
+### 3. Production (Docker)
+
+`docker-compose.yml` mounts `docker/schema.sql` as a Postgres init script, so a fresh
+container bootstraps itself on first boot. Later schema changes ship as entries in
+`src/instrumentation.ts` and apply automatically on deploy — no manual `psql` step.
 
 ### 4. Start the dev server
 
@@ -155,37 +152,31 @@ payments, reports, etc.) as later milestones land.
 │   │   ├── payment/                ← PaymentProvider + MockPaymentProvider
 │   │   ├── printer/                ← PrinterService + MockPrinterService
 │   │   ├── money.ts                ← paisa ↔ rupee conversion
-│   │   ├── types/
-│   │   │   ├── database.generated.ts  ← AUTO-GENERATED, do not hand-edit (see below)
-│   │   │   └── index.ts               ← friendly type aliases derived from the above
-│   │   └── supabase/               ← client.ts, server.ts
+│   │   ├── db/                     ← getDb() — the shared `postgres` client
+│   │   └── types/
+│   │       ├── database.generated.ts  ← row types — see below
+│   │       └── index.ts               ← friendly type aliases derived from the above
 │   └── middleware.ts               ← gates /dashboard/* and /pos/* on the dashboard session
+├── src/instrumentation.ts          ← auto-applies pending migrations on server startup
 └── supabase/
-    ├── migrations/                 ← 001 (base schema), 002 (Smart Cafe additions)
+    ├── migrations/                 ← one file per schema change, historical record
     └── seed/                       ← demo_cafe.sql, 002_smart_cafe_seed.sql
 ```
 
-### Regenerating `database.generated.ts`
+### Updating `database.generated.ts`
 
-After **any** migration change, regenerate this file (it's the single source of truth
-for every `.from(...)` call's types — see the comment at the top of `src/lib/types/index.ts`
-for why hand-writing it broke type inference repo-wide):
-
-```bash
-npx supabase gen types typescript --local > src/lib/types/database.generated.ts
-```
-
-Requires `npx supabase start` running with all migrations applied.
+There's no codegen step — `database.generated.ts` is hand-maintained. After any migration
+that adds/renames/removes a column or table, update the corresponding `Row`/`Insert`/`Update`
+type there by hand, then adjust the friendly aliases in `src/lib/types/index.ts` if needed.
 
 ---
 
 ## Conventions
 
 - TypeScript strict mode — DB row types are `type` aliases, never `interface` (see the
-  note in `src/lib/types/index.ts` — this isn't stylistic, `interface` silently breaks
-  postgrest's type inference on this stack).
-- All DB queries go through `src/lib/supabase/client.ts` (browser) or `server.ts` (server
-  components/API routes) — never instantiate a Supabase client elsewhere.
+  note in `src/lib/types/index.ts`).
+- All DB queries go through `getDb()` in `src/lib/db` (a shared `postgres` client) —
+  never instantiate a separate connection elsewhere.
 - Server components fetch data; client components (`'use client'`) handle interactivity,
   following the existing `page.tsx` (server) + `XClient.tsx` (client) + `router.refresh()`
   pattern used throughout `/dashboard/*`.

@@ -1227,26 +1227,6 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE public.tables ENABLE ROW LEVEL SECURITY;
 
---
--- Name: supabase_realtime; Type: PUBLICATION; Schema: -; Owner: -
---
-
-CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate');
-
-
---
--- Name: supabase_realtime order_items; Type: PUBLICATION TABLE; Schema: public; Owner: -
---
-
-ALTER PUBLICATION supabase_realtime ADD TABLE ONLY public.order_items;
-
-
---
--- Name: supabase_realtime orders; Type: PUBLICATION TABLE; Schema: public; Owner: -
---
-
-ALTER PUBLICATION supabase_realtime ADD TABLE ONLY public.orders;
-
 
 --
 -- PostgreSQL database dump complete

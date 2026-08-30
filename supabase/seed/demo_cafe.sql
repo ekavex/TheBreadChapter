@@ -1,6 +1,6 @@
 -- ============================================================
 -- SEED: The Bread Chapter (Demo client — Pune)
--- Run: supabase db seed  OR paste in SQL Editor
+-- Run: psql -d <your_db> -f supabase/seed/demo_cafe.sql
 -- ============================================================
 
 INSERT INTO cafes (id, name, slug, address, phone, whatsapp) VALUES

@@ -1,18 +1,12 @@
 // ─── Database Types ──────────────────────────────────────────
-// `Database` (and its Row/Insert/Update/Relationships shapes) comes straight
-// from `supabase gen types typescript --local` — see database.generated.ts.
-// Hand-maintaining that shape previously caused every `.from(...)` call in
-// this codebase to silently infer `never` under the installed postgrest-js:
-//   1. Row/Insert/Update pointed at named `interface`s instead of `type`
-//      aliases — postgrest-js's recursive conditional types don't resolve
-//      through a named interface the same way they do a `type` alias to an
-//      equivalent object shape.
-//   2. Embedded/joined selects (e.g. `select('*, items:order_items(*)')`)
-//      need real `Relationships` foreign-key metadata, not `Relationships: []`.
-// Both are pre-existing, repo-wide (every file, not just the new Smart Cafe
-// tables) — confirmed by bisecting against this file's own auto-generated
-// output. Regenerate `database.generated.ts` after schema changes and these
-// friendly type aliases stay correct automatically.
+// `Database` (and its Row/Insert/Update shapes) lives in database.generated.ts.
+// DB access here is raw SQL via the `postgres` client (src/lib/db), not a
+// PostgREST/Supabase client — there's no `.from(...)` query builder in this
+// codebase, so no codegen step keeps that file in sync. Update it by hand
+// after any migration that adds/renames/removes a column or table, then
+// adjust the friendly aliases below if needed. Keep Row/Insert/Update as
+// `type` aliases rather than `interface` for consistency with the rest of
+// this file — no functional requirement forces it either way anymore.
 import type { Database as GeneratedDatabase } from './database.generated'
 
 export type Database = GeneratedDatabase
