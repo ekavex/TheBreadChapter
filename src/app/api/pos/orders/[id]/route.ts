@@ -1,8 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, requireAdmin } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
+
+// DELETE /api/pos/orders/[id] — admin-only, permanent. order_items, kot_tickets
+// and payments cascade automatically (FK ON DELETE CASCADE); stock_transactions
+// rows keep their history but have reference_order_id cleared first since that
+// FK has no cascade — deleting an order shouldn't erase the ingredient ledger.
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const roleGuard = await requireAdmin(req)
+  if (roleGuard) return roleGuard
+
+  try {
+    const sql = getDb()
+    const deleted = await sql.begin(async (tx) => {
+      await tx`UPDATE stock_transactions SET reference_order_id = NULL WHERE reference_order_id = ${params.id}`
+      const [row] = await tx`DELETE FROM orders WHERE id = ${params.id} RETURNING id`
+      return row
+    })
+
+    if (!deleted) {
+      return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
+    }
+    return NextResponse.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    return NextResponse.json({ data: null, error: err instanceof Error ? err.message : 'Failed to delete order' }, { status: 500 })
+  }
+}
 
 // PATCH /api/pos/orders/[id] — update mutable order fields (customer_note).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {

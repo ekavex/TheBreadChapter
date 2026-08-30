@@ -33,6 +33,17 @@ class PrintBridgeService : Service() {
         private const val CHANNEL_ID = "print_bridge"
         private const val NOTIF_ID = 1001
         private const val POLL_INTERVAL_MS = 1_200L
+        // A cached socket idle longer than this is dropped and reconnected fresh
+        // rather than reused — Android doesn't reliably flip isConnected to false
+        // when the remote end silently vanishes, so an infrequently-used socket
+        // (bills print far less often than KOTs) is the one most likely to be a
+        // zombie: reusing it would mean a blocking write that can hang for many
+        // seconds before finally failing, which looks identical to "still slow".
+        private const val SOCKET_IDLE_TIMEOUT_MS = 30_000L
+        // Upper bound on a single write — if it hangs past this, the watchdog
+        // force-closes the socket so the caller fails fast and can reconnect,
+        // instead of the write blocking indefinitely.
+        private const val WRITE_TIMEOUT_MS = 4_000L
         // SPP UUID — standard Serial Port Profile
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
@@ -51,7 +62,8 @@ class PrintBridgeService : Service() {
     // Kept open across jobs instead of reconnect-per-print, since establishing
     // a fresh RFCOMM connection (SDP lookup + channel handshake) typically costs
     // 1–4 seconds — the dominant cost in the old per-job connect/disconnect flow.
-    private val sockets = mutableMapOf<String, BluetoothSocket>()
+    private data class CachedSocket(val socket: BluetoothSocket, var lastUsedAt: Long)
+    private val sockets = mutableMapOf<String, CachedSocket>()
     private val socketLock = Any()
 
     override fun onCreate() {
@@ -236,27 +248,63 @@ class PrintBridgeService : Service() {
     // already-open stream, which is milliseconds instead of seconds.
 
     private fun sendViaBluetooth(mac: String, payload: ByteArray) {
+        val t0 = System.currentTimeMillis()
         val socket = getOrConnectSocket(mac)
+        val tConnected = System.currentTimeMillis()
+        try {
+            writeWithTimeout(socket, payload)
+            Thread.sleep(500) // let printer buffer drain
+        } catch (e: Exception) {
+            // Write failed (or hung past the watchdog timeout) — the connection
+            // is dead (printer rebooted, walked out of range, silently dropped
+            // while idle, etc). Drop it and retry once with a fresh connection.
+            AppLogManager.log("⚠ Write to $mac failed (${e.message}), reconnecting")
+            closeSocket(mac)
+            val fresh = getOrConnectSocket(mac)
+            writeWithTimeout(fresh, payload)
+            Thread.sleep(500)
+        } finally {
+            val tDone = System.currentTimeMillis()
+            AppLogManager.log(
+                "Print to $mac: connect=${tConnected - t0}ms write+drain=${tDone - tConnected}ms"
+            )
+        }
+    }
+
+    // A blocking OutputStream.write() to a dead BluetoothSocket can hang far
+    // longer than any sane print job should take, since classic Bluetooth has
+    // no fast keepalive to surface a silently-vanished remote end. Run the
+    // write on this thread but arm a watchdog that force-closes the socket
+    // if it doesn't finish in time — closing from another thread reliably
+    // unblocks a stuck read/write with an IOException, turning an indefinite
+    // hang into a bounded failure the caller can reconnect and retry from.
+    private fun writeWithTimeout(socket: BluetoothSocket, payload: ByteArray) {
+        val watchdog = Thread {
+            try {
+                Thread.sleep(WRITE_TIMEOUT_MS)
+                AppLogManager.log("⚠ Write watchdog fired — forcing socket closed")
+                try { socket.close() } catch (_: Exception) {}
+            } catch (_: InterruptedException) {
+                // Write finished in time — nothing to do.
+            }
+        }
+        watchdog.start()
         try {
             socket.outputStream.write(payload)
             socket.outputStream.flush()
-            Thread.sleep(500) // let printer buffer drain
-        } catch (e: Exception) {
-            // Stream write failed — the connection is dead (printer rebooted,
-            // walked out of range, etc). Drop the cached socket and retry once
-            // with a fresh connection before giving up on this job.
-            closeSocket(mac)
-            val fresh = getOrConnectSocket(mac)
-            fresh.outputStream.write(payload)
-            fresh.outputStream.flush()
-            Thread.sleep(500)
+        } finally {
+            watchdog.interrupt()
         }
     }
 
     private fun getOrConnectSocket(mac: String): BluetoothSocket {
         synchronized(socketLock) {
-            sockets[mac]?.let { existing ->
-                if (existing.isConnected) return existing
+            sockets[mac]?.let { cached ->
+                val idleMs = System.currentTimeMillis() - cached.lastUsedAt
+                if (cached.socket.isConnected && idleMs < SOCKET_IDLE_TIMEOUT_MS) {
+                    cached.lastUsedAt = System.currentTimeMillis()
+                    return cached.socket
+                }
                 closeSocketLocked(mac)
             }
 
@@ -283,7 +331,7 @@ class PrintBridgeService : Service() {
 
             @Suppress("MissingPermission")
             socket.connect()
-            sockets[mac] = socket
+            sockets[mac] = CachedSocket(socket, System.currentTimeMillis())
             AppLogManager.log("Connected to printer $mac")
             return socket
         }
@@ -295,7 +343,7 @@ class PrintBridgeService : Service() {
 
     private fun closeSocketLocked(mac: String) {
         sockets.remove(mac)?.let {
-            try { it.close() } catch (_: Exception) {}
+            try { it.socket.close() } catch (_: Exception) {}
         }
     }
 

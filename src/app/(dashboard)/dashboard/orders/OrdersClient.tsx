@@ -1,10 +1,18 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
-import { ChevronDown, ArrowRight, X, Printer, FileDown, ChevronRight } from 'lucide-react'
-import type { Order, OrderStatus, OrderItem } from '@/lib/types'
+import { ChevronDown, ArrowRight, X, Printer, FileDown, ChevronRight, Trash2 } from 'lucide-react'
+import type { Order, OrderStatus, OrderItem, UserRole } from '@/lib/types'
 import toast from 'react-hot-toast'
+
+function readRoleCookie(): UserRole {
+  if (typeof document === 'undefined') return 'manager'
+  const match = document.cookie.match(/(?:^|;\s*)sc_role=([^;]+)/)
+  const val = match?.[1]
+  if (val === 'admin' || val === 'manager' || val === 'staff') return val
+  return 'manager'
+}
 
 const STATUSES: OrderStatus[] = ['pending', 'confirmed', 'making', 'ready', 'served', 'completed', 'cancelled']
 
@@ -132,11 +140,14 @@ function downloadReceipt(orderId: string) {
 
 // ─── Order detail drawer ─────────────────────────────────────────────────────
 
-function OrderDetailDrawer({ order, onClose, onAdvance, advancing }: {
+function OrderDetailDrawer({ order, onClose, onAdvance, advancing, isAdmin, onDelete, deleting }: {
   order: Order
   onClose: () => void
   onAdvance: (order: Order) => void
   advancing: boolean
+  isAdmin: boolean
+  onDelete: (order: Order) => void
+  deleting: boolean
 }) {
   const items: OrderItem[] = (order.items ?? []) as OrderItem[]
   const tableInfo = (order as any).table
@@ -279,6 +290,16 @@ function OrderDetailDrawer({ order, onClose, onAdvance, advancing }: {
             >
               <FileDown size={14} /> Download
             </button>
+            {isAdmin && (
+              <button
+                onClick={() => onDelete(order)}
+                disabled={deleting}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                title="Delete order permanently"
+              >
+                <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -292,6 +313,10 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
   const router = useRouter()
   const [updating, setUpdating] = useState<string | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => { setIsAdmin(readRoleCookie() === 'admin') }, [])
 
   const filtered = activeStatus === 'all'
     ? orders
@@ -325,6 +350,23 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
       toast.error('Status update failed')
     } finally {
       setUpdating(null)
+    }
+  }
+
+  async function deleteOrder(order: Order) {
+    if (!window.confirm(`Delete order ${order.order_number} permanently? This cannot be undone.`)) return
+    setDeleting(order.id)
+    try {
+      const res = await fetch(`/api/pos/orders/${order.id}`, { method: 'DELETE' })
+      const { error } = await res.json()
+      if (error) throw new Error(error)
+      toast.success(`${order.order_number} deleted`)
+      setSelectedOrder(null)
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete order')
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -501,6 +543,9 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
           onClose={() => setSelectedOrder(null)}
           onAdvance={advanceStatus}
           advancing={updating === selectedOrder.id}
+          isAdmin={isAdmin}
+          onDelete={deleteOrder}
+          deleting={deleting === selectedOrder.id}
         />
       )}
     </div>
