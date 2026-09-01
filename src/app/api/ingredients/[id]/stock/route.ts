@@ -9,9 +9,9 @@ async function recordStaffAction(userId: string, action: string, description: st
   await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
 }
 
-// POST /api/ingredients/[id]/stock — Module 1 "Update Stock":
+// POST /api/ingredients/[id]/stock - Module 1 "Update Stock":
 // purchase entry, manual adjustment, expired stock removal. Every change
-// goes through this ledger (stock_transactions) — a DB trigger applies it to
+// goes through this ledger (stock_transactions) - a DB trigger applies it to
 // ingredients.current_stock, so this route never writes current_stock directly.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireManagerOrAdmin(req)
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (rawQuantity < 0) return NextResponse.json({ data: null, error: 'Removal quantity must be positive' }, { status: 400 })
       signedQuantity = -rawQuantity
     } else {
-      signedQuantity = rawQuantity // manual_adjustment — caller supplies the sign
+      signedQuantity = rawQuantity // manual_adjustment - caller supplies the sign
     }
 
     const sql = getDb()

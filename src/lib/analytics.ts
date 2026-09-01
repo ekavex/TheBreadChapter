@@ -1,4 +1,4 @@
-// Modules 6/7/8 — P&L, area analytics, customer analytics.
+// Modules 6/7/8 - P&L, area analytics, customer analytics.
 import {
   startOfDay, endOfDay, subDays,
   startOfWeek, endOfWeek, subWeeks,

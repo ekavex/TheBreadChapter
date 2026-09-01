@@ -1,5 +1,5 @@
 // Money is stored as integer paisa across the new Smart Cafe tables
-// (ingredients, recipes cost cache, orders.total_paisa, payments — see
+// (ingredients, recipes cost cache, orders.total_paisa, payments - see
 // docs/DEVELOPER_HANDOVER_MASTER.md §3). Convert once at the UI boundary.
 
 export function rupeesToPaisa(rupees: number): number {

@@ -7,7 +7,7 @@ import PwaRegister from '@/components/PwaRegister'
 
 export const metadata: Metadata = {
   title: { default: 'The Bread Chapter', template: '%s | The Bread Chapter' },
-  description: 'The Bread Chapter — Smart Cafe Management',
+  description: 'The Bread Chapter - Smart Cafe Management',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,

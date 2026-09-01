@@ -19,7 +19,7 @@ class BreadChapterApp : Application() {
         val prefs = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE)
         val appId = prefs.getString(SettingsActivity.KEY_PINE_APP_ID, "").orEmpty().trim()
         if (appId.isBlank()) {
-            Log.i("PineSDK", "No Application ID set — SDK not initialised yet")
+            Log.i("PineSDK", "No Application ID set - SDK not initialised yet")
             return
         }
         if (PineBillingSdk.isInitialized()) {

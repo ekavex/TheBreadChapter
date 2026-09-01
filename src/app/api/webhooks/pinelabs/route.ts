@@ -1,12 +1,12 @@
 // POST /api/webhooks/pinelabs
 //
-// Pine Labs pushes payment results here (Post Back URL — register this with
+// Pine Labs pushes payment results here (Post Back URL - register this with
 // Pine Labs during onboarding). The body is application/x-www-form-urlencoded
-// but the *value* is a single comma-joined "key=value" CSV string — NOT
+// but the *value* is a single comma-joined "key=value" CSV string - NOT
 // standard URL-encoded form fields (see PINELABS_INTEGRATION_MASTER.md §6).
 //
 // Security posture:
-//   • No session cookie — Pine Labs calls this server-to-server. Instead the
+//   • No session cookie - Pine Labs calls this server-to-server. Instead the
 //     caller must present the shared secret configured as
 //     PINELABS_WEBHOOK_SECRET, either as ?token=… on the registered Post Back
 //     URL or as an X-Webhook-Token header. Confirm with Pine Labs which of the
@@ -14,7 +14,7 @@
 //   • We NEVER trust the postback alone for money decisions. After parsing we
 //     always re-verify via GetStatus before finalizing. The postback is only a
 //     wake-up signal.
-//   • Internal failures return 5xx so Pine Labs retries — silently swallowing
+//   • Internal failures return 5xx so Pine Labs retries - silently swallowing
 //     them with a 200 loses the payment result entirely.
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     responseMessage: fields['ResponseMessage'],
   })
 
-  // Unparseable payload — retrying will not help, acknowledge it.
+  // Unparseable payload - retrying will not help, acknowledge it.
   if (!ptrid && !transactionNumber) {
     logger.warn('webhook.pinelabs.unidentifiable', { raw: rawBody.slice(0, 200) })
     return NextResponse.json({ ok: true })
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     }
     const [paymentRaw] = await paymentRows
     if (!paymentRaw) {
-      // Not ours (or not yet written). Acknowledge — a retry storm would not help.
+      // Not ours (or not yet written). Acknowledge - a retry storm would not help.
       logger.warn('webhook.pinelabs.payment_not_found', { ptrid, transactionNumber })
       return NextResponse.json({ ok: true })
     }
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Source of truth — never the postback body.
+    // Source of truth - never the postback body.
     const statusResult = await paymentProvider.status(resolvedPtrid, {
       clientId: payment.client_id ?? '',
       storeId:  payment.store_id  ?? resolveStoreId(),
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
         logger.info('webhook.pinelabs.finalized', { orderId: order.id })
       } catch (err) {
         if (err instanceof PaymentAmountMismatchError) {
-          // Retrying cannot fix a mismatch — acknowledge and leave the order
+          // Retrying cannot fix a mismatch - acknowledge and leave the order
           // in AWAITING_PAYMENT for manual verification.
           logger.error('webhook.pinelabs.amount_mismatch', { orderId: order.id, ptrid: resolvedPtrid })
           return NextResponse.json({ ok: true })
@@ -197,6 +197,6 @@ export async function POST(req: NextRequest) {
     // Real internal failure: ask Pine Labs to retry rather than losing the event.
     const message = err instanceof Error ? err.message : String(err)
     logger.error('webhook.pinelabs.error', { ptrid, transactionNumber, error: message })
-    return NextResponse.json({ error: 'Internal error — please retry' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal error - please retry' }, { status: 500 })
   }
 }

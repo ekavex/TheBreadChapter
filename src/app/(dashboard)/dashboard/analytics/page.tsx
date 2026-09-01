@@ -12,7 +12,7 @@ function formatHour(hour: number): string {
 }
 
 export default async function AnalyticsPage() {
-  // P&L across all four ranges up front — the range switcher is client-side
+  // P&L across all four ranges up front - the range switcher is client-side
   // (no refetch). Each range is bounded so this stays light.
   const [daily, weekly, monthly, yearly, area, customer] = await Promise.all([
     getPnLData('daily'),
@@ -32,10 +32,10 @@ export default async function AnalyticsPage() {
         <p className="text-ink-muted text-sm mt-0.5">Profit &amp; loss, area, customer · last 30 days</p>
       </div>
 
-      {/* P&L — Module 6 */}
+      {/* P&L - Module 6 */}
       <PnLClient initial={{ daily, weekly, monthly, yearly }} />
 
-      {/* Area analytics — Module 7 */}
+      {/* Area analytics - Module 7 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
           <h2 className="font-display font-semibold text-ink mb-4">Visitors by area</h2>
@@ -68,7 +68,7 @@ export default async function AnalyticsPage() {
                 <div key={a.area}>
                   <p className="text-xs font-medium uppercase tracking-wide text-ink-faint mb-1">{a.area}</p>
                   <p className="text-sm text-ink">
-                    {a.items.map((i) => i.name).join(', ') || '—'}
+                    {a.items.map((i) => i.name).join(', ') || '-'}
                   </p>
                 </div>
               ))}
@@ -86,7 +86,7 @@ export default async function AnalyticsPage() {
                 <div key={a.area} className="bg-surface-overlay rounded-xl p-3">
                   <p className="text-xs text-ink-faint uppercase tracking-wide">{a.area}</p>
                   <p className="text-base font-display font-bold text-ink">
-                    {a.peakHour ? formatHour(a.peakHour.hour) : '—'}
+                    {a.peakHour ? formatHour(a.peakHour.hour) : '-'}
                   </p>
                   <p className="text-xs text-ink-muted">{a.peakHour ? `${a.peakHour.count} orders` : 'no data'}</p>
                 </div>
@@ -96,7 +96,7 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Customer analytics — Module 8 */}
+      {/* Customer analytics - Module 8 */}
       <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
         <h2 className="font-display font-semibold text-ink mb-4">Customer analytics</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -104,8 +104,8 @@ export default async function AnalyticsPage() {
             { label: 'Total customers', value: customer.totalCustomers.toString() },
             { label: 'New', value: customer.newCustomers.toString() },
             { label: 'Repeat', value: customer.repeatCustomers.toString() },
-            { label: 'Most ordered item', value: customer.mostOrderedItem?.name ?? '—' },
-            { label: 'Peak visiting hour', value: customer.peakVisitingHour ? formatHour(customer.peakVisitingHour.hour) : '—' },
+            { label: 'Most ordered item', value: customer.mostOrderedItem?.name ?? '-' },
+            { label: 'Peak visiting hour', value: customer.peakVisitingHour ? formatHour(customer.peakVisitingHour.hour) : '-' },
             { label: 'Avg bill value', value: formatPaisa(Math.round(customer.avgBillValue * 100)) },
           ].map((m) => (
             <div key={m.label} className="bg-surface-overlay rounded-xl p-3">
@@ -116,7 +116,7 @@ export default async function AnalyticsPage() {
         </div>
         {customer.totalCustomers === 0 && (
           <p className="text-xs text-ink-faint mt-3">
-            No customers captured yet — customer identity is recorded only when a phone is entered at POS payment.
+            No customers captured yet - customer identity is recorded only when a phone is entered at POS payment.
           </p>
         )}
       </div>

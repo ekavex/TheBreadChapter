@@ -1,4 +1,4 @@
-// Service Worker — cache-first for static assets, network-first for API
+// Service Worker - cache-first for static assets, network-first for API
 const CACHE = 'tbc-pos-v1'
 
 const STATIC_URLS = [

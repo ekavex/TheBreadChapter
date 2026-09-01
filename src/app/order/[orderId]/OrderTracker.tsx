@@ -91,7 +91,7 @@ export default function OrderTracker({ initialOrder }: Props) {
                 </div>
               )}
               {order.status === 'confirmed' && (
-                <p className="text-sm text-ink-muted">Order confirmed — kitchen is on it</p>
+                <p className="text-sm text-ink-muted">Order confirmed - kitchen is on it</p>
               )}
               {order.status === 'making' && (
                 <div className="flex items-center justify-center gap-2 text-brand-500">

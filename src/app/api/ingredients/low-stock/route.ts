@@ -5,8 +5,8 @@ import type { Ingredient } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/ingredients/low-stock — Module 1 "Low Stock Alert"
-// e.g. "Bread < 20 pieces" — notification generated.
+// GET /api/ingredients/low-stock - Module 1 "Low Stock Alert"
+// e.g. "Bread < 20 pieces" - notification generated.
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard

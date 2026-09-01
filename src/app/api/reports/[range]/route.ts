@@ -4,7 +4,7 @@ import { getReportData, type ReportRange } from '@/lib/reports'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/reports/daily|weekly|monthly — JSON report for the reports page.
+// GET /api/reports/daily|weekly|monthly - JSON report for the reports page.
 export async function GET(req: NextRequest, { params }: { params: { range: string } }) {
   const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard

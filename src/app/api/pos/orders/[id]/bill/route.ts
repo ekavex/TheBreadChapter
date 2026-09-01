@@ -15,9 +15,9 @@ async function fetchOrderWithItems(orderId: string) {
   return { ...order, items, table: tableRow ?? null }
 }
 
-// POST /api/pos/orders/[id]/bill — Module 5 "Bill Generation & Printing":
+// POST /api/pos/orders/[id]/bill - Module 5 "Bill Generation & Printing":
 // itemised total, table → billed. Safe to re-generate while still BILLED
-// (e.g. a network retry) — recomputes from current order_items either way.
+// (e.g. a network retry) - recomputes from current order_items either way.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const totalAmount = subtotal + taxAmount + serviceCharge
     const totalPaisa = rupeesToPaisa(totalAmount)
 
-    // Totals and table status move together — a crash between them would
+    // Totals and table status move together - a crash between them would
     // leave a billed table with a stale total.
     const now = new Date().toISOString()
     await sql.begin(async (tx) => {

@@ -7,7 +7,7 @@ declare global {
 }
 
 // Runs once per process to apply any pending in-code migrations.
-// Safe to call on every startup — all statements use IF NOT EXISTS / idempotent DDL.
+// Safe to call on every startup - all statements use IF NOT EXISTS / idempotent DDL.
 let migrationRan = false
 async function runMigrations(sql: postgres.Sql) {
   if (migrationRan) return

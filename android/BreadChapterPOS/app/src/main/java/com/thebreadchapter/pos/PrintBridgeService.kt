@@ -34,17 +34,17 @@ class PrintBridgeService : Service() {
         private const val NOTIF_ID = 1001
         private const val POLL_INTERVAL_MS = 1_200L
         // A cached socket idle longer than this is dropped and reconnected fresh
-        // rather than reused — Android doesn't reliably flip isConnected to false
+        // rather than reused - Android doesn't reliably flip isConnected to false
         // when the remote end silently vanishes, so an infrequently-used socket
         // (bills print far less often than KOTs) is the one most likely to be a
         // zombie: reusing it would mean a blocking write that can hang for many
         // seconds before finally failing, which looks identical to "still slow".
         private const val SOCKET_IDLE_TIMEOUT_MS = 30_000L
-        // Upper bound on a single write — if it hangs past this, the watchdog
+        // Upper bound on a single write - if it hangs past this, the watchdog
         // force-closes the socket so the caller fails fast and can reconnect,
         // instead of the write blocking indefinitely.
         private const val WRITE_TIMEOUT_MS = 4_000L
-        // SPP UUID — standard Serial Port Profile
+        // SPP UUID - standard Serial Port Profile
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
         var isRunning = false
@@ -56,12 +56,12 @@ class PrintBridgeService : Service() {
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    // One phone talks to both printers at once — a Bluetooth SPP link is
+    // One phone talks to both printers at once - a Bluetooth SPP link is
     // exclusive per *printer*, not per phone, so this device can hold a socket
     // to the kitchen printer and another to the beverage printer simultaneously.
     // Kept open across jobs instead of reconnect-per-print, since establishing
     // a fresh RFCOMM connection (SDP lookup + channel handshake) typically costs
-    // 1–4 seconds — the dominant cost in the old per-job connect/disconnect flow.
+    // 1–4 seconds - the dominant cost in the old per-job connect/disconnect flow.
     private data class CachedSocket(val socket: BluetoothSocket, var lastUsedAt: Long)
     private val sockets = mutableMapOf<String, CachedSocket>()
     private val socketLock = Any()
@@ -101,7 +101,7 @@ class PrintBridgeService : Service() {
             val beverageMac = prefs.getString(SettingsActivity.KEY_BEVERAGE_MAC, "") ?: ""
 
             if (serverUrl.isBlank() || token.isBlank() || (kitchenMac.isBlank() && beverageMac.isBlank())) {
-                updateNotification("⚙ Settings missing — configure in Settings")
+                updateNotification("⚙ Settings missing - configure in Settings")
                 AppLogManager.log("Bridge waiting for configuration...")
                 delay(5000.milliseconds)
                 continue
@@ -125,7 +125,7 @@ class PrintBridgeService : Service() {
                 val msg = "Poll error: ${e.message}"
                 Log.e(TAG, msg)
                 AppLogManager.log("⚠ $msg")
-                updateNotification("⚠ Server unreachable — retrying…")
+                updateNotification("⚠ Server unreachable - retrying…")
             }
 
             delay(POLL_INTERVAL_MS.milliseconds)
@@ -244,7 +244,7 @@ class PrintBridgeService : Service() {
     // ── Bluetooth ─────────────────────────────────────────────────────────────
     // Sockets are cached per MAC and reused across jobs. A job only pays the
     // Bluetooth connect cost the *first* time it prints to a given printer (or
-    // after a real disconnect) — every job after that just writes to an
+    // after a real disconnect) - every job after that just writes to an
     // already-open stream, which is milliseconds instead of seconds.
 
     private fun sendViaBluetooth(mac: String, payload: ByteArray) {
@@ -255,7 +255,7 @@ class PrintBridgeService : Service() {
             writeWithTimeout(socket, payload)
             Thread.sleep(500) // let printer buffer drain
         } catch (e: Exception) {
-            // Write failed (or hung past the watchdog timeout) — the connection
+            // Write failed (or hung past the watchdog timeout) - the connection
             // is dead (printer rebooted, walked out of range, silently dropped
             // while idle, etc). Drop it and retry once with a fresh connection.
             AppLogManager.log("⚠ Write to $mac failed (${e.message}), reconnecting")
@@ -275,17 +275,17 @@ class PrintBridgeService : Service() {
     // longer than any sane print job should take, since classic Bluetooth has
     // no fast keepalive to surface a silently-vanished remote end. Run the
     // write on this thread but arm a watchdog that force-closes the socket
-    // if it doesn't finish in time — closing from another thread reliably
+    // if it doesn't finish in time - closing from another thread reliably
     // unblocks a stuck read/write with an IOException, turning an indefinite
     // hang into a bounded failure the caller can reconnect and retry from.
     private fun writeWithTimeout(socket: BluetoothSocket, payload: ByteArray) {
         val watchdog = Thread {
             try {
                 Thread.sleep(WRITE_TIMEOUT_MS)
-                AppLogManager.log("⚠ Write watchdog fired — forcing socket closed")
+                AppLogManager.log("⚠ Write watchdog fired - forcing socket closed")
                 try { socket.close() } catch (_: Exception) {}
             } catch (_: InterruptedException) {
-                // Write finished in time — nothing to do.
+                // Write finished in time - nothing to do.
             }
         }
         watchdog.start()

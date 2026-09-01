@@ -18,7 +18,7 @@ const STATUS_LABELS: Record<TableStatus, string> = {
   billed: 'Billed',
 }
 
-// Module 10 "live table statuses" — read-only manager view. Waiters act on
+// Module 10 "live table statuses" - read-only manager view. Waiters act on
 // these from /pos; this is just visibility.
 export default function LiveTableGrid({ sections }: Props) {
   return (

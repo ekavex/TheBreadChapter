@@ -61,9 +61,9 @@ export async function POST(req: NextRequest) {
   }
 
   const res = NextResponse.json({ data: { role, displayName }, error: null })
-  // httpOnly session token — the signed credential
+  // httpOnly session token - the signed credential
   res.cookies.set(SESSION_COOKIE_NAME, token, { ...cookieOpts, httpOnly: true })
-  // Non-httpOnly role cookie — readable by client-side JS for nav filtering
+  // Non-httpOnly role cookie - readable by client-side JS for nav filtering
   res.cookies.set(ROLE_COOKIE_NAME, role, { ...cookieOpts, httpOnly: false })
   return res
 }

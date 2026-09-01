@@ -16,7 +16,7 @@ process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? ''
 process.env.RECONCILER_DISABLED = 'true'
 process.env.PINELABS_STORE_ID = process.env.PINELABS_STORE_ID ?? '9988'
 
-// Provider stub — each test decides what Pine Labs "says".
+// Provider stub - each test decides what Pine Labs "says".
 const providerStatus = vi.fn()
 const providerCancel = vi.fn()
 vi.mock('@/lib/payment/provider', () => ({
@@ -101,7 +101,7 @@ describeDb('payment matrix (integration)', () => {
     expect(stockRows % 3 === 0 ? stockRows / 3 : stockRows).toBe(stockRows)
   })
 
-  it('refuses to finalize — and changes nothing — when the amount does not match', async () => {
+  it('refuses to finalize - and changes nothing - when the amount does not match', async () => {
     const { finalizeApprovedPayment, PaymentAmountMismatchError } = await import('@/lib/payment/finalize')
     const db = testDb()
     const seeded = await seedAwaitingPaymentOrder(fx)

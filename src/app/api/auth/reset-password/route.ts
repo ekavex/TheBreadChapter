@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   const user = rows[0]
 
   if (!user) {
-    // Don't reveal whether userId exists — same response
+    // Don't reveal whether userId exists - same response
     return NextResponse.json({ error: 'Invalid security key' }, { status: 401 })
   }
 

@@ -61,7 +61,7 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-The Bread Chapter}
 
-      # Payment — PAYMENT_PROVIDER=pinelabs is mandatory in production.
+      # Payment - PAYMENT_PROVIDER=pinelabs is mandatory in production.
       PAYMENT_PROVIDER:        ${PAYMENT_PROVIDER:-mock}
       PINELABS_MERCHANT_ID:    ${PINELABS_MERCHANT_ID:-}
       PINELABS_SECURITY_TOKEN: ${PINELABS_SECURITY_TOKEN:-}
@@ -77,11 +77,11 @@ services:
       CRON_SECRET:             ${CRON_SECRET:-}
       ALLOW_DEFAULT_CREDENTIALS: ${ALLOW_DEFAULT_CREDENTIALS:-false}
 
-      # Android print bridge — set to a random secret, then configure the same
+      # Android print bridge - set to a random secret, then configure the same
       # value in the APK's Settings screen. Leave blank to disable the bridge.
       PRINT_BRIDGE_TOKEN:      ${PRINT_BRIDGE_TOKEN:-}
 
-      # Thermal printers — leave blank if not connected
+      # Thermal printers - leave blank if not connected
       PRINTER_KITCHEN_USB_DEVICE:  ${PRINTER_KITCHEN_USB_DEVICE:-}
       PRINTER_BEVERAGE_USB_DEVICE: ${PRINTER_BEVERAGE_USB_DEVICE:-}
       PRINTER_KITCHEN_BT_MAC:      ${PRINTER_KITCHEN_BT_MAC:-}
@@ -91,7 +91,7 @@ services:
       PRINTER_KITCHEN_IP:          ${PRINTER_KITCHEN_IP:-}
       PRINTER_BEVERAGE_IP:         ${PRINTER_BEVERAGE_IP:-}
 
-    # USB thermal printers — uncomment when printers are connected.
+    # USB thermal printers - uncomment when printers are connected.
     # Devices must exist on the host before `docker compose up`.
     # devices:
     #   - /dev/usb/lp0:/dev/usb/lp0   # kitchen printer  (set PRINTER_KITCHEN_USB_DEVICE)

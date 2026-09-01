@@ -7,7 +7,7 @@
 # Writes a compressed custom-format dump (restorable selectively with
 # pg_restore) to /backups and prunes dumps older than BACKUP_RETENTION_DAYS.
 #
-# RESTORE (destructive — read twice before running):
+# RESTORE (destructive - read twice before running):
 #   docker compose stop app
 #   docker compose exec -T db pg_restore -U breaduser -d breadchapter --clean --if-exists < backups/<file>.dump
 #   docker compose start app
@@ -29,7 +29,7 @@ echo "{\"ts\":\"$(date -u +%FT%TZ)\",\"event\":\"backup.start\",\"target\":\"$TA
 # Custom format (-Fc) is compressed and supports partial restore.
 pg_dump -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -Fc -f "$TARGET"
 
-# A dump that cannot be listed is not a backup — verify before trusting it.
+# A dump that cannot be listed is not a backup - verify before trusting it.
 if ! pg_restore --list "$TARGET" >/dev/null 2>&1; then
   echo "{\"ts\":\"$(date -u +%FT%TZ)\",\"level\":\"error\",\"event\":\"backup.verify_failed\",\"target\":\"$TARGET\"}"
   rm -f "$TARGET"

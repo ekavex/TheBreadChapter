@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 
-// Never use window.confirm() for destructive actions in this app — the
+// Never use window.confirm() for destructive actions in this app - the
 // staff APK wraps the dashboard in an Android WebView with no
 // WebChromeClient configured, so window.confirm() silently returns false
 // with no dialog shown at all, and the action just does nothing.

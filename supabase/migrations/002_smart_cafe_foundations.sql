@@ -1,5 +1,5 @@
 -- ============================================================
--- SMART CAFE — M0 Foundations
+-- SMART CAFE - M0 Foundations
 -- Sections, tables status, terminals, inventory, recipes, costing,
 -- POS order lifecycle, KOT tickets, payments, auth credentials.
 -- Run after 001_initial_schema.sql.
@@ -221,7 +221,7 @@ CREATE TABLE auth_credentials (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- NOTE: no `expenses` table. Per IMPLEMENTATION_PLAN.md open item #5 — Expense
+-- NOTE: no `expenses` table. Per IMPLEMENTATION_PLAN.md open item #5 - Expense
 -- Management is explicitly out of scope per DEVELOPER_HANDOVER_MASTER.md, so
 -- P&L (Module 6, M7) computes as revenue - ingredient cost only for now.
 -- Add this table + wire it into the P&L query if that decision changes.

@@ -1,6 +1,6 @@
 // ─── PaymentProvider abstraction (Module 5 + Pine Labs) ──────
 // Spec: docs/PINELABS_INTEGRATION_MASTER.md §10. Business logic (orders,
-// stock, dashboard) talks to this interface only — never HTTP/paisa/tag
+// stock, dashboard) talks to this interface only - never HTTP/paisa/tag
 // parsing directly. MockPaymentProvider ships first; PineLabsCloudProvider
 // (M6) implements the same interface once UAT credentials exist.
 

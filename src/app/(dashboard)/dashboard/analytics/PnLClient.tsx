@@ -60,7 +60,7 @@ export default function PnLClient({ initial }: { initial: Record<Range, PnLData>
                   <span className="text-[10px] font-semibold text-white">{formatPaisa(Math.round(r.profit * 100))}</span>
                 )}
               </div>
-              {r.profit <= 0 && <span className="absolute left-2 top-1 text-[10px] text-status-overdue">—</span>}
+              {r.profit <= 0 && <span className="absolute left-2 top-1 text-[10px] text-status-overdue">-</span>}
             </div>
             <span className="text-xs text-ink-faint w-20 sm:w-28 shrink-0 text-right">
               {r.orderCount} · {r.marginPct.toFixed(0)}%

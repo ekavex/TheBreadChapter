@@ -1,5 +1,5 @@
 // Runs once on server startup (Next.js 14 instrumentation hook).
-// Migrations are embedded inline — no file-path dependency inside Docker.
+// Migrations are embedded inline - no file-path dependency inside Docker.
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 

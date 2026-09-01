@@ -1,7 +1,7 @@
 {
   "name": "The Bread Chapter POS",
   "short_name": "TBC POS",
-  "description": "The Bread Chapter — Smart Cafe Management",
+  "description": "The Bread Chapter - Smart Cafe Management",
   "start_url": "/pos",
   "display": "standalone",
   "orientation": "portrait",

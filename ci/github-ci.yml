@@ -1,4 +1,4 @@
-# CI pipeline for this repository — NOT ACTIVE FROM THIS PATH.
+# CI pipeline for this repository - NOT ACTIVE FROM THIS PATH.
 #
 # GitHub only runs workflows stored at .github/workflows/. This copy lives here
 # because writing that directory requires a token with the `workflow` scope,
@@ -87,7 +87,7 @@ jobs:
       - name: A pending payment must never be written as failed
         run: |
           if grep -rn "status === 'pending'" src/app/api/pos/orders/*/pay/route.ts >/dev/null; then
-            echo "pending is handled explicitly — ok"
+            echo "pending is handled explicitly - ok"
           else
             echo "::error::pay route no longer handles the 'pending' state explicitly"
             exit 1

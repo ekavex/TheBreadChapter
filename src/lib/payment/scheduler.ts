@@ -1,7 +1,7 @@
 // Periodic payment reconciliation sweep.
 //
 // Next.js 14's instrumentation hook also compiles for the Edge runtime, which
-// cannot bundle postgres.js — so the sweep is started from the Node-only
+// cannot bundle postgres.js - so the sweep is started from the Node-only
 // database module instead (see lib/db/index.ts). Same effect: one timer per
 // server process, started the first time the process talks to the database.
 //

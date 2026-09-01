@@ -2,9 +2,9 @@
 // emits one JSON line so ops can grep stdout or ship it to an aggregator.
 //
 // Two production requirements are handled here rather than at 100 call sites:
-//   • Correlation — every line carries the request id set by middleware, so a
+//   • Correlation - every line carries the request id set by middleware, so a
 //     single payment can be followed across pay → webhook → reconciler.
-//   • Redaction — no card data, VPA or security token ever reaches the log,
+//   • Redaction - no card data, VPA or security token ever reaches the log,
 //     whatever a caller passes in.
 
 import { headers } from 'next/headers'

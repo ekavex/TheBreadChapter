@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 // The amount check runs before any database work, so this exercises the real
 // guard without a live Postgres. getDb is stubbed to prove it is never reached
-// on a mismatch — i.e. a wrong-amount "approval" can never write PAID.
+// on a mismatch - i.e. a wrong-amount "approval" can never write PAID.
 vi.mock('@/lib/db', () => ({
   getDb: vi.fn(() => {
     throw new Error('database must not be touched when the amount does not match')

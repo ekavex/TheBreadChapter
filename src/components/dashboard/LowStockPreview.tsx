@@ -6,7 +6,7 @@ interface Props {
   items: Ingredient[]
 }
 
-// Module 10 "Low Stock Items" — e.g. "Bread < 20 pieces" preview on the dashboard.
+// Module 10 "Low Stock Items" - e.g. "Bread < 20 pieces" preview on the dashboard.
 export default function LowStockPreview({ items }: Props) {
   return (
     <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5">

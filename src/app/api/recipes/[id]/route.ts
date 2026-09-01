@@ -31,7 +31,7 @@ async function fetchRecipeWithDetails(recipeId: string) {
   }
 }
 
-// PATCH /api/recipes/[id] — replace a recipe's ingredient lines wholesale
+// PATCH /api/recipes/[id] - replace a recipe's ingredient lines wholesale
 // (simplest correct approach: delete then reinsert; the recompute trigger
 // fires on each step but converges to the right final cost).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/recipes/[id] — remove the recipe entirely (recipe_ingredients
+// DELETE /api/recipes/[id] - remove the recipe entirely (recipe_ingredients
 // cascade; the menu item's cost_price_paisa recompute trigger only fires on
 // recipe_ingredients changes, so we zero the cost explicitly here too).
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {

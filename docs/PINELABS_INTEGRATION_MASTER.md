@@ -1,8 +1,8 @@
-# Pine Labs Cloud Integration — Developer Master Guide
+# Pine Labs Cloud Integration - Developer Master Guide
 
 **Device:** Pine Labs A910S (Plutus Smart, Android EDC)
 **Integration type:** Cloud (RESTful JSON), server-to-server
-**Applies to:** Smart Cafe Management System — Module 5 (Order, KOT Routing & Payment)
+**Applies to:** Smart Cafe Management System - Module 5 (Order, KOT Routing & Payment)
 
 > **Source & disclaimer.** This guide is built from Pine Labs' Cloud Integration spec (UploadBilledTransaction / GetStatus / CancelTransaction / Force Cancel / Post Back URL). Exact endpoint **paths** for Upload and GetStatus are not fully spelled out in the spec we have (only the base pattern `.../API/CloudBasedIntegration/V1/...` is confirmed via the Force Cancel URL). **Confirm the exact paths, the production host, and your credentials with Pine Labs before go-live.** Field names/codes below are copied from the spec; treat them as authoritative for UAT and re-verify at onboarding.
 
@@ -17,7 +17,7 @@ The spec's own words: the goal is to "integrate a billing application on tablet 
 Consequences (do not design against these):
 
 - Your ordering UI stays a normal web app. **No app certification/deployment onto the locked-down device is needed** for the ordering flow.
-- All calls to Pine Labs happen **from your backend**, never the browser (your `SecurityToken` is a secret — see §4).
+- All calls to Pine Labs happen **from your backend**, never the browser (your `SecurityToken` is a secret - see §4).
 - The A910S needs only to be **registered to the cloud** and configured with the allowed payment modes.
 - The link between "the bill in your system" and "the payment on the terminal" is the **PTRID** returned by Upload. Everything hangs off that value.
 
@@ -61,7 +61,7 @@ Consequences (do not design against these):
 2. **Register each A910S** to the cloud and configure the **payment modes** the cafe will accept (Card, Cash, UPI).
 3. **UAT access**: base host `https://www.plutuscloudserviceuat.in:8201`, plus a **UAT test terminal / TID** so you can run transactions without real money.
 4. **Confirm exact endpoint paths** for Upload and GetStatus (Force Cancel is `.../API/CloudBasedIntegration/V1/CancelTransactionForced`).
-5. **Register a Post Back URL** (your webhook) with Pine Labs if you want pushed status updates (recommended — see §8).
+5. **Register a Post Back URL** (your webhook) with Pine Labs if you want pushed status updates (recommended - see §8).
 6. Decide **ClientId vs StoreId** usage (see §11) based on how many terminals the cafe runs.
 
 ---
@@ -70,7 +70,7 @@ Consequences (do not design against these):
 
 - **All Pine Labs calls originate from your backend.** The browser/terminal-facing web app must never hold `MerchantID` / `SecurityToken`.
 - Store credentials in server-side secrets (env vars / secret manager), not in code or the repo.
-- The Post Back URL must be **HTTPS**, and you should **validate** incoming callbacks (allowlist Pine Labs source if possible, and always re-verify with GetStatus before acting on money — treat the callback as a *trigger*, not as trusted final truth).
+- The Post Back URL must be **HTTPS**, and you should **validate** incoming callbacks (allowlist Pine Labs source if possible, and always re-verify with GetStatus before acting on money - treat the callback as a *trigger*, not as trusted final truth).
 - Log every request/response (with card numbers already masked by Pine Labs as `************1234`) for audit and reconciliation.
 
 ---
@@ -83,10 +83,10 @@ Method: `POST`, `Content-Type: application/json`
 
 You will use four operations:
 
-1. **UploadBilledTransaction** — create the payable transaction, get a PTRID.
-2. **GetStatus** — fetch final transaction result by PTRID.
-3. **CancelTransaction / CancelTransactionForced** — cancel an open/stuck transaction.
-4. **Post Back URL** — Pine Labs pushes the result to your webhook (alternative to polling GetStatus).
+1. **UploadBilledTransaction** - create the payable transaction, get a PTRID.
+2. **GetStatus** - fetch final transaction result by PTRID.
+3. **CancelTransaction / CancelTransactionForced** - cancel an open/stuck transaction.
+4. **Post Back URL** - Pine Labs pushes the result to your webhook (alternative to polling GetStatus).
 
 ---
 
@@ -111,7 +111,7 @@ You will use four operations:
 | `AutoCancelDurationInMinutes` | N | Auto-cancel the request if not completed (e.g. `5`). Use this. | O |
 | `ForceCancelOnBack` | B | If true, pressing Back on terminal force-cancels the txn. | O |
 
-**Payment mode codes you care about:** `1` Card · `2` Cash · `10` UPI Sale · `11` UPI Bharat QR. (Many others exist — EMI, wallets, Zomato/Swiggy, etc. — ignore for v1 unless the client asks.)
+**Payment mode codes you care about:** `1` Card · `2` Cash · `10` UPI Sale · `11` UPI Bharat QR. (Many others exist - EMI, wallets, Zomato/Swiggy, etc. - ignore for v1 unless the client asks.)
 
 **Example request (cafe bill ₹250, allow Card/Cash/UPI):**
 
@@ -165,7 +165,7 @@ Declined example:
 }
 ```
 
-**Response:** `ResponseCode`, `ResponseMessage` (`"TXN APPROVED"` on success), `PlutusTransactionReferenceID`, and **`TransactionData` — an array of `{Tag, Value}` pairs.**
+**Response:** `ResponseCode`, `ResponseMessage` (`"TXN APPROVED"` on success), `PlutusTransactionReferenceID`, and **`TransactionData` - an array of `{Tag, Value}` pairs.**
 
 ```json
 {
@@ -187,7 +187,7 @@ Declined example:
 }
 ```
 
-**CRITICAL parsing rule:** `TransactionData` **tags and their order vary by payment mode** (a UPI txn has `Customer VPA`, a card txn has `Card Number`/`Card Type`, EMI has tenure tags, etc.). **Always parse into a map by `Tag` — never by array index.** Example helper:
+**CRITICAL parsing rule:** `TransactionData` **tags and their order vary by payment mode** (a UPI txn has `Customer VPA`, a card txn has `Card Number`/`Card Type`, EMI has tenure tags, etc.). **Always parse into a map by `Tag` - never by array index.** Example helper:
 
 ```js
 function tagsToMap(transactionData = []) {
@@ -226,7 +226,7 @@ Use to cancel an **open** transaction (customer walked away, wrong amount, timeo
 
 Response: `ResponseCode` 0 = success. Invalid PTRID returns non-0 (`"INVALID PLUTUS TXN REF ID"`).
 
-**Cancellation rules (from spec — enforce in your state machine):**
+**Cancellation rules (from spec - enforce in your state machine):**
 - A sale can be cancelled **only until PIN entry**.
 - If cancelled **after** PIN entry, the txn is **auto-reversed**.
 - **UPI:** if the customer already paid via the UPI app but it's cancelled on the terminal, it **auto-reverses**.
@@ -235,7 +235,7 @@ Response: `ResponseCode` 0 = success. Invalid PTRID returns non-0 (`"INVALID PLU
 
 ---
 
-## 6. Post Back URL (webhook — recommended)
+## 6. Post Back URL (webhook - recommended)
 
 Instead of only polling, give Pine Labs a **Post Back URL** and they push the result to you in real time (best fit for "dashboard updates instantly").
 
@@ -287,9 +287,9 @@ Parse it as comma-split then `=`-split (mind that `PaymenMode` is spelled exactl
 ```
 
 **What this settles about the original requirements:**
-- The **UPI QR is generated by the A910S**, not your app — you just include mode `10`/`11` in `AllowedPaymentMode`.
+- The **UPI QR is generated by the A910S**, not your app - you just include mode `10`/`11` in `AllowedPaymentMode`.
 - **Card, Cash, and UPI** are all handled by one Upload call via `1|2|10`.
-- **KOT printing is separate** from this — food→kitchen, beverage→counter go to your own network/BT printers, driven by the backend when the order is confirmed (step 1), independent of Pine Labs.
+- **KOT printing is separate** from this - food→kitchen, beverage→counter go to your own network/BT printers, driven by the backend when the order is confirmed (step 1), independent of Pine Labs.
 
 ---
 
@@ -379,7 +379,7 @@ Webhook handler (`POST /webhooks/pinelabs`) parses the urlencoded CSV, finds the
 ## 12. Money, idempotency, reconciliation (non-negotiables)
 
 - **Paisa everywhere.** Convert once at the boundary; never send rupees or floats.
-- **Unique `TransactionNumber` per attempt.** If you retry a failed Upload, decide: reuse (idempotent) or new number — and keep the PTRID mapping straight.
+- **Unique `TransactionNumber` per attempt.** If you retry a failed Upload, decide: reuse (idempotent) or new number - and keep the PTRID mapping straight.
 - **Idempotent finalization.** Guard stock deduction and revenue on `status != PAID`. A duplicate webhook + poll must not double-count.
 - **Reconciliation job.** Nightly (or hourly): for any order in `AWAITING_PAYMENT` older than N minutes, call GetStatus; resolve to PAID/FAILED/CANCELLED. Store `RRN` + `TransactionLogId` for matching against Pine Labs settlement reports.
 - **Timeouts.** Use `AutoCancelDurationInMinutes` on Upload so abandoned bills self-cancel on the terminal; mirror that timeout on your side.
@@ -416,7 +416,7 @@ Webhook handler (`POST /webhooks/pinelabs`) parses the urlencoded CSV, finds the
 
 ## 15. Implementation phases (build order)
 
-1. **Mock provider + full order/KOT/bill/dashboard flow** — build and ship end-to-end against `MockPaymentProvider`. No Pine Labs dependency.
+1. **Mock provider + full order/KOT/bill/dashboard flow** - build and ship end-to-end against `MockPaymentProvider`. No Pine Labs dependency.
 2. **In parallel:** complete Pine Labs onboarding, get UAT creds + test terminal, confirm endpoint paths, register Post Back URL.
 3. **`PineLabsCloudProvider.charge()`** = UploadBilledTransaction; persist PTRID; order → AWAITING_PAYMENT.
 4. **`status()`** = GetStatus + tag-map parsing; finalization (idempotent) + dashboard push.

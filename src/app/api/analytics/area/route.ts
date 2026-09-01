@@ -4,7 +4,7 @@ import { getAreaAnalytics } from '@/lib/analytics'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/analytics/area?days=30 — Module 7.
+// GET /api/analytics/area?days=30 - Module 7.
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireAdmin(req)
   if (sessionGuard) return sessionGuard

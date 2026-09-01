@@ -3,7 +3,7 @@ import { getDb } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-// Public GET — customer-facing order tracker polls this to get live status.
+// Public GET - customer-facing order tracker polls this to get live status.
 // No auth required; only exposes status fields, not financial data.
 export async function GET(_req: NextRequest, { params }: { params: { orderId: string } }) {
   try {

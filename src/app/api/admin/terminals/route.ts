@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/admin/terminals — list all terminals
+// GET /api/admin/terminals - list all terminals
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin(req)
   if (guard) return guard
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ data: rows, error: null })
 }
 
-// POST /api/admin/terminals — add a new terminal
+// POST /api/admin/terminals - add a new terminal
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin(req)
   if (guard) return guard

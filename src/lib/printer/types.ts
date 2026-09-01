@@ -1,4 +1,4 @@
-// ─── PrinterService abstraction (Module 5 — KOT routing) ─────
+// ─── PrinterService abstraction (Module 5 - KOT routing) ─────
 // Kitchen and beverage counter are separate physical thermal printers.
 // Business logic never talks to a printer driver directly.
 

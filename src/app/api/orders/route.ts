@@ -13,7 +13,7 @@ const MAX_CUSTOMISATION_CHARS = 200
 
 interface IncomingLine { menuItemId?: string; quantity?: number; customisation?: string | null }
 
-// POST /api/orders — customer QR flow. Unauthenticated by nature (the customer
+// POST /api/orders - customer QR flow. Unauthenticated by nature (the customer
 // has no login), so NOTHING price-related from the request body is trusted:
 // names, prices, tax and totals are all recomputed from the database.
 export async function POST(req: NextRequest) {
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     `
     if (!table) return NextResponse.json({ data: null, error: 'Table not found' }, { status: 404 })
 
-    // Resolve every line against the live menu — price comes from the DB only.
+    // Resolve every line against the live menu - price comes from the DB only.
     const requestedIds = Array.from(
       new Set(items.map((i) => i.menuItemId).filter((id): id is string => typeof id === 'string' && id.length > 0))
     )
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
 
 const ALLOWED_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'making', 'ready', 'served', 'completed', 'cancelled']
 
-// Update order status — called by the kitchen display. Staff session required.
+// Update order status - called by the kitchen display. Staff session required.
 export async function PATCH(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -190,7 +190,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// Full order data (totals, customers, items) — staff session required.
+// Full order data (totals, customers, items) - staff session required.
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -204,7 +204,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const sql = getDb()
-    // The kitchen display polls this every few seconds on a tablet — send only
+    // The kitchen display polls this every few seconds on a tablet - send only
     // the columns it renders, and cap the board so one bad day cannot turn the
     // poll into a full table scan dump.
     const orders = kitchen

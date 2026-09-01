@@ -1,12 +1,12 @@
 // ─── Database Types ──────────────────────────────────────────
 // `Database` (and its Row/Insert/Update shapes) lives in database.generated.ts.
 // DB access here is raw SQL via the `postgres` client (src/lib/db), not a
-// PostgREST/Supabase client — there's no `.from(...)` query builder in this
+// PostgREST/Supabase client - there's no `.from(...)` query builder in this
 // codebase, so no codegen step keeps that file in sync. Update it by hand
 // after any migration that adds/renames/removes a column or table, then
 // adjust the friendly aliases below if needed. Keep Row/Insert/Update as
 // `type` aliases rather than `interface` for consistency with the rest of
-// this file — no functional requirement forces it either way anymore.
+// this file - no functional requirement forces it either way anymore.
 import type { Database as GeneratedDatabase } from './database.generated'
 
 export type Database = GeneratedDatabase
@@ -20,7 +20,7 @@ export type TableStatus = Enums['table_status']
 export type MenuItemCategory = Enums['menu_item_category']
 export type StockTxnType = Enums['stock_txn_type']
 
-// CHECK-constrained TEXT columns, not real Postgres enums — codegen can't
+// CHECK-constrained TEXT columns, not real Postgres enums - codegen can't
 // narrow these, so they stay hand-written.
 export type PosStatus = 'OPEN' | 'KOT_SENT' | 'BILLED' | 'AWAITING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'REQUIRES_VERIFICATION' | 'CANCELLED'
 export type UserRole = 'admin' | 'manager' | 'staff'

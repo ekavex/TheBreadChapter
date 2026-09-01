@@ -8,7 +8,7 @@ import { DEMO_CAFE_ID } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/admin/settings/printers — current printer config (DB merged over env)
+// GET /api/admin/settings/printers - current printer config (DB merged over env)
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// PATCH /api/admin/settings/printers — save printer config to cafes.settings
+// PATCH /api/admin/settings/printers - save printer config to cafes.settings
 export async function PATCH(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard

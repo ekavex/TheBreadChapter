@@ -21,7 +21,7 @@ export default function DashboardMetrics({ orderCount, revenue, activeOrders, av
     },
     {
       label: 'Avg. order value',
-      value: avgOrderValue > 0 ? `₹${Math.round(avgOrderValue)}` : '—',
+      value: avgOrderValue > 0 ? `₹${Math.round(avgOrderValue)}` : '-',
       sub: 'per order',
       accent: 'text-blue-600',
     },

@@ -72,7 +72,7 @@ export function printBill(order: BillOrder, opts: BillOptions): void {
     </table>
     <div class="div"></div>
     <div class="status">${opts.paid ? `PAID${opts.mode ? ` · ${escHtml(String(opts.mode))}` : ''}` : 'NOT PAID'}</div>
-    <div class="thanks">Thank you — please visit again</div>
+    <div class="thanks">Thank you - please visit again</div>
   `
 
   const html = `<!DOCTYPE html>

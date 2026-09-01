@@ -24,7 +24,7 @@ import { resolveStoreId } from '@/lib/payment/terminals'
 import type { Order, Payment } from '@/lib/types'
 import type { PaymentResult } from './types'
 
-// Only look at orders that have been waiting longer than this — anything
+// Only look at orders that have been waiting longer than this - anything
 // younger is probably still being paid in front of the customer.
 export const RECONCILE_AFTER_MS = 90_000
 

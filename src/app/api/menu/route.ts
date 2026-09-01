@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
-// Item availability/price changes must be visible immediately — don't let
+// Item availability/price changes must be visible immediately - don't let
 // Next.js's default GET route-handler caching serve a stale menu.
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// PATCH /api/menu — toggle item availability. Staff session required.
+// PATCH /api/menu - toggle item availability. Staff session required.
 export async function PATCH(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard

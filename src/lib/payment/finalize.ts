@@ -3,7 +3,7 @@
 //
 // Two P0 rules this file enforces:
 //   1. ALL writes happen inside a single database transaction. A crash halfway
-//      through must roll back completely — never leave an order that can never
+//      through must roll back completely - never leave an order that can never
 //      reach PAID because a side-effect flag was already consumed.
 //   2. The amount reported by Pine Labs is verified against the order total
 //      before anything is marked PAID. A mismatch is never finalized.
@@ -34,7 +34,7 @@ function mapPaymentMethod(mode?: string): 'card' | 'upi' | 'cash' | 'unpaid' {
 }
 
 // Thrown when Pine Labs reports an approved amount that does not match the
-// order total. The caller must NOT retry the charge — the payment needs manual
+// order total. The caller must NOT retry the charge - the payment needs manual
 // verification against the Pine Labs settlement report.
 export class PaymentAmountMismatchError extends Error {
   constructor(readonly orderId: string, readonly expectedPaisa: number, readonly reportedPaisa: number) {
@@ -87,11 +87,11 @@ export async function finalizeApprovedPayment(
   const result = await sql.begin(async (tx) => {
     const exec = tx as unknown as Sql
 
-    // Lock the order row — concurrent webhook + poll callers queue here.
+    // Lock the order row - concurrent webhook + poll callers queue here.
     const [locked] = await exec`SELECT * FROM orders WHERE id = ${order.id} FOR UPDATE`
     if (!locked) throw new Error(`Order ${order.id} disappeared during finalization`)
 
-    // Already finalized by whoever got the lock first — no side-effects.
+    // Already finalized by whoever got the lock first - no side-effects.
     if (locked.pos_status === 'PAID') {
       logger.info('payment.finalize.already_paid', { orderId: order.id, paymentId: payment.id })
       const paidOrder = await fetchOrderWithItems(exec, order.id)
@@ -104,7 +104,7 @@ export async function finalizeApprovedPayment(
 
     const items = await exec`SELECT * FROM order_items WHERE order_id = ${order.id} ORDER BY created_at`
 
-    // Stock deduction — one stock_transactions row per recipe ingredient line.
+    // Stock deduction - one stock_transactions row per recipe ingredient line.
     // Guarded by `stock_deducted_at` so a re-run after a rolled-back attempt
     // cannot double-deduct, while a rollback correctly un-sets the flag too.
     if (!locked.stock_deducted_at) {
@@ -120,7 +120,7 @@ export async function finalizeApprovedPayment(
               'sale_deduction',
               ${-(line.quantity * item.quantity)},
               ${order.id},
-              ${`Order ${order.order_number} — ${item.name} x${item.quantity}`}
+              ${`Order ${order.order_number} - ${item.name} x${item.quantity}`}
             )
           `
         }

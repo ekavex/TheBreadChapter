@@ -1,5 +1,5 @@
 -- ============================================================
--- SEED: The Bread Chapter (Demo client — Pune)
+-- SEED: The Bread Chapter (Demo client - Pune)
 -- Run: psql -d <your_db> -f supabase/seed/demo_cafe.sql
 -- ============================================================
 
@@ -31,7 +31,7 @@ INSERT INTO menu_items (cafe_id, category_id, name, name_hi, description, price,
   -- Hot Beverages
   ('11111111-1111-1111-1111-111111111111', 'ca000001-0000-0000-0000-000000000001',
    'Sunrise Signature Coffee', 'सनराइज सिग्नेचर कॉफी',
-   'Our house blend — smooth, strong, and just right', 120, true, true, 247, 5, 0),
+   'Our house blend - smooth, strong, and just right', 120, true, true, 247, 5, 0),
 
   ('11111111-1111-1111-1111-111111111111', 'ca000001-0000-0000-0000-000000000001',
    'Caramel Latte', 'कैरामल लट्टे',
@@ -39,11 +39,11 @@ INSERT INTO menu_items (cafe_id, category_id, name, name_hi, description, price,
 
   ('11111111-1111-1111-1111-111111111111', 'ca000001-0000-0000-0000-000000000001',
    'Masala Chai', 'मसाला चाय',
-   'Ginger, cardamom, and Assam tea — the real deal', 60, true, false, 312, 3, 1),
+   'Ginger, cardamom, and Assam tea - the real deal', 60, true, false, 312, 3, 1),
 
   ('11111111-1111-1111-1111-111111111111', 'ca000001-0000-0000-0000-000000000001',
    'Filter Coffee', 'फिल्टर कॉफी',
-   'South Indian style — served in a traditional dabara', 80, true, false, 95, 4, 0),
+   'South Indian style - served in a traditional dabara', 80, true, false, 95, 4, 0),
 
   -- Cold Beverages
   ('11111111-1111-1111-1111-111111111111', 'ca000002-0000-0000-0000-000000000002',
@@ -61,11 +61,11 @@ INSERT INTO menu_items (cafe_id, category_id, name, name_hi, description, price,
   -- Snacks
   ('11111111-1111-1111-1111-111111111111', 'ca000003-0000-0000-0000-000000000003',
    'Chocolate Croissant', 'चॉकलेट क्रोइसां',
-   'Buttery, flaky, dark chocolate filling — baked fresh', 120, true, true, 176, 3, 0),
+   'Buttery, flaky, dark chocolate filling - baked fresh', 120, true, true, 176, 3, 0),
 
   ('11111111-1111-1111-1111-111111111111', 'ca000003-0000-0000-0000-000000000003',
    'Vada Pav', 'वडा पाव',
-   'Mumbai style — spicy potato vada, green chutney, pav', 50, true, false, 298, 5, 2),
+   'Mumbai style - spicy potato vada, green chutney, pav', 50, true, false, 298, 5, 2),
 
   ('11111111-1111-1111-1111-111111111111', 'ca000003-0000-0000-0000-000000000003',
    'Cheese Toast', 'चीज़ टोस्ट',
@@ -83,8 +83,8 @@ INSERT INTO menu_items (cafe_id, category_id, name, name_hi, description, price,
   -- Desserts
   ('11111111-1111-1111-1111-111111111111', 'ca000005-0000-0000-0000-000000000005',
    'Chocolate Brownie', 'चॉकलेट ब्राउनी',
-   'Warm, fudgy — served with a scoop of vanilla', 150, true, true, 159, 5, 0),
+   'Warm, fudgy - served with a scoop of vanilla', 150, true, true, 159, 5, 0),
 
   ('11111111-1111-1111-1111-111111111111', 'ca000005-0000-0000-0000-000000000005',
    'Gulab Jamun', 'गुलाब जामुन',
-   'Classic, soft, rose-syrup soaked — served warm (2 pcs)', 90, true, false, 178, 3, 0);
+   'Classic, soft, rose-syrup soaked - served warm (2 pcs)', 90, true, false, 178, 3, 0);

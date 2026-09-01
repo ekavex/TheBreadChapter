@@ -127,7 +127,7 @@
             android:layout_marginVertical="16dp"
             android:background="@color/divider" />
 
-        <!-- Auto-login credentials (POS kiosk convenience — stored in SharedPreferences) -->
+        <!-- Auto-login credentials (POS kiosk convenience - stored in SharedPreferences) -->
         <TextView
             style="@style/SettingsLabel"
             android:text="Auto-login User ID (leave blank to disable)" />

@@ -13,7 +13,7 @@ import type { Terminal } from '@/lib/types'
 
 export class NoTerminalConfiguredError extends Error {
   constructor() {
-    super('No payment terminal is configured — add the A910S ClientId to the terminals table')
+    super('No payment terminal is configured - add the A910S ClientId to the terminals table')
     this.name = 'NoTerminalConfiguredError'
   }
 }
@@ -27,7 +27,7 @@ export function resolveStoreId(): string {
   const configured = process.env.PINELABS_STORE_ID?.trim()
   if (configured) return configured
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('PINELABS_STORE_ID is not set — refusing to record payments against a placeholder store')
+    throw new Error('PINELABS_STORE_ID is not set - refusing to record payments against a placeholder store')
   }
   return DEMO_STORE_ID
 }

@@ -457,7 +457,7 @@ export default function OrdersClient({ orders, currentDate, availableDates, acti
                           <p className="text-xs text-ink-faint mt-0.5">{format(new Date(order.created_at), 'h:mm a')}</p>
                         </td>
                         <td className="px-4 py-3.5 text-ink-muted">
-                          {tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : '—')}
+                          {tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : '-')}
                         </td>
                         <td className="px-4 py-3.5">
                           <span className="text-ink-muted">{(order.items ?? []).length} items</span>

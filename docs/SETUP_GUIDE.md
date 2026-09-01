@@ -1,6 +1,6 @@
-# Setup Guide — The Bread Chapter
+# Setup Guide - The Bread Chapter
 
-Get the Smart Cafe System running on any machine in minutes. Docker handles the database, the build, and all dependencies — you only need Git and Docker.
+Get the Smart Cafe System running on any machine in minutes. Docker handles the database, the build, and all dependencies - you only need Git and Docker.
 
 ---
 
@@ -12,7 +12,7 @@ Get the Smart Cafe System running on any machine in minutes. Docker handles the 
 | Git | any | [git-scm.com](https://git-scm.com) |
 | openssl | any | Pre-installed on Linux/macOS |
 
-> **Note** — Node.js is not required on the host. The app builds and runs entirely inside Docker.
+> **Note** - Node.js is not required on the host. The app builds and runs entirely inside Docker.
 
 ---
 
@@ -70,7 +70,7 @@ Three accounts are created automatically from the schema seed.
 | Manager | `manager` | `manager123` |
 | Staff | `staff` | `staff123` |
 
-> **Production** — change passwords via the Admin panel at `/dashboard/admin` after first login. The seed also inserts demo cafe and menu data; clear it before going live.
+> **Production** - change passwords via the Admin panel at `/dashboard/admin` after first login. The seed also inserts demo cafe and menu data; clear it before going live.
 
 ---
 
@@ -86,7 +86,7 @@ Three accounts are created automatically from the schema seed.
 | Rebuild after code change | `docker compose up -d --build` |
 | Wipe all data (destructive) | `docker compose down -v` |
 
-**Change the port** — set `APP_PORT=8080` in `.env`. The app will be at `http://localhost:8080`.
+**Change the port** - set `APP_PORT=8080` in `.env`. The app will be at `http://localhost:8080`.
 
 ---
 
@@ -99,7 +99,7 @@ git pull
 docker compose up -d --build
 ```
 
-> **Schema migrations** — if the DB schema changed, apply the new SQL manually via the DB console or add the file to `docker/schema.sql` before rebuilding. The init script only runs on an empty volume (first start).
+> **Schema migrations** - if the DB schema changed, apply the new SQL manually via the DB console or add the file to `docker/schema.sql` before rebuilding. The init script only runs on an empty volume (first start).
 
 ---
 
@@ -134,7 +134,7 @@ After getting the certificate, set `NEXT_PUBLIC_APP_URL=https://yourdomain.com` 
 
 ### Firewall
 
-Open ports 80 and 443. Port 3000 does **not** need to be public — Nginx proxies to it internally.
+Open ports 80 and 443. Port 3000 does **not** need to be public - Nginx proxies to it internally.
 
 ```bash
 ufw allow 80 && ufw allow 443
@@ -146,9 +146,9 @@ ufw allow 80 && ufw allow 443
 
 | Symptom | Fix |
 |---|---|
-| `db` container not healthy | Run `docker compose logs db` — usually a wrong `POSTGRES_PASSWORD` or port 5432 conflict |
-| App crashes on start | `docker compose logs app` — look for `DATABASE_URL` or missing env var errors |
+| `db` container not healthy | Run `docker compose logs db` - usually a wrong `POSTGRES_PASSWORD` or port 5432 conflict |
+| App crashes on start | `docker compose logs app` - look for `DATABASE_URL` or missing env var errors |
 | Build fails with TS error | Run `npm run build` locally first to catch errors before deploying |
 | Port 3000 already in use | Set `APP_PORT=3001` in `.env` |
-| Schema not applied on fresh start | Init script only runs on empty volume — run `docker compose down -v` then `up -d --build` |
+| Schema not applied on fresh start | Init script only runs on empty volume - run `docker compose down -v` then `up -d --build` |
 | QR codes point to wrong URL | Set `NEXT_PUBLIC_APP_URL` to the public domain/IP in `.env` and rebuild |

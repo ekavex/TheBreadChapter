@@ -1,7 +1,7 @@
 import net from 'net'
 import type { PrinterService, KotTicket } from './types'
 
-// ESC/POS byte sequences — standard across most 80mm/58mm thermal printers.
+// ESC/POS byte sequences - standard across most 80mm/58mm thermal printers.
 const ESC = 0x1b
 const GS = 0x1d
 

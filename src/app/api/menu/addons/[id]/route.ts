@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { requireManagerOrAdmin } from '@/lib/auth/requireDashboardSession'
 
-// PATCH /api/menu/addons/[id] — update an add-on (name, price, is_active, sort_order)
+// PATCH /api/menu/addons/[id] - update an add-on (name, price, is_active, sort_order)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const guard = await requireManagerOrAdmin(req)
   if (guard) return guard
@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/menu/addons/[id] — permanently delete an add-on
+// DELETE /api/menu/addons/[id] - permanently delete an add-on
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const guard = await requireManagerOrAdmin(req)
   if (guard) return guard

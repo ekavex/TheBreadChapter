@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-bt-print.sh — ESC/POS Bluetooth thermal printer test
+# test-bt-print.sh - ESC/POS Bluetooth thermal printer test
 # Usage:
 #   sudo ./scripts/test-bt-print.sh [MAC] [CHANNEL]
 #
@@ -136,7 +136,7 @@ log "Checking prerequisites..."
 
 for cmd in rfcomm hcitool; do
     command -v "$cmd" &>/dev/null || \
-        fail "Missing: $cmd — install with: sudo apt-get install -y bluez"
+        fail "Missing: $cmd - install with: sudo apt-get install -y bluez"
 done
 
 ok "BlueZ tools present"
@@ -161,7 +161,7 @@ log "Binding $MAC → $RFCOMM_DEV (channel $CHANNEL)..."
 sudo rfcomm release "$RFCOMM_DEV" 2>/dev/null || true
 
 if ! sudo rfcomm bind "$RFCOMM_DEV" "$MAC" "$CHANNEL" 2>/dev/null; then
-    fail "rfcomm bind failed — is the printer on and in range?"
+    fail "rfcomm bind failed - is the printer on and in range?"
 fi
 
 ok "RFCOMM bound: $RFCOMM_DEV"
@@ -170,7 +170,7 @@ sleep 1.5
 
 if [ ! -e "$RFCOMM_DEV" ]; then
     sudo rfcomm release "$RFCOMM_DEV" 2>/dev/null || true
-    fail "Device $RFCOMM_DEV not found after bind — printer may be off or out of range"
+    fail "Device $RFCOMM_DEV not found after bind - printer may be off or out of range"
 fi
 
 ok "Device ready: $RFCOMM_DEV"
@@ -396,7 +396,7 @@ else
 
     sudo rfcomm release "$RFCOMM_DEV" 2>/dev/null || true
 
-    fail "Write to $RFCOMM_DEV failed — printer may have disconnected"
+    fail "Write to $RFCOMM_DEV failed - printer may have disconnected"
 
 fi
 

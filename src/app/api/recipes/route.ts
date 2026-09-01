@@ -4,7 +4,7 @@ import { requireManagerOrAdmin } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/recipes?menuItemId=xxx — fetch the recipe (with ingredient lines)
+// GET /api/recipes?menuItemId=xxx - fetch the recipe (with ingredient lines)
 // for a menu item, or { data: null } if it doesn't have one yet.
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireManagerOrAdmin(req)
@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/recipes — Module 2: attach a recipe (ingredient + quantity lines)
-// to a menu item. Recipe cost is never stored here — a DB trigger recomputes
+// POST /api/recipes - Module 2: attach a recipe (ingredient + quantity lines)
+// to a menu item. Recipe cost is never stored here - a DB trigger recomputes
 // menu_items.cost_price_paisa the moment the lines are inserted.
 export async function POST(req: NextRequest) {
   const sessionGuard = await requireManagerOrAdmin(req)

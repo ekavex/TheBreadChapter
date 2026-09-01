@@ -1,7 +1,7 @@
 // Single place where the live PaymentProvider is chosen.
 //
 // Safety rule (P0): a production deployment must NEVER silently fall back to
-// MockPaymentProvider — a missing env var would otherwise mark every order PAID
+// MockPaymentProvider - a missing env var would otherwise mark every order PAID
 // without any money being collected. Selection is therefore explicit:
 //
 //   PAYMENT_PROVIDER=pinelabs  → real provider, requires all credentials
@@ -36,7 +36,7 @@ export function createPaymentProvider(): PaymentProvider {
   if (requested === 'mock') {
     if (isProduction()) {
       throw new Error(
-        'PAYMENT_PROVIDER=mock is not allowed in production — set PAYMENT_PROVIDER=pinelabs and configure Pine Labs credentials.'
+        'PAYMENT_PROVIDER=mock is not allowed in production - set PAYMENT_PROVIDER=pinelabs and configure Pine Labs credentials.'
       )
     }
     logger.warn('payment.provider.mock', { reason: 'explicitly requested' })
@@ -65,7 +65,7 @@ export function createPaymentProvider(): PaymentProvider {
 // Lazily built and memoised: `next build` runs module top-level code with
 // NODE_ENV=production, so eager construction would fail the build on any
 // machine without live credentials. Failing on first use keeps the safety
-// guarantee where it matters — no request can be served by a mock in prod.
+// guarantee where it matters - no request can be served by a mock in prod.
 let cached: PaymentProvider | null = null
 
 export function getPaymentProvider(): PaymentProvider {

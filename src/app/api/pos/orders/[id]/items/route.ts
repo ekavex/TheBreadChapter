@@ -21,7 +21,7 @@ async function fetchOrderWithDetails(orderId: string) {
   return { ...order, items, table }
 }
 
-// POST /api/pos/orders/[id]/items — add an item to an OPEN order. Merges into
+// POST /api/pos/orders/[id]/items - add an item to an OPEN order. Merges into
 // an existing line (same menu item, no customisation) instead of duplicating.
 // Items are locked once the order moves past OPEN (KOT already sent).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const [order] = await sql`SELECT pos_status, table_id FROM orders WHERE id = ${params.id}`
     if (!order) return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
     if (!['OPEN', 'KOT_SENT'].includes(order.pos_status)) {
-      return NextResponse.json({ data: null, error: `Items are locked — order is already ${order.pos_status}` }, { status: 409 })
+      return NextResponse.json({ data: null, error: `Items are locked - order is already ${order.pos_status}` }, { status: 409 })
     }
 
     const [menuItem] = await sql`SELECT * FROM menu_items WHERE id = ${menu_item_id}`
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const itemName = hasVariant ? `${menuItem.name} (${variant.label})` : menuItem.name
     const basePrice = hasVariant ? Number(variant.price) : Number(menuItem.price)
 
-    // When KOT is already sent, never merge into an existing line — always create
+    // When KOT is already sent, never merge into an existing line - always create
     // a new row with a fresh created_at so the frontend can diff "sent vs add-on".
     // Also never merge variant items (different variants are separate lines).
     const [existingLine] = (note || hasAddons || hasVariant || order.pos_status === 'KOT_SENT')

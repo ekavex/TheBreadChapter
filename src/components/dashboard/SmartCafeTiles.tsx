@@ -33,19 +33,19 @@ export default function SmartCafeTiles({
     },
     {
       label: 'Top seller today',
-      value: topSellerToday?.name ?? '—',
+      value: topSellerToday?.name ?? '-',
       sub: topSellerToday ? `${topSellerToday.count} sold` : 'no orders yet',
       accent: 'text-brand-500',
     },
     {
       label: 'Most visited area',
-      value: mostVisitedArea?.name ?? '—',
+      value: mostVisitedArea?.name ?? '-',
       sub: mostVisitedArea ? `${mostVisitedArea.count} orders today` : 'no orders yet',
       accent: 'text-blue-600',
     },
     {
       label: 'Peak hour',
-      value: peakHour ? formatHour(peakHour.hour) : '—',
+      value: peakHour ? formatHour(peakHour.hour) : '-',
       sub: peakHour ? `${peakHour.count} orders` : 'no orders yet',
       accent: 'text-purple-600',
     },

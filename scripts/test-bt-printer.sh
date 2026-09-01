@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-bt-printer.sh — Bluetooth range & connectivity test for KOT thermal printer
+# test-bt-printer.sh - Bluetooth range & connectivity test for KOT thermal printer
 # Usage: ./scripts/test-bt-printer.sh [MAC] [pings]
 # Example: ./scripts/test-bt-printer.sh 66:32:F7:C5:B7:05 10
 
@@ -28,7 +28,7 @@ echo ""
 log "Checking tools..."
 for cmd in hcitool l2ping rfcomm; do
   if ! command -v "$cmd" &>/dev/null; then
-    fail "Missing: $cmd — install with: sudo apt-get install -y bluez"
+    fail "Missing: $cmd - install with: sudo apt-get install -y bluez"
     exit 1
   fi
 done
@@ -45,7 +45,7 @@ ok "Adapter: $ADAPTER"
 
 # ── 3. L2CAP ping (range test) ──────────────────────────────────────────────
 echo ""
-log "L2CAP ping — $COUNT packets to $MAC"
+log "L2CAP ping - $COUNT packets to $MAC"
 log "Move the printer further away between pings to test range."
 echo ""
 
@@ -63,7 +63,7 @@ echo ""
 if [ "$BT_EXIT" -eq 0 ]; then
   ok "Printer is reachable via Bluetooth"
 else
-  fail "Printer did not respond — out of range or powered off"
+  fail "Printer did not respond - out of range or powered off"
 fi
 
 # ── 4. RSSI (signal strength) ───────────────────────────────────────────────
@@ -72,7 +72,7 @@ log "Checking signal strength (RSSI)..."
 log "RSSI guide:  0 to -50 = excellent  |  -50 to -70 = good  |  -80+ = weak"
 echo ""
 
-# Need an active connection for RSSI — bind RFCOMM temporarily
+# Need an active connection for RSSI - bind RFCOMM temporarily
 BOUND=false
 if sudo rfcomm bind "$RFCOMM_DEV" "$MAC" "$RFCOMM_CHANNEL" 2>/dev/null; then
   BOUND=true
@@ -84,13 +84,13 @@ echo "  $RSSI_RAW"
 
 if echo "$RSSI_RAW" | grep -q "RSSI return value"; then
   RSSI_VAL=$(echo "$RSSI_RAW" | grep -oP '[-0-9]+' | tail -1)
-  if   [ "$RSSI_VAL" -ge -50 ]; then ok  "Signal: ${RSSI_VAL} dBm — Excellent"
-  elif [ "$RSSI_VAL" -ge -70 ]; then ok  "Signal: ${RSSI_VAL} dBm — Good"
-  elif [ "$RSSI_VAL" -ge -80 ]; then warn "Signal: ${RSSI_VAL} dBm — Weak, may drop"
-  else                                fail "Signal: ${RSSI_VAL} dBm — Too weak for reliable printing"
+  if   [ "$RSSI_VAL" -ge -50 ]; then ok  "Signal: ${RSSI_VAL} dBm - Excellent"
+  elif [ "$RSSI_VAL" -ge -70 ]; then ok  "Signal: ${RSSI_VAL} dBm - Good"
+  elif [ "$RSSI_VAL" -ge -80 ]; then warn "Signal: ${RSSI_VAL} dBm - Weak, may drop"
+  else                                fail "Signal: ${RSSI_VAL} dBm - Too weak for reliable printing"
   fi
 else
-  warn "Could not read RSSI — printer may not be paired yet"
+  warn "Could not read RSSI - printer may not be paired yet"
 fi
 
 # ── 5. Cleanup ───────────────────────────────────────────────────────────────

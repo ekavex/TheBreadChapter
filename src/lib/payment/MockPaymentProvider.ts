@@ -1,6 +1,6 @@
 import type { PaymentProvider, PaymentResult, ChargeInput, TerminalContext } from './types'
 
-// In-memory only — fine for a single long-running dev/prod Node process.
+// In-memory only - fine for a single long-running dev/prod Node process.
 // Real state of truth once M6 lands is Pine Labs + our `payments` table.
 const store = new Map<string, PaymentResult>()
 
@@ -53,6 +53,6 @@ export class MockPaymentProvider implements PaymentProvider {
   }
 }
 
-// Provider selection lives in ./provider.ts — importing `paymentProvider` from
+// Provider selection lives in ./provider.ts - importing `paymentProvider` from
 // this file used to silently enable the mock in production (P0). Import from
 // '@/lib/payment/provider' instead.

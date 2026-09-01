@@ -11,8 +11,8 @@ async function recordStaffAction(userId: string, action: string, description: st
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/ingredients — list all ingredients, with low-stock/expiry flags
-// computed server-side so the UI stays presentational. Dashboard-only data —
+// GET /api/ingredients - list all ingredients, with low-stock/expiry flags
+// computed server-side so the UI stays presentational. Dashboard-only data -
 // not part of the public customer menu API, so it's session-gated.
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/ingredients — add a new ingredient (manager or admin only)
+// POST /api/ingredients - add a new ingredient (manager or admin only)
 export async function POST(req: NextRequest) {
   const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard

@@ -32,7 +32,7 @@ export function useKitchenOrders(_cafeId: string) {
   return { orders, loading }
 }
 
-// Hook for customer to track their own order — polls the public order status endpoint
+// Hook for customer to track their own order - polls the public order status endpoint
 export function useOrderStatus(orderId: string) {
   const [order, setOrder] = useState<Order | null>(null)
   const doneRef = useRef(false)
@@ -53,7 +53,7 @@ export function useOrderStatus(orderId: string) {
             doneRef.current = true
           }
         }
-      } catch { /* network blip — keep polling */ }
+      } catch { /* network blip - keep polling */ }
     }
 
     poll()

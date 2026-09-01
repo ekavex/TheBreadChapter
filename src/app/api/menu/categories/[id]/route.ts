@@ -11,7 +11,7 @@ async function recordStaffAction(userId: string, action: string, description: st
   await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
 }
 
-// PATCH /api/menu/categories/[id] — Edit menu category (staff action logged)
+// PATCH /api/menu/categories/[id] - Edit menu category (staff action logged)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/menu/categories/[id] — Delete menu category (staff action logged)
+// DELETE /api/menu/categories/[id] - Delete menu category (staff action logged)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
@@ -59,7 +59,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     if (Number(count) > 0) {
       return NextResponse.json(
-        { data: null, error: `This category still has ${count} item(s) — delete or move them first` },
+        { data: null, error: `This category still has ${count} item(s) - delete or move them first` },
         { status: 409 }
       )
     }

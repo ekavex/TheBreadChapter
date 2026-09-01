@@ -13,9 +13,9 @@ type IngredientPatch = Partial<
   Pick<Ingredient, 'name' | 'unit' | 'low_stock_threshold' | 'cost_per_unit_paisa' | 'is_perishable' | 'expiry_date'>
 >
 
-// PATCH /api/ingredients/[id] — edit ingredient metadata (name, unit,
+// PATCH /api/ingredients/[id] - edit ingredient metadata (name, unit,
 // thresholds, cost, perishability, expiry). `current_stock` is deliberately
-// NOT editable here — it only ever changes through a stock_transactions entry
+// NOT editable here - it only ever changes through a stock_transactions entry
 // (see POST .../stock) so there's always an audit trail (Module 1).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireManagerOrAdmin(req)
@@ -72,10 +72,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ data: { ok: true }, error: null })
   } catch (err) {
     const code = (err as { code?: string }).code
-    // FK violation — ingredient is still used in a recipe
+    // FK violation - ingredient is still used in a recipe
     if (code === '23503') {
       return NextResponse.json(
-        { data: null, error: 'This ingredient is used in one or more recipes — remove it from those recipes first' },
+        { data: null, error: 'This ingredient is used in one or more recipes - remove it from those recipes first' },
         { status: 409 }
       )
     }

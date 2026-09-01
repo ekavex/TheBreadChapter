@@ -48,7 +48,7 @@ object EscPosHelper {
         out.write(byteArrayOf(0x1D, 0x28, 0x6B, 4, 0, 49, 65, 2, 0))
         // Module size (dots per cell)
         out.write(byteArrayOf(0x1D, 0x28, 0x6B, 3, 0, 49, 67, moduleSize.toByte(), 0))
-        // Error correction level L (lightest — smaller QR, still scannable)
+        // Error correction level L (lightest - smaller QR, still scannable)
         out.write(byteArrayOf(0x1D, 0x28, 0x6B, 3, 0, 49, 69, 48, 0))
         // Store data: pL pH = (n + 3) split across low/high byte
         val pL = ((n + 3) and 0xFF).toByte()
@@ -80,7 +80,7 @@ object EscPosHelper {
         w(INIT)
         w(ALIGN_CENTER)
 
-        // Table label — large and prominent (no station header)
+        // Table label - large and prominent (no station header)
         w(BOLD_ON)
         w(DOUBLE_SIZE)
         w(text("TABLE: $tableLabel"))
@@ -91,7 +91,7 @@ object EscPosHelper {
         w(text(DIV.trimEnd()))
         w(ALIGN_LEFT)
 
-        // Items — double-height for easy reading across the barista station
+        // Items - double-height for easy reading across the barista station
         for (item in items) {
             val qty  = (item["quantity"] as? Number)?.toInt() ?: 1
             val name = (item["name"] as? String) ?: ""
@@ -187,7 +187,7 @@ object EscPosHelper {
         w(NORMAL_SIZE)
         w(BOLD_OFF)
         w(text(DIV.trimEnd()))
-        // Table label — double-height for easy reading
+        // Table label - double-height for easy reading
         w(BOLD_ON)
         w(DOUBLE_HEIGHT)
         w(text("Table: $tableLabel"))
@@ -229,7 +229,7 @@ object EscPosHelper {
         w(LF)
         w(qrCode(upiUrl, moduleSize = 6))
         w(LF)
-        // Net total below QR — large and bold
+        // Net total below QR - large and bold
         w(BOLD_ON)
         w(DOUBLE_HEIGHT)
         w(text(totalStr))

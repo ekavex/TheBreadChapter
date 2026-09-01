@@ -1,8 +1,8 @@
-// Pine Labs Cloud Integration — M6.
+// Pine Labs Cloud Integration - M6.
 // Implements PaymentProvider against Pine Labs' CloudBasedIntegration V1 API.
 // All calls are server-to-server; SecurityToken never leaves the backend.
 //
-// Endpoint paths — CONFIRM with Pine Labs before go-live (§16 of the spec):
+// Endpoint paths - CONFIRM with Pine Labs before go-live (§16 of the spec):
 //   Upload:    /API/CloudBasedIntegration/V1/UploadBilledTransaction
 //   GetStatus: /API/CloudBasedIntegration/V1/GetCloudBasedTxnStatus
 //   Cancel:    /API/CloudBasedIntegration/V1/CancelTransactionForced
@@ -33,7 +33,7 @@ interface StatusResponse {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// CRITICAL: always parse TransactionData by Tag — never by index.
+// CRITICAL: always parse TransactionData by Tag - never by index.
 // Tags and their order vary by payment mode (card vs UPI vs cash).
 function tagsToMap(rows: { Tag: string; Value: string }[] = []): Record<string, string> {
   const m: Record<string, string> = {}
@@ -84,7 +84,7 @@ function timeoutMs(): number {
 interface PostOptions {
   /** Retry on connection-level failures. Never enable for Upload after a timeout. */
   retryOnConnectionError?: boolean
-  /** Retry when Pine Labs answers 5xx — only safe for idempotent calls. */
+  /** Retry when Pine Labs answers 5xx - only safe for idempotent calls. */
   retryOnServerError?: boolean
 }
 
@@ -177,14 +177,14 @@ export class PineLabsCloudProvider implements PaymentProvider {
 
   // ─── charge → UploadBilledTransaction ──────────────────────────────────────
   // Pushes the bill to Pine Labs cloud; the A910S picks it up by ClientId.
-  // Returns status:'pending' + PTRID on success — caller must poll status().
+  // Returns status:'pending' + PTRID on success - caller must poll status().
   async charge(input: ChargeInput): Promise<PaymentResult> {
     const url = `${this.base}/API/CloudBasedIntegration/V1/UploadBilledTransaction`
     if (!input.clientId || !Number.isFinite(Number(input.clientId))) {
-      throw new Error(`Invalid terminal ClientId "${input.clientId}" — the bill cannot be routed to a terminal`)
+      throw new Error(`Invalid terminal ClientId "${input.clientId}" - the bill cannot be routed to a terminal`)
     }
     if (!Number.isInteger(input.amountPaisa) || input.amountPaisa <= 0) {
-      throw new Error(`Invalid amount ${input.amountPaisa} — Pine Labs requires a positive integer paisa amount`)
+      throw new Error(`Invalid amount ${input.amountPaisa} - Pine Labs requires a positive integer paisa amount`)
     }
     const body = {
       MerchantID:                   Number(this.mid),
@@ -208,7 +208,7 @@ export class PineLabsCloudProvider implements PaymentProvider {
       mode: input.allowedModes,
     })
 
-    // Upload is NOT idempotent — only retried when the connection never landed.
+    // Upload is NOT idempotent - only retried when the connection never landed.
     const resp = await plPost<UploadResponse>(url, body, { retryOnConnectionError: true })
 
     logger.info('pinelabs.upload.response', {
@@ -231,7 +231,7 @@ export class PineLabsCloudProvider implements PaymentProvider {
 
   // ─── status → GetCloudBasedTxnStatus ───────────────────────────────────────
   // Checks final state by PTRID. Returns 'pending' when the terminal hasn't
-  // settled yet — caller should poll until approved/declined/cancelled.
+  // settled yet - caller should poll until approved/declined/cancelled.
   async status(ptrid: string, ctx: TerminalContext): Promise<PaymentResult> {
     const url = `${this.base}/API/CloudBasedIntegration/V1/GetCloudBasedTxnStatus`
     const body = {
@@ -275,7 +275,7 @@ export class PineLabsCloudProvider implements PaymentProvider {
       return { status: 'declined', ptrid, raw: resp }
     }
 
-    // Anything else — transaction still open on terminal, keep polling
+    // Anything else - transaction still open on terminal, keep polling
     return { status: 'pending', ptrid, raw: resp }
   }
 

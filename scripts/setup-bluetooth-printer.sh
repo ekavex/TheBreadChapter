@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ─── Billing Buddy 58mm Bluetooth Printer — One-time Setup ──────────────────
+# ─── Billing Buddy 58mm Bluetooth Printer - One-time Setup ──────────────────
 # Run this ONCE on the Kali machine that runs the Next.js server.
 # After this, the app auto-reconnects via env vars on every start.
 #
@@ -50,7 +50,7 @@ fi
 
 # ── 4. Pair and trust ─────────────────────────────────────────────────────────
 info "Pairing with $MAC..."
-bluetoothctl pair   "$MAC" || warn "Already paired or pairing failed — continuing"
+bluetoothctl pair   "$MAC" || warn "Already paired or pairing failed - continuing"
 bluetoothctl trust  "$MAC"
 info "Printer trusted."
 
@@ -60,7 +60,7 @@ RFCOMM_INDEX=0
 CHANNEL=1
 
 if [ -e "$DEVICE" ]; then
-  warn "$DEVICE already exists — releasing it first."
+  warn "$DEVICE already exists - releasing it first."
   rfcomm release $RFCOMM_INDEX || true
 fi
 

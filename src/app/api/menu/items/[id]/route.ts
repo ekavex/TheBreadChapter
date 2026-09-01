@@ -18,7 +18,7 @@ async function recordStaffAction(userId: string, action: string, description: st
   await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
 }
 
-// PATCH /api/menu/items/[id] — Edit menu item (staff action logged)
+// PATCH /api/menu/items/[id] - Edit menu item (staff action logged)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
@@ -39,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (updateData.category && !['food', 'beverage'].includes(updateData.category)) {
       return NextResponse.json({ data: null, error: 'category must be "food" or "beverage"' }, { status: 400 })
     }
-    // Handle variants separately — sql() tag can't serialize JSONB in a SET clause
+    // Handle variants separately - sql() tag can't serialize JSONB in a SET clause
     let variantsOverride: { apply: boolean; value: unknown } = { apply: false, value: null }
     if ('variants' in body) {
       variantsOverride = {
@@ -86,7 +86,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/menu/items/[id] — Delete menu item (staff action logged)
+// DELETE /api/menu/items/[id] - Delete menu item (staff action logged)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
@@ -110,7 +110,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const code = (err as { code?: string }).code
     if (code === '23503') {
       return NextResponse.json(
-        { data: null, error: 'This item has previous orders on record — mark it unavailable instead of deleting it' },
+        { data: null, error: 'This item has previous orders on record - mark it unavailable instead of deleting it' },
         { status: 409 }
       )
     }

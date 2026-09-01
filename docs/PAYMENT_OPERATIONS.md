@@ -1,7 +1,7 @@
 # Payment Operations Guide
 
 How money moves through this system, what each state means, and what to do when
-something is stuck. Written for whoever is on shift — not just developers.
+something is stuck. Written for whoever is on shift - not just developers.
 
 ---
 
@@ -17,7 +17,7 @@ BILLED ──pay──► AWAITING_PAYMENT ──┬── Pine Labs says approv
 | State | Means | Who resolves it |
 |---|---|---|
 | `AWAITING_PAYMENT` | A transaction is live on the terminal. | Resolves itself: the screen polls, the webhook pushes, the reconciler sweeps. |
-| `PAID` | Pine Labs confirmed approval **and** the amount matched the bill. | Nobody — done. |
+| `PAID` | Pine Labs confirmed approval **and** the amount matched the bill. | Nobody - done. |
 | `PAYMENT_FAILED` | Pine Labs explicitly declined, voided or cancelled. Table stays occupied. | Cashier may retry. |
 | `REQUIRES_VERIFICATION` | We could not determine the outcome. **The customer may already have paid.** | A human, using the terminal and the Pine Labs report. |
 
@@ -26,12 +26,12 @@ Nothing marks an order failed unless Pine Labs said so.
 
 ## 2. What resolves a stuck payment, in order
 
-1. **The POS screen** — while an order is `AWAITING_PAYMENT` it re-verifies
+1. **The POS screen** - while an order is `AWAITING_PAYMENT` it re-verifies
    every couple of seconds for up to 6 minutes. Verification only; it can never
    start a second charge.
-2. **The Pine Labs webhook** — `POST /api/webhooks/pinelabs?token=…`. Treated as
+2. **The Pine Labs webhook** - `POST /api/webhooks/pinelabs?token=…`. Treated as
    a wake-up signal only; the result is always re-verified with GetStatus.
-3. **The reconciler** — sweeps every `RECONCILER_INTERVAL_MS` (default 60s) for
+3. **The reconciler** - sweeps every `RECONCILER_INTERVAL_MS` (default 60s) for
    orders awaiting payment for more than 90 seconds. Approved → finalize;
    declined → failed; still open after 12 minutes → `REQUIRES_VERIFICATION`.
 
@@ -81,7 +81,7 @@ WHERE p.status = 'approved' AND p.created_at::date = current_date
 ORDER BY p.created_at;
 ```
 
-Card numbers, UPI VPAs and the security token are never stored or logged — only
+Card numbers, UPI VPAs and the security token are never stored or logged - only
 what reconciliation needs.
 
 ## 5. Safety properties (do not remove these without replacing them)

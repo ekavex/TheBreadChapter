@@ -100,12 +100,12 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [searchQuery, setSearchQuery] = useState('')
   const [activeItemId, setActiveItemId] = useState<string | null>(null)
   const [variantPicker, setVariantPicker] = useState<MenuItem | null>(null)
-  // True while the terminal still has the transaction open — the screen tracks
+  // True while the terminal still has the transaction open - the screen tracks
   // it automatically so the cashier never has to poll by hand.
   const [autoTracking, setAutoTracking] = useState(false)
   const trackingRef = useRef(false)
 
-  // Table info — use joined order.table once order exists, fall back to initialTable prop
+  // Table info - use joined order.table once order exists, fall back to initialTable prop
   const rawTable = (order?.table ?? initialTable) as (Table & { section?: { name: string } }) | undefined
   const tableLabel = rawTable?.label || (rawTable?.number != null ? String(rawTable.number) : null)
   const sectionName = rawTable?.section?.name
@@ -123,7 +123,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       const fresh = await api<Order>(`/api/pos/orders/${order.id}`, 'GET')
       setOrder(fresh)
     } catch {
-      // ignore — caller already surfaced an error
+      // ignore - caller already surfaced an error
     }
   }
 
@@ -140,7 +140,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         ...(variant ? { variant } : {}),
       })
       setOrder(updated)
-      // Track which item is "active" for addon toggling — pick the matching
+      // Track which item is "active" for addon toggling - pick the matching
       // item with the latest created_at (covers merge-into-existing and new lines).
       const matches = ((updated.items ?? []) as Record<string, unknown>[])
         .filter(i => i.menu_item_id === item.id)
@@ -168,7 +168,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     try {
       await api(`/api/pos/orders/${order.id}`, 'PATCH', { customer_note: note || null })
     } catch {
-      // Non-critical — note save failure shouldn't block the workflow
+      // Non-critical - note save failure shouldn't block the workflow
     }
   }
 
@@ -284,7 +284,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         setPayment(result.payment)
         setPaymentNotice(result.message ?? null)
 
-        // A timeout is NOT a failure — never say "declined" unless Pine Labs did.
+        // A timeout is NOT a failure - never say "declined" unless Pine Labs did.
         if (opts.announce || result.paymentState !== 'pending') {
           switch (result.paymentState) {
             case 'paid':
@@ -294,13 +294,13 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
               toast('Waiting for the customer to pay on the terminal…', { icon: '⏳' })
               break
             case 'requires_verification':
-              toast.error(result.message ?? 'Payment needs verification — do not retry yet', { duration: 8000 })
+              toast.error(result.message ?? 'Payment needs verification - do not retry yet', { duration: 8000 })
               break
             case 'cancelled':
               toast('Payment cancelled on the terminal', { icon: '🚫' })
               break
             default:
-              toast.error('Payment declined by the terminal — you can retry')
+              toast.error('Payment declined by the terminal - you can retry')
           }
         }
         return result.paymentState
@@ -324,7 +324,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
 
       if (bridge?.isAvailable() && (paymentMode === 'card' || paymentMode === 'upi')) {
         if (!bridge.isSdkReady()) {
-          toast.error('Pine Billing SDK not ready — set Application ID in the APK Settings', { duration: 8000 })
+          toast.error('Pine Billing SDK not ready - set Application ID in the APK Settings', { duration: 8000 })
           setBusy(false)
           return
         }
@@ -339,7 +339,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
               } else if (result.status === 'busy') {
                 toast(msg, { icon: '⏳' })
               } else {
-                toast.error('Payment declined on the terminal — you can retry')
+                toast.error('Payment declined on the terminal - you can retry')
               }
               resolve()
               return
@@ -364,7 +364,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   }
 
   // Keeps verifying an open transaction until the terminal settles it. Each
-  // request already waits server-side, so this is a slow, cheap loop — and it
+  // request already waits server-side, so this is a slow, cheap loop - and it
   // is verification only, never a new charge.
   useEffect(() => {
     if (order?.pos_status !== 'AWAITING_PAYMENT') {
@@ -443,7 +443,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const isKotSent = posStatus === 'KOT_SENT'
   const isBilledOrAfter = ['BILLED', 'AWAITING_PAYMENT', 'PAID', 'PAYMENT_FAILED'].includes(posStatus)
   const canAddItems = isOpen || isKotSent
-  // AWAITING_PAYMENT stays cancellable — the server force-cancels the open
+  // AWAITING_PAYMENT stays cancellable - the server force-cancels the open
   // transaction and refuses if the money was actually taken.
   const canCancel = !['PAID', 'CANCELLED', 'REQUIRES_VERIFICATION'].includes(posStatus)
   const tableIsFree = !order || order.table?.status === 'free'
@@ -502,7 +502,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         </div>
       </div>
 
-      {/* Menu browser — shown while order is open or KOT_SENT (add-on mode) */}
+      {/* Menu browser - shown while order is open or KOT_SENT (add-on mode) */}
       {canAddItems && (
         <div className="mb-6">
           <input
@@ -678,7 +678,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         {isKotSent && addonItems.length > 0 && (
           <>
             <div className="px-5 py-2 bg-amber-50 border-t border-amber-100">
-              <p className="text-xs text-amber-700 uppercase tracking-wide font-medium">New — not yet sent</p>
+              <p className="text-xs text-amber-700 uppercase tracking-wide font-medium">New - not yet sent</p>
             </div>
             <div className="divide-y divide-ink/5">
               {addonItems.map((item) => (
@@ -738,7 +738,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
           <p className="px-5 py-4 text-sm text-ink-faint">No items yet.</p>
         )}
 
-        {/* Bill view — all items shown read-only when billed/paying/paid */}
+        {/* Bill view - all items shown read-only when billed/paying/paid */}
         {isBilledOrAfter && (
           <div className="divide-y divide-ink/5">
             {items.length === 0 && <p className="px-5 py-4 text-sm text-ink-faint">No items.</p>}
@@ -832,7 +832,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
           {posStatus === 'PAYMENT_FAILED' && (
             <p className="text-sm text-status-overdue mb-3">
-              {paymentNotice ?? 'The terminal declined or cancelled this payment — you can retry.'}
+              {paymentNotice ?? 'The terminal declined or cancelled this payment - you can retry.'}
             </p>
           )}
           <p className="text-sm font-medium text-ink-muted mb-2">Payment method</p>
@@ -876,14 +876,14 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
               </button>
               {!qrBillSent && (
                 <p className="text-xs text-ink-faint text-center">
-                  Print the bill first — the customer scans the QR and pays.
+                  Print the bill first - the customer scans the QR and pays.
                 </p>
               )}
             </div>
           ) : (
             // Cash / Card / UPI (Pine Labs) flow.
             <>
-              <p className="text-xs text-ink-faint mb-1">Customer (optional — for CRM/analytics)</p>
+              <p className="text-xs text-ink-faint mb-1">Customer (optional - for CRM/analytics)</p>
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <input
                   value={customerPhone}
@@ -923,7 +923,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
           </div>
           <p className="text-sm text-ink-muted mb-3">
             {paymentNotice ??
-              'Ask the customer to complete the payment on the terminal. This screen updates itself — you never need to charge again.'}
+              'Ask the customer to complete the payment on the terminal. This screen updates itself - you never need to charge again.'}
           </p>
           <button
             onClick={pay}
@@ -940,7 +940,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
           <p className="font-display font-semibold text-amber-900 mb-1">Payment needs verification</p>
           <p className="text-sm text-amber-900/80 mb-3">
             {paymentNotice ??
-              'We could not confirm the outcome of this payment with Pine Labs. Check the terminal and the Pine Labs report before charging again — the customer may already have paid.'}
+              'We could not confirm the outcome of this payment with Pine Labs. Check the terminal and the Pine Labs report before charging again - the customer may already have paid.'}
           </p>
           <button
             onClick={pay}
@@ -990,7 +990,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
         />
       )}
 
-      {/* Variant picker — appears when staff taps a multi-variant item */}
+      {/* Variant picker - appears when staff taps a multi-variant item */}
       {variantPicker && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
@@ -1010,7 +1010,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
               </button>
             </div>
             <div className="space-y-2">
-              {/* Base price is always the first option — no need to add it manually */}
+              {/* Base price is always the first option - no need to add it manually */}
               <button
                 disabled={busy}
                 onClick={() => {

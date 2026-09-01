@@ -67,7 +67,7 @@ class PinePaymentBridge(
         if (!PineBillingSdk.isInitialized()) {
             busy.set(false)
             deliverResult(ok = false, txnId = null, status = "not_configured",
-                message = "Pine Billing SDK not initialised — set Application ID in Settings")
+                message = "Pine Billing SDK not initialised - set Application ID in Settings")
             return
         }
 

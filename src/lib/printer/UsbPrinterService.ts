@@ -67,7 +67,7 @@ function buildPayload(ticket: KotTicket): Buffer {
 }
 
 // Writes raw ESC/POS bytes directly to a USB printer character device
-// (e.g. /dev/usb/lp0). No pairing or binding required — just plug in the cable.
+// (e.g. /dev/usb/lp0). No pairing or binding required - just plug in the cable.
 export class UsbPrinterService implements PrinterService {
   constructor(
     private readonly stationDevices: Partial<Record<string, string>>
@@ -81,7 +81,7 @@ export class UsbPrinterService implements PrinterService {
       await access(device, constants.F_OK)
     } catch {
       throw new Error(
-        `USB printer at ${device} not found — is the cable connected and the printer on?`
+        `USB printer at ${device} not found - is the cable connected and the printer on?`
       )
     }
 

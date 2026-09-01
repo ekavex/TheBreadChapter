@@ -2,7 +2,7 @@
 //
 // The body is application/x-www-form-urlencoded, but the value is a single
 // comma-joined "key=value" CSV string (PINELABS_INTEGRATION_MASTER.md §6).
-// Kept out of the route file so it can be unit-tested — Next.js route modules
+// Kept out of the route file so it can be unit-tested - Next.js route modules
 // may only export handlers and route config.
 
 /** Splits the comma-joined key=value payload. Values may themselves contain '='. */

@@ -13,7 +13,7 @@ class MockPrinterService implements PrinterService {
 }
 
 // Priority: USB > Bluetooth/RFCOMM > Network (TCP) > Mock (console log).
-// Set the matching env vars in .env.local — no code changes needed.
+// Set the matching env vars in .env.local - no code changes needed.
 //
 //  USB:       PRINTER_KITCHEN_USB_DEVICE=/dev/usb/lp0
 //             PRINTER_BEVERAGE_USB_DEVICE=/dev/usb/lp1
@@ -43,7 +43,7 @@ function createPrinterService(): PrinterService {
   const beverageBtDevice = process.env.PRINTER_BEVERAGE_BT_DEVICE
 
   if (kitchenBtMac || kitchenBtDevice) {
-    // If both stations share the same MAC it's one physical printer — route
+    // If both stations share the same MAC it's one physical printer - route
     // both stations to the same RFCOMM device (can't hold two bindings at once).
     const samePrinter = !!beverageBtMac && beverageBtMac === kitchenBtMac
     return new BluetoothPrinterService({

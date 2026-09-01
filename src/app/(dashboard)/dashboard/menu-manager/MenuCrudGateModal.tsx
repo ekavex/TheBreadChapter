@@ -8,7 +8,7 @@ interface Props {
   onCancel: () => void
 }
 
-// Module 9: a second, separate credential set — re-verified per action, not
+// Module 9: a second, separate credential set - re-verified per action, not
 // a session/role. This popup is the "Click Add / Edit / Delete Menu →
 // Popup: enter Menu User ID & Password → Credentials verified" step.
 export default function MenuCrudGateModal({ actionLabel, onVerified, onCancel }: Props) {

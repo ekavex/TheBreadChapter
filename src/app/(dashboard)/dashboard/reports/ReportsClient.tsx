@@ -84,8 +84,8 @@ export default function ReportsClient({ initial, ranges }: Props) {
                 { l: 'Margin', v: `${data.summary.marginPct.toFixed(1)}%` },
                 { l: 'Orders', v: String(data.summary.orderCount) },
                 { l: 'Avg order value', v: fmt(data.summary.avgOrderValue) },
-                { l: 'Best day', v: data.summary.bestDay ? `${data.summary.bestDay.label} (${fmt(data.summary.bestDay.revenue)})` : '—' },
-                { l: 'Worst day', v: data.summary.worstDay ? `${data.summary.worstDay.label} (${fmt(data.summary.worstDay.revenue)})` : '—' },
+                { l: 'Best day', v: data.summary.bestDay ? `${data.summary.bestDay.label} (${fmt(data.summary.bestDay.revenue)})` : '-' },
+                { l: 'Worst day', v: data.summary.worstDay ? `${data.summary.worstDay.label} (${fmt(data.summary.worstDay.revenue)})` : '-' },
               ].map((m) => (
                 <div key={m.l} className="bg-surface-overlay rounded-xl p-3">
                   <p className="text-[10px] text-ink-faint uppercase tracking-wide font-medium">{m.l}</p>
@@ -96,7 +96,7 @@ export default function ReportsClient({ initial, ranges }: Props) {
           </section>
 
           <ReportTable title="Top selling items" headers={['Item', 'Qty', 'Revenue']} rows={data.topSellingItems.map((i) => [i.name, String(i.quantity), fmt(i.revenue)])} />
-          <ReportTable title="Area performance" headers={['Area', 'Orders', 'Revenue', 'Top item']} rows={data.areaPerformance.map((a) => [a.area, String(a.orders), fmt(a.revenue), a.topItem ?? '—'])} />
+          <ReportTable title="Area performance" headers={['Area', 'Orders', 'Revenue', 'Top item']} rows={data.areaPerformance.map((a) => [a.area, String(a.orders), fmt(a.revenue), a.topItem ?? '-'])} />
           <ReportTable title="Ingredient usage" headers={['Ingredient', 'Quantity', 'Unit']} rows={data.ingredientUsage.map((i) => [i.name, String(i.quantity), i.unit])} />
 
           <section className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
@@ -106,7 +106,7 @@ export default function ReportsClient({ initial, ranges }: Props) {
                 { l: 'Total customers', v: String(data.customer.totalCustomers) },
                 { l: 'New', v: String(data.customer.newCustomers) },
                 { l: 'Repeat', v: String(data.customer.repeatCustomers) },
-                { l: 'Most ordered', v: data.customer.mostOrderedItem?.name ?? '—' },
+                { l: 'Most ordered', v: data.customer.mostOrderedItem?.name ?? '-' },
                 { l: 'Avg bill', v: fmt(data.customer.avgBillValue) },
               ].map((m) => (
                 <div key={m.l} className="bg-surface-overlay rounded-xl p-3">

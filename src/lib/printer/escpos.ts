@@ -1,4 +1,4 @@
-// Shared ESC/POS payload builder — 58mm / 32-column thermal paper
+// Shared ESC/POS payload builder - 58mm / 32-column thermal paper
 import type { KotTicket } from './types'
 
 const ESC = 0x1b

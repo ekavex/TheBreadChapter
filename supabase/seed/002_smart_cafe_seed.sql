@@ -6,7 +6,7 @@
 -- Sections (Module 5 worked example: Indoor T1-10, Outdoor T11-18, Smoking T19-24.
 -- Demo data below reuses the existing 6 demo tables + adds 2 more so all 3
 -- sections have at least one table for area-analytics testing.
--- NOTE: SRS Module 7 also lists Rooftop/Lounge — open item, see IMPLEMENTATION_PLAN.md #2.)
+-- NOTE: SRS Module 7 also lists Rooftop/Lounge - open item, see IMPLEMENTATION_PLAN.md #2.)
 INSERT INTO sections (id, name, sort_order) VALUES
   (1, 'Indoor', 1),
   (2, 'Outdoor', 2),
@@ -21,7 +21,7 @@ INSERT INTO tables (cafe_id, number, label, capacity, section_id) VALUES
   ('11111111-1111-1111-1111-111111111111', 7, 'Smoking 1', 2, 3),
   ('11111111-1111-1111-1111-111111111111', 8, 'Smoking 2', 2, 3);
 
--- One Pine Labs A910S terminal (UAT placeholder — real ClientId comes from onboarding)
+-- One Pine Labs A910S terminal (UAT placeholder - real ClientId comes from onboarding)
 INSERT INTO terminals (client_id, label, section_id) VALUES
   ('UAT-TERMINAL-1', 'Front Counter A910S', 1);
 

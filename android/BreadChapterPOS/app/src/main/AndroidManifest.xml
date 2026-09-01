@@ -5,11 +5,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Downloads — needed on Android 9 and below to write to the Downloads folder -->
+    <!-- Downloads - needed on Android 9 and below to write to the Downloads folder -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-    <!-- Bluetooth — classic (SPP) for thermal printers -->
+    <!-- Bluetooth - classic (SPP) for thermal printers -->
     <!-- Android < 12 -->
     <uses-permission android:name="android.permission.BLUETOOTH"
         android:maxSdkVersion="30" />
@@ -20,14 +20,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
 
-    <!-- Foreground service — keeps the print bridge alive -->
+    <!-- Foreground service - keeps the print bridge alive -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Android 14+ requires the type to be declared -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
-    <!-- Required for AppToApp transport — lets our app resolve Pine Labs MasterApp -->
+    <!-- Required for AppToApp transport - lets our app resolve Pine Labs MasterApp -->
     <queries>
         <package android:name="com.pinelabs.masterapp" />
     </queries>

@@ -1,7 +1,7 @@
 // Minimal in-process rate limiter for the login endpoint.
 //
 // Single-container deployment (one Node process), so an in-memory map is the
-// right amount of machinery — no Redis. If the app is ever scaled to multiple
+// right amount of machinery - no Redis. If the app is ever scaled to multiple
 // instances this must move to the database or a shared store.
 
 interface Bucket { count: number; firstAt: number; blockedUntil: number }

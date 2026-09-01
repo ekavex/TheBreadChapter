@@ -4,7 +4,7 @@ import { requireAdmin, requireManagerOrAdmin, getSessionUser } from '@/lib/auth/
 import bcrypt from 'bcryptjs'
 import type { UserRole } from '@/lib/types'
 
-// GET /api/admin/users — List users (admin: all; manager: staff only)
+// GET /api/admin/users - List users (admin: all; manager: staff only)
 export async function GET(req: NextRequest) {
   const guard = await requireManagerOrAdmin(req)
   if (guard) return guard
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/admin/users — Create new user (admin: any role; manager: staff only)
+// POST /api/admin/users - Create new user (admin: any role; manager: staff only)
 export async function POST(req: NextRequest) {
   const guard = await requireManagerOrAdmin(req)
   if (guard) return guard

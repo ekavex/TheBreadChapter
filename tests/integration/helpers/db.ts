@@ -1,8 +1,8 @@
 // Integration-test harness.
 //
-// Runs against a REAL Postgres so the things that only exist in the database —
+// Runs against a REAL Postgres so the things that only exist in the database -
 // transactions, row locks, partial unique indexes, the FOR UPDATE serialization
-// in finalizeApprovedPayment — are actually exercised. Unit tests cannot prove
+// in finalizeApprovedPayment - are actually exercised. Unit tests cannot prove
 // any of that.
 //
 // Point TEST_DATABASE_URL at a throwaway database and the suite runs:
@@ -106,7 +106,7 @@ export interface SeededOrder {
   totalPaisa: number
 }
 
-/** An order sitting in AWAITING_PAYMENT with an initiated payment — the state every hard case starts from. */
+/** An order sitting in AWAITING_PAYMENT with an initiated payment - the state every hard case starts from. */
 export async function seedAwaitingPaymentOrder(fx: Fixture, totalPaisa = 25000): Promise<SeededOrder> {
   const db = testDb()
   const [order] = await db`

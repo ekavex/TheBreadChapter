@@ -19,7 +19,7 @@ export async function loadPrinterConfig(
     const [row] = await sql`SELECT settings FROM cafes WHERE id = ${cafeId}`
     dbPrinters = (row?.settings as Record<string, unknown>)?.printers as typeof dbPrinters ?? {}
   } catch {
-    // DB read failure — fall through to env vars
+    // DB read failure - fall through to env vars
   }
 
   function merge(station: string, envBt?: string, envUsb?: string, envIp?: string) {
@@ -67,7 +67,7 @@ export function buildPrinterService(cfg: PrinterConfig): PrinterService {
     })
   }
 
-  // Mock — logs to console
+  // Mock - logs to console
   return {
     async printTicket(ticket) {
       const lines = ticket.items.map(i => `  ${i.quantity}x ${i.name}`).join('\n')

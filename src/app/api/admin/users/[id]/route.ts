@@ -4,7 +4,7 @@ import { requireManagerOrAdmin, getSessionUser } from '@/lib/auth/requireDashboa
 import bcrypt from 'bcryptjs'
 import type { UserRole } from '@/lib/types'
 
-// PATCH /api/admin/users/[id] — Update role, display name, or password
+// PATCH /api/admin/users/[id] - Update role, display name, or password
 // Admin: can update anyone. Manager: can only update staff accounts.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const guard = await requireManagerOrAdmin(req)
@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/admin/users/[id] — Remove user (admin: anyone; manager: staff only)
+// DELETE /api/admin/users/[id] - Remove user (admin: anyone; manager: staff only)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const guard = await requireManagerOrAdmin(req)
   if (guard) return guard

@@ -5,8 +5,8 @@ import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/tables?cafeId=xxx — list all tables
-// POST /api/tables — generate QR codes for all tables of a cafe
+// GET /api/tables?cafeId=xxx - list all tables
+// POST /api/tables - generate QR codes for all tables of a cafe
 
 export async function POST(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)

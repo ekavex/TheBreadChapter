@@ -9,7 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Semi-transparent settings cog — top-right corner, auto-hides after 5s -->
+    <!-- Semi-transparent settings cog - top-right corner, auto-hides after 5s -->
     <LinearLayout
         android:id="@+id/layoutControls"
         android:layout_width="wrap_content"

@@ -4,7 +4,7 @@ import { getPnLData } from '@/lib/analytics'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/analytics/profit-loss?range=daily|weekly|monthly|yearly — Module 6.
+// GET /api/analytics/profit-loss?range=daily|weekly|monthly|yearly - Module 6.
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireAdmin(req)
   if (sessionGuard) return sessionGuard

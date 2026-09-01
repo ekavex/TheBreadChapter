@@ -1,6 +1,6 @@
 // Browser-only: opens a styled popup and calls window.print() so any printer
 // the device can see (Bluetooth paired, USB, or network) can print the KOT.
-// Formatted for 58 mm (2-inch) thermal paper — 32 character columns.
+// Formatted for 58 mm (2-inch) thermal paper - 32 character columns.
 
 interface OrderForPrint {
   id: string
@@ -57,7 +57,7 @@ export function printKot(order: OrderForPrint): void {
 
   const win = window.open('', '_blank', 'width=300,height=560')
   if (!win) {
-    // Popup blocked — fallback: print in the current window's iframe
+    // Popup blocked - fallback: print in the current window's iframe
     printInIframe(blocks.join(''))
     return
   }
@@ -142,7 +142,7 @@ function buildHtml(tableNum: number | string, body: string): string {
 </html>`
 }
 
-// Fallback when popups are blocked — inject a hidden iframe and print from it
+// Fallback when popups are blocked - inject a hidden iframe and print from it
 function printInIframe(body: string): void {
   const existing = document.getElementById('__kot_iframe__')
   if (existing) existing.remove()

@@ -24,7 +24,7 @@ async function fetchFullOrder(orderId: string) {
   return { ...order, items, table }
 }
 
-// POST /api/pos/orders — Module 5 "Order Entry (POS)":
+// POST /api/pos/orders - Module 5 "Order Entry (POS)":
 // waiter taps a table → if free, opens a new order and marks it occupied;
 // if already occupied/kot_sent/billed, resumes the existing open order
 // instead of creating a duplicate.
@@ -53,10 +53,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data: existing, error: null })
     }
 
-    // No open order — table must be free to create one
+    // No open order - table must be free to create one
     if (table.status !== 'free') {
       return NextResponse.json(
-        { data: null, error: `Table is marked ${table.status} but has no open order — data inconsistency, check manually` },
+        { data: null, error: `Table is marked ${table.status} but has no open order - data inconsistency, check manually` },
         { status: 409 }
       )
     }
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       SELECT generate_order_number(${DEMO_CAFE_ID}::uuid) AS order_number
     `
 
-    // Create the order — table stays 'free' until the first item is added.
+    // Create the order - table stays 'free' until the first item is added.
     // `uniq_live_order_per_table` (migration 006) makes a simultaneous second
     // insert fail instead of creating a duplicate open order; in that case the
     // loser simply resumes the winner's order.

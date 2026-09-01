@@ -9,7 +9,7 @@ next/
 tsconfig.tsbuildinfo
 .env
 
-# Database dumps — may contain customer and payment data
+# Database dumps - may contain customer and payment data
 backups/
 
 # Android Gradle build caches

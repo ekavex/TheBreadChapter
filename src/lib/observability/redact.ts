@@ -38,7 +38,7 @@ export function redactPaymentPayload(value: unknown, depth = 0): unknown {
   if (depth > 6 || value === null || value === undefined) return value ?? null
 
   if (Array.isArray(value)) {
-    // Pine Labs TransactionData is [{ Tag, Value }] — redact by Tag.
+    // Pine Labs TransactionData is [{ Tag, Value }] - redact by Tag.
     return value.map((entry) => {
       if (
         entry && typeof entry === 'object' &&

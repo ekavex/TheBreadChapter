@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     const notifications: AppNotification[] = []
     const now = new Date().toISOString()
 
-    // Visible to every role — whoever is on the floor needs to act on this.
+    // Visible to every role - whoever is on the floor needs to act on this.
     ;(unsettledResult as unknown as {
       id: string; order_number: string; pos_status: string; total_amount: number; updated_at: string
     }[]).forEach((o) => {
@@ -75,8 +75,8 @@ export async function GET(req: NextRequest) {
         id: `unsettled-${o.id}`,
         severity: 'critical',
         title: needsHuman
-          ? `Order ${o.order_number} — payment needs verification`
-          : `Order ${o.order_number} — payment unresolved for ${mins} min`,
+          ? `Order ${o.order_number} - payment needs verification`
+          : `Order ${o.order_number} - payment unresolved for ${mins} min`,
         body: needsHuman
           ? `₹${o.total_amount}: check the terminal and the Pine Labs report before charging again.`
           : `₹${o.total_amount} has been awaiting the terminal for ${mins} min.`,
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
           id: `stuck-${o.id}`,
           severity: 'warning',
           title: `Order ${o.order_number} is waiting`,
-          body: `Status "${o.status}" for ${mins} min — check the kitchen station.`,
+          body: `Status "${o.status}" for ${mins} min - check the kitchen station.`,
           href: '/dashboard/orders',
           createdAt: now,
         })

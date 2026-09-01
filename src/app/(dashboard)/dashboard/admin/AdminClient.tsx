@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, CreditCard, Percent, FlameKindling } from 'lucide-react'
+import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, CreditCard, Percent } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import toast from 'react-hot-toast'
@@ -52,8 +52,6 @@ export default function AdminClient() {
   // ── Delete modals ────────────────────────────────────────────────
   const [deleteUser, setDeleteUser] = useState<UserRow | null>(null)
   const [deleteTerminal, setDeleteTerminal] = useState<TerminalRow | null>(null)
-  const [showDeleteOrders, setShowDeleteOrders] = useState(false)
-  const [deletingOrders, setDeletingOrders] = useState(false)
 
   // ── Tax settings ─────────────────────────────────────────────────
   const [taxPercent, setTaxPercent] = useState('')
@@ -230,19 +228,6 @@ export default function AdminClient() {
     await fetchUsers()
   }
 
-  async function confirmDeleteOrders() {
-    setShowDeleteOrders(false)
-    setDeletingOrders(true)
-    try {
-      const res = await fetch('/api/admin/orders', { method: 'DELETE' })
-      const json = await res.json()
-      if (!res.ok) { toast.error(json.error ?? 'Failed to delete orders'); return }
-      toast.success('All orders deleted and tables reset')
-    } finally {
-      setDeletingOrders(false)
-    }
-  }
-
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       {/* Header */}
@@ -303,9 +288,9 @@ export default function AdminClient() {
                 className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"
                 value={newRole} onChange={e => setNewRole(e.target.value as UserRole)}
               >
-                <option value="staff">Staff — POS + Menu</option>
-                <option value="manager">Manager — Full dashboard</option>
-                <option value="admin">Admin — Full access + user management</option>
+                <option value="staff">Staff - POS + Menu</option>
+                <option value="manager">Manager - Full dashboard</option>
+                <option value="admin">Admin - Full access + user management</option>
               </select>
             </div>
             )}
@@ -436,19 +421,19 @@ export default function AdminClient() {
             <span className={`inline-flex items-center gap-1 font-semibold px-1.5 py-0.5 rounded-full border shrink-0 ${ROLE_COLORS.admin}`}>
               {ROLE_ICONS.admin} admin
             </span>
-            <span>Full access — all dashboard sections, analytics, reports, user management</span>
+            <span>Full access - all dashboard sections, analytics, reports, user management</span>
           </div>
           <div className="flex gap-2">
             <span className={`inline-flex items-center gap-1 font-semibold px-1.5 py-0.5 rounded-full border shrink-0 ${ROLE_COLORS.manager}`}>
               {ROLE_ICONS.manager} manager
             </span>
-            <span>Full dashboard — overview, orders, inventory, menu, analytics, reports, POS</span>
+            <span>Full dashboard - overview, orders, inventory, menu, analytics, reports, POS</span>
           </div>
           <div className="flex gap-2">
             <span className={`inline-flex items-center gap-1 font-semibold px-1.5 py-0.5 rounded-full border shrink-0 ${ROLE_COLORS.staff}`}>
               {ROLE_ICONS.staff} staff
             </span>
-            <span>POS + Menu manager only — menu changes are logged as notifications to managers</span>
+            <span>POS + Menu manager only - menu changes are logged as notifications to managers</span>
           </div>
         </div>
       </div>
@@ -486,7 +471,7 @@ export default function AdminClient() {
                   value={newClientId} onChange={e => setNewClientId(e.target.value)}
                   placeholder="e.g. 12345" required
                 />
-                <p className="text-[10px] text-ink-faint mt-0.5">Number from Pine Labs — found on the A910S device or in their onboarding email.</p>
+                <p className="text-[10px] text-ink-faint mt-0.5">Number from Pine Labs - found on the A910S device or in their onboarding email.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-ink-muted mb-1">Label <span className="text-status-overdue">*</span></label>
@@ -601,35 +586,9 @@ export default function AdminClient() {
           <h2 className="font-display text-xl font-bold text-ink">Thermal Printers</h2>
         </div>
         <div className="p-4 bg-surface-raised rounded-2xl border border-ink/8 text-sm text-ink-muted space-y-2">
-          <p>Printing is handled by the <strong className="text-ink">Android APK print bridge</strong> on the tablet — no server-side configuration needed.</p>
+          <p>Printing is handled by the <strong className="text-ink">Android APK print bridge</strong> on the tablet - no server-side configuration needed.</p>
           <p>To configure printers: open the APK → long-press anywhere → tap the gear icon → enter the Bluetooth MAC address for each printer.</p>
           <p className="text-xs text-ink-faint">Kitchen printer and Barista printer are configured separately in the APK settings.</p>
-        </div>
-      </div>
-
-      {/* ── Danger Zone ─────────────────────────────────────────────── */}
-      <div className="mt-8">
-        <div className="flex items-center gap-2 mb-3">
-          <FlameKindling size={18} className="text-red-500" />
-          <h2 className="font-display text-xl font-bold text-red-600">Danger Zone</h2>
-        </div>
-        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-red-800">Delete all orders</p>
-              <p className="text-xs text-red-700 mt-0.5">
-                Permanently deletes every order, order item, payment record, and staff notification.
-                Resets all table statuses to Available. Use for testing only.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowDeleteOrders(true)}
-              disabled={deletingOrders}
-              className="shrink-0 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
-            >
-              {deletingOrders ? 'Deleting…' : 'Delete all orders'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -650,15 +609,6 @@ export default function AdminClient() {
           confirmLabel="Remove"
           onConfirm={confirmDeleteTerminal}
           onCancel={() => setDeleteTerminal(null)}
-        />
-      )}
-      {showDeleteOrders && (
-        <ConfirmModal
-          title="Delete all orders?"
-          message="This will permanently delete every order, payment record, and notification, and reset all tables to Available. This cannot be undone."
-          confirmLabel="Yes, delete all"
-          onConfirm={confirmDeleteOrders}
-          onCancel={() => setShowDeleteOrders(false)}
         />
       )}
     </div>

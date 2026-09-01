@@ -1,11 +1,11 @@
 -- ============================================================
--- Phase 1 — payment reliability hardening.
+-- Phase 1 - payment reliability hardening.
 --
 -- 1. REQUIRES_VERIFICATION order state (ambiguous payment; never auto-retry)
 -- 2. One live order per table (removes the create-order race)
 -- 3. At most one approved payment per order (defence in depth against
 --    double-charge bookkeeping)
--- 4. payment_events — audit trail + webhook de-duplication
+-- 4. payment_events - audit trail + webhook de-duplication
 -- 5. Index supporting the reconciliation sweep
 -- ============================================================
 
@@ -47,7 +47,7 @@ BEGIN
 
   IF offenders IS NOT NULL THEN
     RAISE EXCEPTION
-      'Cannot enforce one live order per table — these tables have more than one live order: %. Close or cancel the duplicates, then re-run this migration.',
+      'Cannot enforce one live order per table - these tables have more than one live order: %. Close or cancel the duplicates, then re-run this migration.',
       offenders;
   END IF;
 END $$;

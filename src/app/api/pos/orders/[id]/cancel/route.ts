@@ -16,9 +16,9 @@ async function fetchOrderWithItems(orderId: string) {
   return { ...order, items, table: tableRow ?? null }
 }
 
-// POST /api/pos/orders/[id]/cancel — releases the table. Best-effort cancels
+// POST /api/pos/orders/[id]/cancel - releases the table. Best-effort cancels
 // any in-flight payment (per the state machine, only allowed before PIN entry
-// on a real terminal — the mock never blocks this).
+// on a real terminal - the mock never blocks this).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           {
             data: null,
             error:
-              'Cannot cancel — the payment status could not be verified with Pine Labs. Check the terminal, then try again.',
+              'Cannot cancel - the payment status could not be verified with Pine Labs. Check the terminal, then try again.',
           },
           { status: 409 }
         )
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           {
             data: null,
             error:
-              'Cannot cancel — this payment was approved on the terminal. Use "Check payment status" to complete the order.',
+              'Cannot cancel - this payment was approved on the terminal. Use "Check payment status" to complete the order.',
           },
           { status: 409 }
         )
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             {
               data: null,
               error:
-                'Cannot cancel — the transaction is still open on the terminal and could not be cancelled. Clear it on the terminal first.',
+                'Cannot cancel - the transaction is still open on the terminal and could not be cancelled. Clear it on the terminal first.',
             },
             { status: 409 }
           )
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           return NextResponse.json(
             {
               data: null,
-              error: `Cannot cancel — Pine Labs returned "${cancelResult.status}" for the open transaction. Clear it on the terminal first.`,
+              error: `Cannot cancel - Pine Labs returned "${cancelResult.status}" for the open transaction. Clear it on the terminal first.`,
             },
             { status: 409 }
           )
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         logger.info('payment.cancel.success', { orderId: params.id, ptrid: latestPayment.plutus_ptrid })
       }
 
-      // Confirmed dead (declined / cancelled) — record it and proceed.
+      // Confirmed dead (declined / cancelled) - record it and proceed.
       await sql`UPDATE payments SET status = 'cancelled' WHERE id = ${latestPayment.id}`
     }
 

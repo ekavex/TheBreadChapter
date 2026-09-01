@@ -13,7 +13,7 @@ function buildUpiUrl(amountPaisa: number): string {
   return `${UPI_BASE}&am=${rupees}&cu=INR&orgId=400043`
 }
 
-// Shared secret auth — no session cookie needed, this is device-to-server.
+// Shared secret auth - no session cookie needed, this is device-to-server.
 function isAuthorized(req: NextRequest): boolean {
   const expected = process.env.PRINT_BRIDGE_TOKEN?.trim()
   if (!expected) return process.env.NODE_ENV !== 'production'
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     const sql = getDb()
 
     // Safety net: a job the bridge claimed ('processing') but never confirmed
-    // via PATCH — bridge phone rebooted, lost Bluetooth, app got killed mid-print —
+    // via PATCH - bridge phone rebooted, lost Bluetooth, app got killed mid-print -
     // would otherwise sit stuck forever, since claiming is a one-way door. Anything
     // still 'processing' well past a normal print cycle goes back to 'queued' so
     // the next poll (from this device or another) picks it up again.

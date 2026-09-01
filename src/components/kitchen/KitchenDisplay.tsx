@@ -212,7 +212,7 @@ export default function KitchenDisplay({ cafeId }: Props) {
                         </p>
                         <p className="text-white font-display font-bold text-base leading-tight">
                           {(order.table as { label?: string; number?: number })?.label
-                            || `Table ${(order.table as { number?: number })?.number ?? '—'}`}
+                            || `Table ${(order.table as { number?: number })?.number ?? '-'}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-slate-500">

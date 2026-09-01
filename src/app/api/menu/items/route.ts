@@ -8,7 +8,7 @@ async function recordStaffAction(userId: string, action: string, description: st
   await sql`INSERT INTO staff_notifications (cafe_id, action, description, created_by) VALUES (${DEMO_CAFE_ID}, ${action}, ${description}, ${userId})`
 }
 
-// POST /api/menu/items — Add menu item (manager or admin only; change is logged to admin)
+// POST /api/menu/items - Add menu item (manager or admin only; change is logged to admin)
 export async function POST(req: NextRequest) {
   const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard

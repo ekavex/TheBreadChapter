@@ -5,7 +5,7 @@ import { DEMO_CAFE_ID } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-// POST /api/pos/tables — create a new table (manager only)
+// POST /api/pos/tables - create a new table (manager only)
 export async function POST(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/pos/tables — sections + tables with live status (Module 5:
-// "Each table shows a live status — Free, Occupied, KOT Sent, or Billed").
+// GET /api/pos/tables - sections + tables with live status (Module 5:
+// "Each table shows a live status - Free, Occupied, KOT Sent, or Billed").
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard

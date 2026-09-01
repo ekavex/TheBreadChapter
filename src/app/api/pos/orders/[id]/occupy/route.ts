@@ -23,7 +23,7 @@ async function fetchOrderWithDetails(orderId: string) {
   return { ...order, items, table }
 }
 
-// POST /api/pos/orders/[id]/occupy — manually mark the table as occupied
+// POST /api/pos/orders/[id]/occupy - manually mark the table as occupied
 // Used when a waiter seats guests but hasn't added items yet.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)

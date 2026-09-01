@@ -14,7 +14,7 @@ const TYPE_LABELS: Record<StockTxnType, string> = {
   purchase: 'Purchase entry',
   manual_adjustment: 'Manual adjustment',
   expired_removal: 'Expired stock removal',
-  sale_deduction: 'Sale deduction', // not selectable here — automatic, order-driven
+  sale_deduction: 'Sale deduction', // not selectable here - automatic, order-driven
 }
 
 export default function StockUpdateModal({ ingredient, onClose, onSaved }: Props) {
@@ -88,7 +88,7 @@ export default function StockUpdateModal({ ingredient, onClose, onSaved }: Props
           <div>
             <label className="block text-sm font-medium text-ink-muted mb-1">
               Quantity ({ingredient.unit})
-              {type === 'manual_adjustment' && ' — use a negative number to subtract'}
+              {type === 'manual_adjustment' && ' - use a negative number to subtract'}
             </label>
             <input
               type="number"

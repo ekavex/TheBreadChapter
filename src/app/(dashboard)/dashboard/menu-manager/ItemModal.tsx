@@ -222,7 +222,7 @@ export default function ItemModal({ item, categories, defaultCategoryId, onClose
                 <p className="text-xs text-ink-faint">When variants are set, staff will pick one before adding the item in POS.</p>
               </div>
             ) : (
-              <p className="text-xs text-ink-faint">No variants — item adds at base price.</p>
+              <p className="text-xs text-ink-faint">No variants - item adds at base price.</p>
             )}
           </div>
 

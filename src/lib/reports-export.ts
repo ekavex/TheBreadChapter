@@ -16,7 +16,7 @@ function reportTitle(data: ReportData): string {
   const from = new Date(data.window.from).toLocaleDateString('en-IN')
   const to = new Date(data.window.to).toLocaleDateString('en-IN')
   const rangeLabel = data.range.charAt(0).toUpperCase() + data.range.slice(1)
-  return `Smart Cafe — ${rangeLabel} report (${from} → ${to})`
+  return `Smart Cafe - ${rangeLabel} report (${from} → ${to})`
 }
 
 // ── CSV ───────────────────────────────────────────────────────
@@ -36,8 +36,8 @@ export function reportToCsv(data: ReportData): string {
     ['Margin %', data.summary.marginPct.toFixed(1)],
     ['Orders', data.summary.orderCount],
     ['Avg order value', fmtMoney(data.summary.avgOrderValue)],
-    ['Best day', data.summary.bestDay ? `${data.summary.bestDay.label} (${fmtMoney(data.summary.bestDay.revenue)})` : '—'],
-    ['Worst day', data.summary.worstDay ? `${data.summary.worstDay.label} (${fmtMoney(data.summary.worstDay.revenue)})` : '—'],
+    ['Best day', data.summary.bestDay ? `${data.summary.bestDay.label} (${fmtMoney(data.summary.bestDay.revenue)})` : '-'],
+    ['Worst day', data.summary.worstDay ? `${data.summary.worstDay.label} (${fmtMoney(data.summary.worstDay.revenue)})` : '-'],
   ])
   push('TOP SELLING ITEMS', [
     ['Item', 'Quantity', 'Revenue'],
@@ -45,7 +45,7 @@ export function reportToCsv(data: ReportData): string {
   ])
   push('AREA PERFORMANCE', [
     ['Area', 'Orders', 'Revenue', 'Top item'],
-    ...data.areaPerformance.map((a) => [a.area, a.orders, fmtMoney(a.revenue), a.topItem ?? '—'] as (string | number)[]),
+    ...data.areaPerformance.map((a) => [a.area, a.orders, fmtMoney(a.revenue), a.topItem ?? '-'] as (string | number)[]),
   ])
   push('INGREDIENT USAGE', [
     ['Ingredient', 'Quantity', 'Unit'],
@@ -55,7 +55,7 @@ export function reportToCsv(data: ReportData): string {
     ['Total customers', data.customer.totalCustomers],
     ['New', data.customer.newCustomers],
     ['Repeat', data.customer.repeatCustomers],
-    ['Most ordered item', data.customer.mostOrderedItem?.name ?? '—'],
+    ['Most ordered item', data.customer.mostOrderedItem?.name ?? '-'],
     ['Avg bill value', fmtMoney(data.customer.avgBillValue)],
   ])
   return lines.join('\n')
@@ -77,8 +77,8 @@ export function reportToExcelBuffer(data: ReportData): Buffer {
     ['Margin %', Number(data.summary.marginPct.toFixed(1))],
     ['Orders', data.summary.orderCount],
     ['Avg order value', fmtMoney(data.summary.avgOrderValue)],
-    ['Best day', data.summary.bestDay ? `${data.summary.bestDay.label} (${fmtMoney(data.summary.bestDay.revenue)})` : '—'],
-    ['Worst day', data.summary.worstDay ? `${data.summary.worstDay.label} (${fmtMoney(data.summary.worstDay.revenue)})` : '—'],
+    ['Best day', data.summary.bestDay ? `${data.summary.bestDay.label} (${fmtMoney(data.summary.bestDay.revenue)})` : '-'],
+    ['Worst day', data.summary.worstDay ? `${data.summary.worstDay.label} (${fmtMoney(data.summary.worstDay.revenue)})` : '-'],
   ])
   addSheet(
     'Top items',
@@ -86,7 +86,7 @@ export function reportToExcelBuffer(data: ReportData): Buffer {
   )
   addSheet(
     'Area performance',
-    [['Area', 'Orders', 'Revenue', 'Top item'], ...data.areaPerformance.map((a) => [a.area, a.orders, fmtMoney(a.revenue), a.topItem ?? '—'])]
+    [['Area', 'Orders', 'Revenue', 'Top item'], ...data.areaPerformance.map((a) => [a.area, a.orders, fmtMoney(a.revenue), a.topItem ?? '-'])]
   )
   addSheet(
     'Ingredient usage',
@@ -97,7 +97,7 @@ export function reportToExcelBuffer(data: ReportData): Buffer {
     ['Total customers', data.customer.totalCustomers],
     ['New', data.customer.newCustomers],
     ['Repeat', data.customer.repeatCustomers],
-    ['Most ordered item', data.customer.mostOrderedItem?.name ?? '—'],
+    ['Most ordered item', data.customer.mostOrderedItem?.name ?? '-'],
     ['Avg bill value', fmtMoney(data.customer.avgBillValue)],
   ])
 
@@ -125,8 +125,8 @@ export function reportToPdfBuffer(data: ReportData): Buffer {
       ['Margin %', `${data.summary.marginPct.toFixed(1)}%`],
       ['Orders', String(data.summary.orderCount)],
       ['Avg order value', fmtMoney(data.summary.avgOrderValue)],
-      ['Best day', data.summary.bestDay ? `${data.summary.bestDay.label} (${fmtMoney(data.summary.bestDay.revenue)})` : '—'],
-      ['Worst day', data.summary.worstDay ? `${data.summary.worstDay.label} (${fmtMoney(data.summary.worstDay.revenue)})` : '—'],
+      ['Best day', data.summary.bestDay ? `${data.summary.bestDay.label} (${fmtMoney(data.summary.bestDay.revenue)})` : '-'],
+      ['Worst day', data.summary.worstDay ? `${data.summary.worstDay.label} (${fmtMoney(data.summary.worstDay.revenue)})` : '-'],
     ],
     theme: 'striped',
     headStyles: { fillColor: [26, 26, 24] },
@@ -141,7 +141,7 @@ export function reportToPdfBuffer(data: ReportData): Buffer {
 
   autoTable(doc, {
     head: [['Area', 'Orders', 'Revenue', 'Top item']],
-    body: data.areaPerformance.map((a) => [a.area, String(a.orders), fmtMoney(a.revenue), a.topItem ?? '—']),
+    body: data.areaPerformance.map((a) => [a.area, String(a.orders), fmtMoney(a.revenue), a.topItem ?? '-']),
     theme: 'striped',
     headStyles: { fillColor: [26, 26, 24] },
   })
@@ -159,7 +159,7 @@ export function reportToPdfBuffer(data: ReportData): Buffer {
       ['Total customers', String(data.customer.totalCustomers)],
       ['New', String(data.customer.newCustomers)],
       ['Repeat', String(data.customer.repeatCustomers)],
-      ['Most ordered item', data.customer.mostOrderedItem?.name ?? '—'],
+      ['Most ordered item', data.customer.mostOrderedItem?.name ?? '-'],
       ['Avg bill value', fmtMoney(data.customer.avgBillValue)],
     ],
     theme: 'striped',

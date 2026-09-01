@@ -4,10 +4,10 @@ import { requireDashboardSession, requireAdmin } from '@/lib/auth/requireDashboa
 
 export const dynamic = 'force-dynamic'
 
-// DELETE /api/pos/orders/[id] — admin-only, permanent. order_items, kot_tickets
+// DELETE /api/pos/orders/[id] - admin-only, permanent. order_items, kot_tickets
 // and payments cascade automatically (FK ON DELETE CASCADE); stock_transactions
 // rows keep their history but have reference_order_id cleared first since that
-// FK has no cascade — deleting an order shouldn't erase the ingredient ledger.
+// FK has no cascade - deleting an order shouldn't erase the ingredient ledger.
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const roleGuard = await requireAdmin(req)
   if (roleGuard) return roleGuard
@@ -29,7 +29,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   }
 }
 
-// PATCH /api/pos/orders/[id] — update mutable order fields (customer_note).
+// PATCH /api/pos/orders/[id] - update mutable order fields (customer_note).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// GET /api/pos/orders/[id] — full order detail for the POS order-builder screen.
+// GET /api/pos/orders/[id] - full order detail for the POS order-builder screen.
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard

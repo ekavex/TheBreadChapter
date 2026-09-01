@@ -119,7 +119,7 @@ export default function RecipeModal({ menuItem, ingredients, onClose, onSaved }:
           </button>
         </div>
         <p className="text-sm text-ink-muted mb-4">
-          Selling price ₹{menuItem.price} — recipe cost auto-recalculates when ingredient costs change.
+          Selling price ₹{menuItem.price} - recipe cost auto-recalculates when ingredient costs change.
         </p>
 
         {loading ? (

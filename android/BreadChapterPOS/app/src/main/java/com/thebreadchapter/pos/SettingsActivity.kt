@@ -26,7 +26,7 @@ class SettingsActivity : AppCompatActivity() {
         const val KEY_KITCHEN_MAC    = "kitchen_mac"
         const val KEY_BEVERAGE_MAC   = "beverage_mac"
         const val KEY_BRIDGE_TOKEN   = "bridge_token"
-        // Pine Labs Application ID — provisioned by Pine Labs for this billing app
+        // Pine Labs Application ID - provisioned by Pine Labs for this billing app
         const val KEY_PINE_APP_ID    = "pine_app_id"
         // Auto-login credentials stored for POS kiosk convenience
         const val KEY_AUTO_LOGIN_USER = "auto_login_user"

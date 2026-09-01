@@ -20,13 +20,13 @@ const POLL_TIMEOUT_MS  = 25_000
 const POLL_INTERVAL_MS = 2_000
 
 // Payment state reported to the UI. Deliberately distinguishes "we do not know"
-// from "it failed" — a frontend timeout is NOT a failed payment.
+// from "it failed" - a frontend timeout is NOT a failed payment.
 export type PaymentState =
   | 'paid'
   | 'failed'
   | 'cancelled'
   | 'pending'                // terminal still has the transaction open
-  | 'requires_verification'  // ambiguous — a human must check before any retry
+  | 'requires_verification'  // ambiguous - a human must check before any retry
 
 // Card data / VPA never reach the database or the logs.
 function toJson(value: unknown) { return toStorableJson(value) as never }
@@ -80,7 +80,7 @@ async function latestPaymentFor(orderId: string): Promise<Payment | null> {
 }
 
 // Polls GetStatus until the terminal reaches a final outcome or the deadline
-// passes. Returns the last result — which may still be 'pending'.
+// passes. Returns the last result - which may still be 'pending'.
 //
 // CRITICAL: 'pending' means the transaction is still open on the terminal. It
 // must never be mapped to a failure, because the customer may complete the
@@ -99,7 +99,7 @@ async function pollForOutcome(
     try {
       last = await paymentProvider.status(ptrid, ctx)
     } catch (err) {
-      // A status call failing tells us nothing about the payment — keep trying.
+      // A status call failing tells us nothing about the payment - keep trying.
       logger.warn('payment.poll.error', {
         orderId, ptrid, attempt,
         error: err instanceof Error ? err.message : String(err),
@@ -156,7 +156,7 @@ async function resolveAwaitingPayment(
         'No Pine Labs transaction reference is recorded for this order. Verify against the terminal and the Pine Labs report.',
       )
     }
-    // Nothing was ever sent to a terminal — safe to release for a retry.
+    // Nothing was ever sent to a terminal - safe to release for a retry.
     logger.warn('payment.resolve.no_pending_payment', { orderId: order.id })
     const sql = getDb()
     await sql`
@@ -164,7 +164,7 @@ async function resolveAwaitingPayment(
       WHERE id = ${order.id} AND pos_status = 'AWAITING_PAYMENT'
     `
     const failedOrder = await fetchOrderWithItemsAndTable(order.id)
-    return ok(failedOrder ?? order, payment, 'failed', 'No transaction reached the terminal — you can retry.')
+    return ok(failedOrder ?? order, payment, 'failed', 'No transaction reached the terminal - you can retry.')
   }
 
   const ctx = {
@@ -220,7 +220,7 @@ async function finalizeOrFlag(
         order.id,
         payment,
         'amount mismatch',
-        'Pine Labs reported a different amount than the bill. Do NOT retry — verify this transaction before continuing.',
+        'Pine Labs reported a different amount than the bill. Do NOT retry - verify this transaction before continuing.',
       )
     }
     throw err
@@ -228,7 +228,7 @@ async function finalizeOrFlag(
 }
 
 // Before charging again on a previously failed order, make sure no earlier
-// transaction is still live on the terminal — otherwise the customer can be
+// transaction is still live on the terminal - otherwise the customer can be
 // charged twice (once per open transaction).
 async function ensureNoOpenTransaction(
   orderId: string,
@@ -264,14 +264,14 @@ async function ensureNoOpenTransaction(
     }
 
     if (statusResult.status === 'approved') {
-      // The "failed" payment actually went through — recover instead of charging again.
+      // The "failed" payment actually went through - recover instead of charging again.
       logger.warn('payment.retry.recovered_approved', { orderId, ptrid: open.plutus_ptrid })
       const currentOrder = await fetchOrderWithItemsAndTable(orderId)
       if (currentOrder) return finalizeOrFlag(currentOrder, open, statusResult, customerPhone, customerName)
     }
 
     if (statusResult.status === 'pending') {
-      // Still open on the terminal — force-cancel it before a new upload.
+      // Still open on the terminal - force-cancel it before a new upload.
       try {
         const cancelResult = await paymentProvider.cancel(
           open.plutus_ptrid as string,
@@ -296,7 +296,7 @@ async function ensureNoOpenTransaction(
       continue
     }
 
-    // declined / cancelled — record it so it is not inspected again.
+    // declined / cancelled - record it so it is not inspected again.
     await sql`
       UPDATE payments SET status = ${statusResult.status === 'cancelled' ? 'cancelled' : 'declined'}
       WHERE id = ${open.id}
@@ -306,7 +306,7 @@ async function ensureNoOpenTransaction(
   return null
 }
 
-// Cash / UPI-QR collected in person — no terminal push or Pine Labs call needed.
+// Cash / UPI-QR collected in person - no terminal push or Pine Labs call needed.
 async function handleCashPayment(
   order: Order,
   orderId: string,
@@ -328,7 +328,7 @@ async function handleCashPayment(
       return ok(freshOrder, payment, 'paid')
     }
     return NextResponse.json(
-      { data: null, error: 'Payment already in progress on this order — refresh and retry' },
+      { data: null, error: 'Payment already in progress on this order - refresh and retry' },
       { status: 409 },
     )
   }
@@ -381,17 +381,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ data: null, error: 'mode must be "card", "cash", "upi", or "upi_qr"' }, { status: 400 })
     }
     if (!order.total_paisa || Number(order.total_paisa) <= 0) {
-      return NextResponse.json({ data: null, error: 'Order total is zero — regenerate the bill before taking payment' }, { status: 409 })
+      return NextResponse.json({ data: null, error: 'Order total is zero - regenerate the bill before taking payment' }, { status: 409 })
     }
 
-    // Cash and UPI QR are both settled manually — no terminal required.
+    // Cash and UPI QR are both settled manually - no terminal required.
     if (mode === 'cash' || mode === 'upi_qr') {
       return handleCashPayment(order, params.id, customer_phone, customer_name, mode)
     }
 
     // On-device AppToApp payment: the Android APK handled the charge locally and
     // already received a SUCCESS from Pine Labs MasterApp. We trust the result
-    // and record it directly — no terminal upload or status poll needed.
+    // and record it directly - no terminal upload or status poll needed.
     if (native_result?.ok === true) {
       const claimedRows = await sql`
         UPDATE orders SET pos_status = 'AWAITING_PAYMENT'
@@ -441,7 +441,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     if (order.pos_status === 'AWAITING_PAYMENT' || order.pos_status === 'REQUIRES_VERIFICATION') {
-      // Re-verification only — this path never starts a new charge.
+      // Re-verification only - this path never starts a new charge.
       return resolveAwaitingPayment(order, terminal, customer_phone, customer_name)
     }
 
@@ -449,7 +449,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const blocked = await ensureNoOpenTransaction(params.id, terminal, customer_phone, customer_name)
     if (blocked) return blocked
 
-    // Atomic claim — whoever's UPDATE matches first wins the charge
+    // Atomic claim - whoever's UPDATE matches first wins the charge
     const claimedRows = await sql`
       UPDATE orders SET pos_status = 'AWAITING_PAYMENT'
       WHERE id = ${params.id}
@@ -467,7 +467,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         return ok(freshOrder, payment, 'paid')
       }
       return NextResponse.json(
-        { data: null, error: 'Payment already in progress on this order — refresh and retry' },
+        { data: null, error: 'Payment already in progress on this order - refresh and retry' },
         { status: 409 }
       )
     }
@@ -487,7 +487,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       })
     } catch (chargeErr) {
       // The upload may or may not have reached Pine Labs. Do NOT declare
-      // failure — record the attempt and let verification/reconciliation decide.
+      // failure - record the attempt and let verification/reconciliation decide.
       const message = chargeErr instanceof Error ? chargeErr.message : String(chargeErr)
       logger.error('payment.charge.error', { orderId: claimed.id, transactionNumber, error: message })
       await sql`
@@ -526,7 +526,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     `
     const payment = paymentRow as Payment
 
-    // Upload itself was rejected — nothing is live on the terminal.
+    // Upload itself was rejected - nothing is live on the terminal.
     if (chargeResult.status === 'declined' || chargeResult.status === 'cancelled') {
       await markFailed(params.id, payment, chargeResult)
       const failedOrder = await fetchOrderWithItemsAndTable(params.id)
@@ -534,7 +534,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     if (!chargeResult.ptrid) {
-      // No reference to poll on — must be verified manually.
+      // No reference to poll on - must be verified manually.
       return verificationResponse(
         params.id,
         payment,
@@ -554,7 +554,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     if (statusResult.status === 'pending') {
-      // Still on the terminal. Order stays AWAITING_PAYMENT — the webhook, the
+      // Still on the terminal. Order stays AWAITING_PAYMENT - the webhook, the
       // cashier pressing "check", or the reconciler will settle it.
       const currentOrder = await fetchOrderWithItemsAndTable(params.id)
       return ok(currentOrder ?? claimed, payment, 'pending', 'Waiting for the customer to complete payment on the terminal.')

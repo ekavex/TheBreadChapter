@@ -1,4 +1,4 @@
-// GET /api/health — liveness + readiness for the container healthcheck and any
+// GET /api/health - liveness + readiness for the container healthcheck and any
 // uptime monitor. Deliberately unauthenticated but says nothing sensitive:
 // no versions, no hostnames, no configuration values.
 //

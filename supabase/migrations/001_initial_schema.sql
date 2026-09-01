@@ -1,5 +1,5 @@
 -- ============================================================
--- CAFE SYSTEM — Phase 1 Database Schema
+-- CAFE SYSTEM - Phase 1 Database Schema
 -- Run this in Supabase SQL Editor or via: supabase db push
 -- ============================================================
 

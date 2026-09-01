@@ -27,7 +27,7 @@
 	}
 
 	# The Pine Labs postback must reach the app even under load; it is small
-	# and infrequent, so no rate limiting here — the endpoint authenticates
+	# and infrequent, so no rate limiting here - the endpoint authenticates
 	# itself with PINELABS_WEBHOOK_SECRET.
 	reverse_proxy app:3000 {
 		health_uri /api/health

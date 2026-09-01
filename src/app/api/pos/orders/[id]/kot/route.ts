@@ -19,7 +19,7 @@ async function fetchOrderWithItems(orderId: string) {
   return { ...order, items, table: tableRow ?? null }
 }
 
-// POST /api/pos/orders/[id]/kot — Module 5 "KOT Routing": on confirm, split
+// POST /api/pos/orders/[id]/kot - Module 5 "KOT Routing": on confirm, split
 // the order by category and print a ticket per station (food → kitchen,
 // beverage → beverage counter). Table → kot_sent.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -50,12 +50,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (orderItems.length === 0) {
       return NextResponse.json({
         data: null,
-        error: isAddon ? 'No new items to send — add items first' : 'Add at least one item before sending to the kitchen',
+        error: isAddon ? 'No new items to send - add items first' : 'Add at least one item before sending to the kitchen',
       }, { status: 400 })
     }
 
     // For the first KOT, skip stations already ticketed (retry-safe).
-    // For add-on KOT, always insert a new ticket — different items, same station is fine.
+    // For add-on KOT, always insert a new ticket - different items, same station is fine.
     const alreadyTicketed = new Set<string>()
     if (!isAddon) {
       const ticketRows = await sql`SELECT station FROM kot_tickets WHERE order_id = ${order.id}`
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Printing itself happens out-of-band: this just queues one ticket per
     // station and the Bluetooth print bridge (running on a dedicated device
     // near the printers) picks it up within its poll interval. There's no
-    // synchronous printer call here — the server has no physical path (BT/USB/
+    // synchronous printer call here - the server has no physical path (BT/USB/
     // local LAN) to a printer sitting in the cafe, so attempting one here only
     // adds latency and a spurious "printer offline" warning that fires on every
     // send regardless of whether the bridge actually prints it moments later.

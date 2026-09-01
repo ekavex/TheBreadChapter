@@ -1,6 +1,6 @@
 // ─── HMAC-signed stateless session (RBAC-aware) ─────────────
 // Payload: { userId, role, exp }
-// Uses Web Crypto (SubtleCrypto) — runs in both Edge middleware and Node routes.
+// Uses Web Crypto (SubtleCrypto) - runs in both Edge middleware and Node routes.
 import type { UserRole } from '@/lib/types'
 
 export const SESSION_COOKIE_NAME = 'sc_session'

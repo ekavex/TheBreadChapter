@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     if (!order.total_paisa || Number(order.total_paisa) <= 0) {
       return NextResponse.json(
-        { data: null, error: 'Order total is zero — regenerate the bill before printing QR' },
+        { data: null, error: 'Order total is zero - regenerate the bill before printing QR' },
         { status: 409 },
       )
     }

@@ -1,4 +1,4 @@
-# Smart Cafe Management System — Developer Handover (Master)
+# Smart Cafe Management System - Developer Handover (Master)
 
 **Version:** 2.0 (consolidated) · **Date:** July 2026
 **Owner:** Project Management / System Design
@@ -12,7 +12,7 @@
 
 We are building an in-cafe management system for a single cafe (extensible to more). Waiters take orders at the table on a web app; the system routes food and beverage tickets to separate prep stations (KOT), generates and prints a bill, takes payment on a **Pine Labs A910S** terminal (UPI / card / cash), and updates inventory, sales, and a **live dashboard** in real time. Managers use the same dashboard for analytics and reports.
 
-**An initial codebase already exists — build on top of it.** Do not scaffold from scratch or swap frameworks without raising it first.
+**An initial codebase already exists - build on top of it.** Do not scaffold from scratch or swap frameworks without raising it first.
 
 The scope is 11 modules (below). Three modules from the original draft (WhatsApp, Expense, Forecasting/AI) were **removed**. Ordering + KOT + payment were **consolidated into Module 5**. Authentication was **simplified to two credential sets, no roles**.
 
@@ -42,7 +42,7 @@ The scope is 11 modules (below). Three modules from the original draft (WhatsApp
 Rules that follow (do not violate):
 
 - No client holds authoritative state. The waiter app, manager dashboard, printers, and payment terminal are all clients of the backend.
-- **The A910S is only a payment terminal.** In Pine Labs *cloud* integration the ordering app is **not** deployed on the device — so no locked-down-device app certification is needed for the order flow. (See §9.)
+- **The A910S is only a payment terminal.** In Pine Labs *cloud* integration the ordering app is **not** deployed on the device - so no locked-down-device app certification is needed for the order flow. (See §9.)
 - "Real-time dashboard" = the backend pushes changes (websocket; polling fallback) when an order is paid, stock changes, a table frees, etc.
 - Payment and KOT printing are **backend-driven side effects**, not device-local actions.
 
@@ -50,7 +50,7 @@ Rules that follow (do not violate):
 
 ## 3. Technology & conventions
 
-- **Match the existing codebase.** First task: inventory the repo — language, framework, DB, existing structure, auth, and which modules already exist. Follow its conventions. Flag before introducing anything new.
+- **Match the existing codebase.** First task: inventory the repo - language, framework, DB, existing structure, auth, and which modules already exist. Follow its conventions. Flag before introducing anything new.
 - **Integrations behind interfaces.** Payment (Pine Labs) and printers (KOT) sit behind clean, **mockable** interfaces. Ship mocks now; drop in real implementations later with zero change to business logic.
 - **Money:** integers in **paisa**, never floats. Convert once at the boundary. Currency INR (₹).
 - **Time:** store UTC; render in cafe-local timezone.
@@ -60,7 +60,7 @@ Rules that follow (do not violate):
 
 ---
 
-## 4. System modules (scope) — 11 modules
+## 4. System modules (scope) - 11 modules
 
 | # | Module | Notes / changes |
 |---|---|---|
@@ -68,15 +68,15 @@ Rules that follow (do not violate):
 | 2 | Recipe Management | Recipe per menu item; **auto stock deduction** on order completion. |
 | 3 | Dynamic Cost Management | Ingredient cost edits → **auto recipe-cost recalculation**; menu pricing; profit. |
 | 4 | Sales Management | Persist every order (id, date/time, item, qty, table, section, customer type). |
-| **5** | **Order, KOT Routing & Payment** | **The heart of the system — see §7.** Table→order→KOT→bill→payment→dashboard. |
+| **5** | **Order, KOT Routing & Payment** | **The heart of the system - see §7.** Table→order→KOT→bill→payment→dashboard. |
 | 6 | Profit & Loss Analysis | Daily/weekly/monthly/yearly; net = revenue − ingredient cost − expenses. |
 | 7 | Cafe Area Analytics | Per-section analytics, popular items, peak hours/heatmap. |
 | 8 | Customer Analytics | New/repeat, most ordered, avg bill, spending trends. |
-| 9 | Authentication & Security | **Two credential sets, no roles — see §8.** |
+| 9 | Authentication & Security | **Two credential sets, no roles - see §8.** |
 | 10 | Dashboard | Live sales/profit/low-stock/top-seller/most-visited/peak-hour/pending/inventory value/table statuses. |
 | 11 | Reports | Daily/weekly/monthly; export PDF/Excel/CSV/print. |
 
-**Removed** from the original draft: WhatsApp Integration, Expense Management, Forecasting/AI. (If Expense is later needed for accurate Net Profit, raise it — see open items §14.)
+**Removed** from the original draft: WhatsApp Integration, Expense Management, Forecasting/AI. (If Expense is later needed for accurate Net Profit, raise it - see open items §14.)
 
 ---
 
@@ -96,7 +96,7 @@ Adapt names to the existing schema; these are the entities and the fields that m
 | `Order` | id, table_id, status, created_at, total_paisa | status per state machine (§10) |
 | `OrderItem` | order_id, menu_item_id, quantity, unit_price_paisa, category | category copied for routing/reporting |
 | `Payment` | order_id, transaction_number, **plutus_ptrid**, status, mode, amount_paisa, rrn, approval_code, txn_log_id, client_id, store_id, raw_response | Pine Labs references; index `plutus_ptrid` & `transaction_number` |
-| `Customer` | id, phone, type, first_seen, visit_count | analytics (optional for v1 — confirm) |
+| `Customer` | id, phone, type, first_seen, visit_count | analytics (optional for v1 - confirm) |
 | `AuthCredential` | id, **scope**, user_id, password_hash | `scope`: `dashboard` \| `menu_crud` (§8) |
 
 **Compute, don't store stale copies:** recipe cost = Σ(recipe qty × ingredient cost); item profit = selling_price − recipe cost; net profit = revenue − ingredient cost − expenses.
@@ -111,7 +111,7 @@ This lifecycle is Module 5. The payment leg is Pine Labs cloud (§9). Everything
 
 ---
 
-## 7. Module 5 — Order, KOT Routing & Payment (detailed)
+## 7. Module 5 - Order, KOT Routing & Payment (detailed)
 
 ### 7.1 Seating & tables
 The floor has sections (**Indoor, Outdoor, Smoking**), each with numbered tables. Each table has a live status (`free` / `occupied` / `kot_sent` / `billed`) shown on the dashboard.
@@ -144,18 +144,18 @@ Table 4 (Indoor) → 1× Croissant (food) + 1× Iced Coffee (beverage) → KOT: 
 
 ---
 
-## 8. Module 9 — Authentication (two credentials, no roles)
+## 8. Module 9 - Authentication (two credentials, no roles)
 
 There are **no role-based permissions.** Exactly two credential sets, each a `user_id` + `password` stored in `AuthCredential` by `scope`:
 
-1. **Dashboard access** (`scope = dashboard`) — required to open/operate the dashboard.
-2. **Menu CRUD** (`scope = menu_crud`) — a **separate** credential. Clicking **Add / Edit / Delete Menu** opens a popup asking for these; the action proceeds only if correct (per-action re-verification, not a session role).
+1. **Dashboard access** (`scope = dashboard`) - required to open/operate the dashboard.
+2. **Menu CRUD** (`scope = menu_crud`) - a **separate** credential. Clicking **Add / Edit / Delete Menu** opens a popup asking for these; the action proceeds only if correct (per-action re-verification, not a session role).
 
-Hash passwords (bcrypt/argon2). No Super Admin/Manager/Cashier tiers — that was removed.
+Hash passwords (bcrypt/argon2). No Super Admin/Manager/Cashier tiers - that was removed.
 
 ---
 
-## 9. Pine Labs A910S — cloud integration (summary)
+## 9. Pine Labs A910S - cloud integration (summary)
 
 **Model:** the A910S is only the payment terminal; your web app is not on the device. Your **backend** talks to Pine Labs cloud over HTTPS; the bill and the payment are linked by a **PTRID**.
 
@@ -164,7 +164,7 @@ Hash passwords (bcrypt/argon2). No Super Admin/Manager/Cashier tiers — that wa
 | Need | Call | In | Out |
 |---|---|---|---|
 | Create payable bill | **UploadBilledTransaction** | `TransactionNumber` (your unique id), `Amount` (paisa), `AllowedPaymentMode` (`"1\|2\|10"`), `ClientId` (terminal), `StoreId`, `MerchantID`, `SecurityToken` | `ResponseCode` (0=ok), `PlutusTransactionReferenceID` (PTRID) |
-| Check result | **GetStatus** | PTRID (+ store/client) | `ResponseCode`, `TransactionData[]` — **parse by `Tag`, never index** |
+| Check result | **GetStatus** | PTRID (+ store/client) | `ResponseCode`, `TransactionData[]` - **parse by `Tag`, never index** |
 | Cancel open txn | **CancelTransactionForced** | PTRID, Amount | `ResponseCode` |
 | Pushed result | **Post Back URL** (webhook) | Pine Labs → you | urlencoded, comma-joined `key=value`; **re-verify via GetStatus** |
 
@@ -201,7 +201,7 @@ Only the **PAID** transition recognises revenue and deducts stock, and it must g
 
 ## 12. Cross-cutting requirements (non-functional)
 
-- **Idempotency:** webhook + poll may both fire — finalize once.
+- **Idempotency:** webhook + poll may both fire - finalize once.
 - **Reconciliation:** scheduled job re-checks any `AWAITING_PAYMENT` order past a threshold via GetStatus; store `RRN` + `TransactionLogId` to match Pine Labs settlement reports.
 - **Security:** backend-only secrets; HTTPS webhook; validate/verify callbacks before acting on money; passwords hashed.
 - **Observability:** structured logs for every Pine Labs call and KOT print; alert on repeated failures.
@@ -213,16 +213,16 @@ Only the **PAID** transition recognises revenue and deducts stock, and it must g
 
 Each milestone is independently runnable/testable. Review after each before proceeding.
 
-1. **M0 — Repo onboarding & foundations.** Inventory the codebase; set up local dev; confirm DB; write the gap analysis (SRS module → exists? → missing). Establish data model (§5); seed sections/tables/terminals.
-2. **M1 — Inventory (Mod 1).** Ingredient CRUD, stock updates, low-stock alerts, expiry tracking.
-3. **M2 — Recipes & costing (Mod 2, 3).** Recipes, auto cost recalculation, menu pricing, profit; wire auto stock deduction hook (used in M4).
-4. **M3 — Menu management + Auth (Mod 4-menu, 9).** Menu CRUD guarded by the menu-CRUD credential popup; dashboard-access credential.
-5. **M4 — Order + KOT + bill (Mod 5, minus payment).** Tables/sections, order entry, category split, **KOT routing behind `PrinterService` (mock)**, bill generation. Payment via **`MockPaymentProvider`** end-to-end. **Ship the whole flow here without Pine Labs.**
-6. **M5 — Dashboard (Mod 10) + Sales (Mod 4).** Real-time tiles, table statuses, persisted sales.
-7. **M6 — Pine Labs cloud (real).** In parallel with M1–M5, complete onboarding/UAT. Then implement `PineLabsCloudProvider` (Upload/GetStatus/Cancel) + `/webhooks/pinelabs`; run the UAT test matrix from the integration master; swap mock → real.
-8. **M7 — Analytics & P&L (Mod 6, 7, 8).** Area + customer analytics, profit trends.
-9. **M8 — Reports (Mod 11).** Daily/weekly/monthly + PDF/Excel/CSV/print export.
-10. **M9 — Hardening.** Reconciliation job, idempotency tests, offline handling, observability, production cutover.
+1. **M0 - Repo onboarding & foundations.** Inventory the codebase; set up local dev; confirm DB; write the gap analysis (SRS module → exists? → missing). Establish data model (§5); seed sections/tables/terminals.
+2. **M1 - Inventory (Mod 1).** Ingredient CRUD, stock updates, low-stock alerts, expiry tracking.
+3. **M2 - Recipes & costing (Mod 2, 3).** Recipes, auto cost recalculation, menu pricing, profit; wire auto stock deduction hook (used in M4).
+4. **M3 - Menu management + Auth (Mod 4-menu, 9).** Menu CRUD guarded by the menu-CRUD credential popup; dashboard-access credential.
+5. **M4 - Order + KOT + bill (Mod 5, minus payment).** Tables/sections, order entry, category split, **KOT routing behind `PrinterService` (mock)**, bill generation. Payment via **`MockPaymentProvider`** end-to-end. **Ship the whole flow here without Pine Labs.**
+6. **M5 - Dashboard (Mod 10) + Sales (Mod 4).** Real-time tiles, table statuses, persisted sales.
+7. **M6 - Pine Labs cloud (real).** In parallel with M1–M5, complete onboarding/UAT. Then implement `PineLabsCloudProvider` (Upload/GetStatus/Cancel) + `/webhooks/pinelabs`; run the UAT test matrix from the integration master; swap mock → real.
+8. **M7 - Analytics & P&L (Mod 6, 7, 8).** Area + customer analytics, profit trends.
+9. **M8 - Reports (Mod 11).** Daily/weekly/monthly + PDF/Excel/CSV/print export.
+10. **M9 - Hardening.** Reconciliation job, idempotency tests, offline handling, observability, production cutover.
 
 ---
 
@@ -232,9 +232,9 @@ Each milestone is independently runnable/testable. Review after each before proc
 - [ ] Final `MerchantID`, `SecurityToken`, `StoreId`, and `ClientId` per A910S; which payment modes are enabled.
 - [ ] Post Back URL support + exact callback format/auth for this account.
 - [ ] **Number of A910S terminals** (drives ClientId/StoreId routing) and whether zero-click auto-routing is enabled.
-- [ ] Separate physical **KOT printers** at kitchen + beverage counter — confirmed models/connectivity.
+- [ ] Separate physical **KOT printers** at kitchen + beverage counter - confirmed models/connectivity.
 - [ ] **Expense** and **Customer** modules in v1? (Net Profit accuracy depends on expenses; customer analytics depends on capturing customer data.)
-- [ ] **Area list mismatch:** SRS Module 7 lists 5 areas (Indoor, Outdoor, Smoking, Rooftop, Lounge) but the workflow uses 3 sections — align to which set?
+- [ ] **Area list mismatch:** SRS Module 7 lists 5 areas (Indoor, Outdoor, Smoking, Rooftop, Lounge) but the workflow uses 3 sections - align to which set?
 - [ ] Offline behavior for ordering/payment on connectivity loss.
 
 ---
@@ -264,9 +264,9 @@ Each milestone is independently runnable/testable. Review after each before proc
 ## 17. Quick reference (pin this)
 
 - **Backend is the source of truth; A910S is only the payment terminal.**
-- **PTRID** joins your order to the payment — save it the moment Upload returns.
+- **PTRID** joins your order to the payment - save it the moment Upload returns.
 - **Success = `ResponseCode: 0`. Amounts = paisa (integer). Parse `TransactionData` by `Tag`.**
 - **KOT:** food→Kitchen printer, beverage→Beverage Counter printer (separate devices, backend-driven). Receipt→A910S built-in.
-- **Auth:** two credentials — dashboard access + menu-CRUD popup. No roles.
+- **Auth:** two credentials - dashboard access + menu-CRUD popup. No roles.
 - **AllowedPaymentMode `"1|2|10"`** = Card, Cash, UPI in one flow.
 - **Everything external is behind a mockable interface.** Build against mocks first.

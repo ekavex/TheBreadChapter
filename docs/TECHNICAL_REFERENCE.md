@@ -1,4 +1,4 @@
-# Technical Reference — The Bread Chapter
+# Technical Reference - The Bread Chapter
 
 Complete architecture, schema, and API reference for the Smart Cafe Management System.
 
@@ -29,7 +29,7 @@ The Bread Chapter is a full-stack cafe management platform built for single-tena
                     └─────────────────────┘         └──────────────┘
 ```
 
-All server-side logic runs in Next.js API routes — no separate backend service. The database is accessed directly via the `postgres` npm package (no ORM). Supabase has been fully removed.
+All server-side logic runs in Next.js API routes - no separate backend service. The database is accessed directly via the `postgres` npm package (no ORM). Supabase has been fully removed.
 
 ---
 
@@ -51,7 +51,7 @@ All server-side logic runs in Next.js API routes — no separate backend service
 
 | Decision | Rationale |
 |---|---|
-| No ORM | Tagged-template SQL via `postgres` npm — full query control, no N+1 leaks |
+| No ORM | Tagged-template SQL via `postgres` npm - full query control, no N+1 leaks |
 | Server Components for pages | Dashboard, POS, menu pages query DB at render time; no client-side fetch on load |
 | Polling instead of websockets | Kitchen display and order tracker use 4–5 s polling; removes realtime dependency |
 | Flat session tokens | JWT signed with `jose`; no NextAuth dependency |
@@ -137,7 +137,7 @@ src/
 | `menu_item_category` | `food` · `beverage` |
 | `stock_txn_type` | `purchase` · `sale_deduction` · `waste` · `adjustment` |
 
-> **PostgreSQL 18 note** — no implicit `text → uuid` or `text → enum` cast exists. All `sql.array()` calls must use explicit casts: `::uuid[]` for UUID arrays, `::order_status[]` for enum arrays.
+> **PostgreSQL 18 note** - no implicit `text → uuid` or `text → enum` cast exists. All `sql.array()` calls must use explicit casts: `::uuid[]` for UUID arrays, `::order_status[]` for enum arrays.
 
 ---
 
@@ -162,19 +162,19 @@ src/
 | `GET` | `/api/pos/orders/[id]` | Fetch single order with items and table |
 | `POST` | `/api/pos/orders/[id]/items` | Add items to an open order |
 | `PATCH` | `/api/pos/orders/[id]/items/[itemId]` | Update quantity or remove an item |
-| `POST` | `/api/pos/orders/[id]/kot` | Fire KOT — prints to kitchen/beverage thermal printer |
+| `POST` | `/api/pos/orders/[id]/kot` | Fire KOT - prints to kitchen/beverage thermal printer |
 | `POST` | `/api/pos/orders/[id]/bill` | Generate bill, set `pos_status → BILLED` |
 | `POST` | `/api/pos/orders/[id]/pay` | Initiate payment (Pine Labs or mock) |
 | `POST` | `/api/pos/orders/[id]/occupy` | Mark table as occupied when order opened |
 | `POST` | `/api/pos/orders/[id]/cancel` | Cancel order and release table |
-| `POST` | `/api/webhooks/pinelabs` | Pine Labs payment callback — finalizes order on approval |
-| `GET` | `/api/order/[orderId]` | **Public** — customer order status tracker (no auth required) |
+| `POST` | `/api/webhooks/pinelabs` | Pine Labs payment callback - finalizes order on approval |
+| `GET` | `/api/order/[orderId]` | **Public** - customer order status tracker (no auth required) |
 
 ### Menu & Inventory
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/menu` | Full menu — categories with nested items |
+| `GET` | `/api/menu` | Full menu - categories with nested items |
 | `POST` | `/api/menu/categories` | Create category |
 | `PATCH` / `DELETE` | `/api/menu/categories/[id]` | Update or delete category |
 | `POST` | `/api/menu/items` | Create menu item |
@@ -192,14 +192,14 @@ src/
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/dashboard` | Today's live metrics — sales, pending orders, top seller, section counts |
+| `GET` | `/api/dashboard` | Today's live metrics - sales, pending orders, top seller, section counts |
 | `GET` | `/api/orders` | Orders by date or kitchen view (`?kitchen=true`) |
 | `GET` | `/api/analytics/profit-loss` | P&L bucketed by `daily / weekly / monthly / yearly` |
-| `GET` | `/api/analytics/area` | Visitors, popular items, peak hour — by seating section |
+| `GET` | `/api/analytics/area` | Visitors, popular items, peak hour - by seating section |
 | `GET` | `/api/analytics/customers` | Customer count, new vs repeat, most ordered item, avg bill |
 | `GET` | `/api/reports/[range]` | Full report for `daily / weekly / monthly` window |
 | `GET` | `/api/reports/[range]/export` | Downloads report as CSV |
-| `GET` | `/api/notifications` | In-app alerts — low stock, expiring items, stuck orders |
+| `GET` | `/api/notifications` | In-app alerts - low stock, expiring items, stuck orders |
 
 ### Admin
 
@@ -221,11 +221,11 @@ src/
 | Dashboard overview | ✓ | ✓ | ✓ read-only |
 | Menu manager | ✓ | ✓ | ✓ read-only |
 | Kitchen display | ✓ | ✓ | ✓ |
-| Inventory management | ✓ | ✓ | — |
-| Orders history | ✓ | ✓ | — |
-| Analytics & reports | ✓ | ✓ | — |
-| Staff notifications | ✓ | ✓ | — |
-| Admin panel (user management) | ✓ | — | — |
+| Inventory management | ✓ | ✓ | - |
+| Orders history | ✓ | ✓ | - |
+| Analytics & reports | ✓ | ✓ | - |
+| Staff notifications | ✓ | ✓ | - |
+| Admin panel (user management) | ✓ | - | - |
 
 Role is stored in the session JWT and checked in both the middleware (page access) and individual API route handlers. The middleware redirects blocked routes to `/dashboard`.
 
@@ -242,7 +242,7 @@ Role is stored in the session JWT and checked in both the middleware (page acces
 | `APP_PORT` | optional | Host port Docker maps to container `:3000`. Default: `3000`. |
 | `MOCK_PAYMENT_OUTCOME` | optional | When Pine Labs is unconfigured, forces mock result: `approved` / `declined` / `cancelled`. |
 | `PINELABS_MERCHANT_ID` | optional | Pine Labs merchant identifier. Leave blank to use mock payment. |
-| `PINELABS_SECURITY_TOKEN` | optional | Pine Labs secret. **Server-side only — never expose client-side.** |
+| `PINELABS_SECURITY_TOKEN` | optional | Pine Labs secret. **Server-side only - never expose client-side.** |
 | `PINELABS_STORE_ID` | optional | Pine Labs store/terminal identifier. |
 | `PINELABS_BASE_URL` | optional | Pine Labs API base URL. UAT default; swap for production URL when live. |
 | `PRINTER_KITCHEN_IP` | optional | Network thermal printer IP for kitchen station. |

@@ -5,7 +5,7 @@ import { DEMO_CAFE_ID } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/admin/settings/cafe — tax and service charge settings
+// GET /api/admin/settings/cafe - tax and service charge settings
 export async function GET(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// PATCH /api/admin/settings/cafe — update tax and service charge
+// PATCH /api/admin/settings/cafe - update tax and service charge
 export async function PATCH(req: NextRequest) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard

@@ -116,7 +116,7 @@ export default function InventoryClient({ ingredients }: Props) {
               {ingredients.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-5 py-8 text-center text-ink-faint">
-                    No ingredients yet — add your first one.
+                    No ingredients yet - add your first one.
                   </td>
                 </tr>
               )}
@@ -149,7 +149,7 @@ export default function InventoryClient({ ingredients }: Props) {
                           {i.expiry_date}
                         </span>
                       ) : (
-                        <span className="text-ink-faint">—</span>
+                        <span className="text-ink-faint">-</span>
                       )}
                     </td>
                     <td className="px-5 py-3.5">
@@ -177,7 +177,7 @@ export default function InventoryClient({ ingredients }: Props) {
       <div className="md:hidden space-y-3">
         {ingredients.length === 0 && (
           <div className="bg-surface-raised rounded-2xl border border-ink/5 p-8 text-center">
-            <p className="text-ink-faint text-sm">No ingredients yet — add your first one.</p>
+            <p className="text-ink-faint text-sm">No ingredients yet - add your first one.</p>
           </div>
         )}
         {ingredients.map((i) => {

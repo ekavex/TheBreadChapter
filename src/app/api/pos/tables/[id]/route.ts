@@ -4,7 +4,7 @@ import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
 
-// PATCH /api/pos/tables/[id] — update table number/label/capacity/section
+// PATCH /api/pos/tables/[id] - update table number/label/capacity/section
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/pos/tables/[id] — soft-delete (is_active=false).
+// DELETE /api/pos/tables/[id] - soft-delete (is_active=false).
 // Blocked if the table currently has a non-terminal order (occupied/kot_sent/billed).
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
@@ -59,7 +59,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     }
     if (table.status !== 'free') {
       return NextResponse.json(
-        { data: null, error: `Table ${table.number} is currently ${table.status} — free it before removing` },
+        { data: null, error: `Table ${table.number} is currently ${table.status} - free it before removing` },
         { status: 409 }
       )
     }

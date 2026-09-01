@@ -1,4 +1,4 @@
-// Module 10 "Live Dashboard" — today's sales/profit, low-stock items, top
+// Module 10 "Live Dashboard" - today's sales/profit, low-stock items, top
 // seller, most-visited area, peak hour, pending orders, inventory value,
 // live table statuses.
 import { startOfDay, endOfDay } from 'date-fns'

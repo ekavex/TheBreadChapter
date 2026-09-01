@@ -7,7 +7,7 @@ export interface StationDevices {
 }
 
 // Per print call: tries Bluetooth RFCOMM first, falls back to USB.
-// No module-level device check — discovery happens at print time so
+// No module-level device check - discovery happens at print time so
 // hot-plugging and rfcomm bind/release work without a server restart.
 export class SmartPrinterService implements PrinterService {
   constructor(
@@ -41,7 +41,7 @@ export class SmartPrinterService implements PrinterService {
 
     if (tried.length > 0) {
       throw new Error(
-        `${ticket.station} printer not reachable — tried ${tried.join(', ')}. ` +
+        `${ticket.station} printer not reachable - tried ${tried.join(', ')}. ` +
         `Check that the printer is on and the cable/Bluetooth is connected.`
       )
     }

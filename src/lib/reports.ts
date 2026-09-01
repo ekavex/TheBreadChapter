@@ -1,4 +1,4 @@
-// Module 11 — reports.
+// Module 11 - reports.
 import { startOfDay, endOfDay, subDays } from 'date-fns'
 import { getDb } from '@/lib/db'
 import { DEMO_CAFE_ID } from '@/lib/constants'

@@ -14,7 +14,7 @@ export interface PaymentEventInput {
   orderId?: string | null
   source: PaymentEventSource
   ptrid?: string | null
-  /** Unique per delivery — a repeated webhook with the same key is ignored. */
+  /** Unique per delivery - a repeated webhook with the same key is ignored. */
   dedupeKey?: string | null
   /** What the caller/postback claimed. */
   reported?: string | null
@@ -26,7 +26,7 @@ export interface PaymentEventInput {
 /**
  * Records an event. Returns false when the event was a duplicate (same
  * dedupeKey already stored), so the caller can skip repeated work.
- * Never throws — audit logging must not break payment handling.
+ * Never throws - audit logging must not break payment handling.
  */
 export async function recordPaymentEvent(input: PaymentEventInput): Promise<boolean> {
   try {

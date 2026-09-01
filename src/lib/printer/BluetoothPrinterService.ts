@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile)
 const MAC_PATTERN = /^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/
 const RFCOMM_DEVICE_PATTERN = /^\/dev\/rfcomm\d{1,3}$/
 
-// O_NOCTTY is POSIX-only — prevents the RFCOMM device becoming the process's
+// O_NOCTTY is POSIX-only - prevents the RFCOMM device becoming the process's
 // controlling terminal. Falls back to 0 on platforms that don't define it.
 const O_NOCTTY: number = (constants as Record<string, number>)['O_NOCTTY'] ?? 0
 
@@ -25,7 +25,7 @@ const CMD = {
   ALIGN_LEFT:     Buffer.from([ESC, 0x61, 0x00]),
   BOLD_ON:        Buffer.from([ESC, 0x45, 0x01]),
   BOLD_OFF:       Buffer.from([ESC, 0x45, 0x00]),
-  // Double-height text (width stays single — fine on 58mm, saves space)
+  // Double-height text (width stays single - fine on 58mm, saves space)
   DOUBLE_HEIGHT:  Buffer.from([ESC, 0x21, 0x10]),
   NORMAL_SIZE:    Buffer.from([ESC, 0x21, 0x00]),
   FULL_CUT:       Buffer.from([GS,  0x56, 0x00]),
@@ -101,8 +101,8 @@ function rfcommIndex(device: string): string {
 
 export interface BluetoothStationConfig {
   device: string     // e.g. /dev/rfcomm0
-  mac?:   string     // e.g. AA:BB:CC:DD:EE:FF — triggers auto-bind if device is missing
-  channel?: number   // SPP channel — almost always 1
+  mac?:   string     // e.g. AA:BB:CC:DD:EE:FF - triggers auto-bind if device is missing
+  channel?: number   // SPP channel - almost always 1
 }
 
 export class BluetoothPrinterService implements PrinterService {
@@ -119,14 +119,14 @@ export class BluetoothPrinterService implements PrinterService {
   }
 
   // If the device doesn't exist, attempt recovery.
-  // USB paths (/dev/usb/lp*) — device must be plugged in; no binding possible.
-  // RFCOMM paths (/dev/rfcomm*) — try `rfcomm bind` using the configured MAC.
+  // USB paths (/dev/usb/lp*) - device must be plugged in; no binding possible.
+  // RFCOMM paths (/dev/rfcomm*) - try `rfcomm bind` using the configured MAC.
   private async ensureDevice(cfg: BluetoothStationConfig): Promise<void> {
     if (await deviceExists(cfg.device)) return
 
     if (!cfg.device.includes('rfcomm')) {
       throw new Error(
-        `Printer device ${cfg.device} not found — is the USB cable connected and the printer powered on?`
+        `Printer device ${cfg.device} not found - is the USB cable connected and the printer powered on?`
       )
     }
 

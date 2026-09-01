@@ -5,7 +5,7 @@ import { DEMO_CAFE_ID } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/menu/addons — list all add-ons for this cafe
+// GET /api/menu/addons - list all add-ons for this cafe
 export async function GET(req: NextRequest) {
   const guard = await requireManagerOrAdmin(req)
   if (guard) return guard
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/menu/addons — create a new add-on
+// POST /api/menu/addons - create a new add-on
 export async function POST(req: NextRequest) {
   const guard = await requireManagerOrAdmin(req)
   if (guard) return guard
