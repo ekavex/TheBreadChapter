@@ -167,6 +167,7 @@ object EscPosHelper {
         items: List<Map<String, Any>>,
         amountPaisa: Long,
         upiUrl: String,
+        customerNote: String? = null,
     ): ByteArray {
         val out = ByteArrayOutputStream()
         fun w(b: ByteArray) = out.write(b)
@@ -209,6 +210,16 @@ object EscPosHelper {
             w(BOLD_ON)
             w(text(rowLine(prefix + nameTrunc, right)))
             w(BOLD_OFF)
+        }
+
+        // Customer note (suggestions)
+        if (!customerNote.isNullOrBlank()) {
+            w(ALIGN_LEFT)
+            w(text(DIV.trimEnd()))
+            w(BOLD_ON)
+            w(text("NOTE:"))
+            w(BOLD_OFF)
+            w(text(customerNote.trim().take(COLS * 3)))
         }
 
         // ── Total ─────────────────────────────────────────────────────────────

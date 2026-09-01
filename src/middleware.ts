@@ -38,8 +38,8 @@ export async function middleware(req: NextRequest) {
     return redirect
   }
 
-  // Admin-only area
-  if (pathname.startsWith('/dashboard/admin') && session.role !== 'admin') {
+  // Admin/manager area - staff cannot manage users
+  if (pathname.startsWith('/dashboard/admin') && session.role === 'staff') {
     const redirect = NextResponse.redirect(new URL('/dashboard', req.url))
     redirect.headers.set(REQUEST_ID_HEADER, requestId)
     return redirect

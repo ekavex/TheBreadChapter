@@ -214,7 +214,7 @@ class PrintBridgeService : Service() {
                         "subtotal" to obj.optInt("subtotal", 0),
                     )
                 }
-                EscPosHelper.buildBillWithQr(tableLabel, orderId, items, amountPaisa, upiUrl)
+                EscPosHelper.buildBillWithQr(tableLabel, orderId, items, amountPaisa, upiUrl, customerNote)
             } else {
                 val items = (0 until itemsJson.length()).map { i ->
                     val obj = itemsJson.getJSONObject(i)
