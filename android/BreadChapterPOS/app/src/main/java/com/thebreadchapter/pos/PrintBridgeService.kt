@@ -66,6 +66,17 @@ class PrintBridgeService : Service() {
     private val sockets = mutableMapOf<String, CachedSocket>()
     private val socketLock = Any()
 
+    // Decoded once and reused for every bill print - bills print far less often
+    // than KOTs, so the decode cost per job is a non-issue either way.
+    private val logoBitmap: android.graphics.Bitmap? by lazy {
+        try {
+            android.graphics.BitmapFactory.decodeResource(resources, R.drawable.logo_receipt)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load receipt logo: ${e.message}")
+            null
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -208,13 +219,18 @@ class PrintBridgeService : Service() {
                 val amountPaisa = job.optLong("amountPaisa", 0L)
                 val items = (0 until itemsJson.length()).map { i ->
                     val obj = itemsJson.getJSONObject(i)
+                    val addonArray = obj.optJSONArray("addons")
+                    val addonNames = if (addonArray != null) {
+                        (0 until addonArray.length()).map { j -> addonArray.getString(j) }
+                    } else emptyList()
                     mapOf(
                         "name"     to obj.getString("name"),
                         "quantity" to obj.getInt("quantity"),
                         "subtotal" to obj.optInt("subtotal", 0),
+                        "addons"   to addonNames,
                     )
                 }
-                EscPosHelper.buildBillWithQr(tableLabel, orderId, items, amountPaisa, upiUrl, customerNote)
+                EscPosHelper.buildBillWithQr(tableLabel, orderId, items, amountPaisa, upiUrl, customerNote, logoBitmap)
             } else {
                 val items = (0 until itemsJson.length()).map { i ->
                     val obj = itemsJson.getJSONObject(i)

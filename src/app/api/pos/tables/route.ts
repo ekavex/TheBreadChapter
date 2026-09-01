@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireDashboardSession, requireManagerOrAdmin } from '@/lib/auth/requireDashboardSession'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-// POST /api/pos/tables - create a new table (manager only)
+// POST /api/pos/tables - create a new table (manager/admin only)
 export async function POST(req: NextRequest) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   let number: number | undefined

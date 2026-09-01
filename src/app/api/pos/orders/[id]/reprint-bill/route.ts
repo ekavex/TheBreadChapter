@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 
-// POST /api/pos/orders/[id]/qr-bill
-// Queues a bill_qr print job to the beverage counter printer.
-// The Android APK picks it up within 3 s and prints a thermal bill with
-// a pre-filled UPI QR code. After the customer pays, the waiter calls
-// POST /pay with mode=upi_qr to mark the order PAID.
+// POST /api/pos/orders/[id]/reprint-bill
+// Queues a thermal reprint of a customer bill (any order, any payment status)
+// to the beverage-counter printer via the Android print bridge - used by the
+// dashboard Orders list "Print" button. Unlike /qr-bill this isn't limited to
+// orders currently awaiting payment, since it's meant for reprinting a
+// historical receipt.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -18,22 +19,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!order) {
       return NextResponse.json({ data: null, error: 'Order not found' }, { status: 404 })
     }
-
-    if (!['BILLED', 'PAYMENT_FAILED', 'AWAITING_PAYMENT'].includes(order.pos_status as string)) {
-      return NextResponse.json(
-        { data: null, error: `Cannot print QR bill for an order that is ${order.pos_status}` },
-        { status: 409 },
-      )
-    }
-
     if (!order.total_paisa || Number(order.total_paisa) <= 0) {
-      return NextResponse.json(
-        { data: null, error: 'Order total is zero - regenerate the bill before printing QR' },
-        { status: 409 },
-      )
+      return NextResponse.json({ data: null, error: 'Order has no total to print' }, { status: 409 })
     }
 
-    // Fetch bill items with subtotals for the printed receipt.
     const orderItems = await sql`
       SELECT oi.quantity, oi.subtotal, oi.addons_json, mi.name
       FROM order_items oi
@@ -62,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     return NextResponse.json({ data: { ok: true }, error: null })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to queue QR bill'
+    const message = err instanceof Error ? err.message : 'Failed to queue reprint'
     return NextResponse.json({ data: null, error: message }, { status: 500 })
   }
 }

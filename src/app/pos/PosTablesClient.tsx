@@ -7,7 +7,15 @@ import {
   ArrowLeft, Settings, Pencil, Trash2, Plus, X, Users, AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
-import type { Section, Table, TableStatus } from '@/lib/types'
+import type { Section, Table, TableStatus, UserRole } from '@/lib/types'
+
+function readRoleCookie(): UserRole {
+  if (typeof document === 'undefined') return 'staff'
+  const match = document.cookie.match(/(?:^|;\s*)sc_role=([^;]+)/)
+  const val = match?.[1]
+  if (val === 'admin' || val === 'manager' || val === 'staff') return val
+  return 'staff'
+}
 
 type TableShape = 'round' | 'square' | 'rectangle'
 
@@ -451,6 +459,9 @@ export default function PosTablesClient({ bySection }: Props) {
   const [addToSection, setAddToSection] = useState<Section | null>(null)
   const [deletingId,   setDeletingId]   = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Table | null>(null)
+  const [canManage,    setCanManage]    = useState(false)
+
+  useEffect(() => { setCanManage(readRoleCookie() !== 'staff') }, [])
 
   const allSections = bySection.map(({ section }) => section)
   const allTables   = bySection.flatMap(({ tables }) => tables)
@@ -537,17 +548,19 @@ export default function PosTablesClient({ bySection }: Props) {
                 </span>
               </div>
             )}
-            <button
-              onClick={() => setManageMode(m => !m)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                manageMode
-                  ? 'bg-brand-500 text-white shadow-sm'
-                  : 'bg-surface-overlay text-ink-muted hover:text-ink border border-ink/10'
-              }`}
-            >
-              <Settings size={14} />
-              {manageMode ? 'Done' : 'Manage tables'}
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setManageMode(m => !m)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  manageMode
+                    ? 'bg-brand-500 text-white shadow-sm'
+                    : 'bg-surface-overlay text-ink-muted hover:text-ink border border-ink/10'
+                }`}
+              >
+                <Settings size={14} />
+                {manageMode ? 'Done' : 'Manage tables'}
+              </button>
+            )}
           </div>
         </div>
       </div>

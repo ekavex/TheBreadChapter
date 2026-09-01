@@ -1,5 +1,7 @@
 package com.thebreadchapter.pos
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -57,6 +59,42 @@ object EscPosHelper {
         out.write(bytes)
         // Print stored symbol
         out.write(byteArrayOf(0x1D, 0x28, 0x6B, 3, 0, 49, 81, 48))
+
+        return out.toByteArray()
+    }
+
+    // ESC/POS GS v 0 raster bit image - prints a 1-bit monochrome bitmap
+    // (already dithered to black/white at build time; luminance is thresholded
+    // here mainly as a safety net for any bitmap that isn't pre-dithered).
+    private fun rasterImage(bitmap: Bitmap): ByteArray {
+        val width = bitmap.width
+        val height = bitmap.height
+        val bytesPerRow = (width + 7) / 8
+        val out = ByteArrayOutputStream()
+
+        out.write(byteArrayOf(0x1D, 0x76, 0x30, 0x00))
+        out.write(byteArrayOf((bytesPerRow and 0xFF).toByte(), ((bytesPerRow shr 8) and 0xFF).toByte()))
+        out.write(byteArrayOf((height and 0xFF).toByte(), ((height shr 8) and 0xFF).toByte()))
+
+        for (y in 0 until height) {
+            var bitBuf = 0
+            var bitCount = 0
+            for (x in 0 until width) {
+                val pixel = bitmap.getPixel(x, y)
+                val isBlack = Color.alpha(pixel) > 127 &&
+                    (0.299 * Color.red(pixel) + 0.587 * Color.green(pixel) + 0.114 * Color.blue(pixel)) < 160
+                bitBuf = (bitBuf shl 1) or (if (isBlack) 1 else 0)
+                bitCount++
+                if (bitCount == 8) {
+                    out.write(bitBuf)
+                    bitBuf = 0
+                    bitCount = 0
+                }
+            }
+            if (bitCount > 0) {
+                out.write(bitBuf shl (8 - bitCount))
+            }
+        }
 
         return out.toByteArray()
     }
@@ -168,6 +206,7 @@ object EscPosHelper {
         amountPaisa: Long,
         upiUrl: String,
         customerNote: String? = null,
+        logo: Bitmap? = null,
     ): ByteArray {
         val out = ByteArrayOutputStream()
         fun w(b: ByteArray) = out.write(b)
@@ -180,13 +219,21 @@ object EscPosHelper {
         // ── Header ────────────────────────────────────────────────────────────
         w(INIT)
         w(ALIGN_CENTER)
-        // Cafe name in double-width + double-height to fill 58mm paper width
-        w(BOLD_ON)
-        w(DOUBLE_SIZE)
-        w(text("THE BREAD"))
-        w(text("CHAPTER"))
-        w(NORMAL_SIZE)
-        w(BOLD_OFF)
+        if (logo != null) {
+            w(rasterImage(logo))
+            w(LF)
+            w(BOLD_ON)
+            w(text("THE BREAD CHAPTER"))
+            w(BOLD_OFF)
+        } else {
+            // Text fallback if the logo bitmap failed to load.
+            w(BOLD_ON)
+            w(DOUBLE_SIZE)
+            w(text("THE BREAD"))
+            w(text("CHAPTER"))
+            w(NORMAL_SIZE)
+            w(BOLD_OFF)
+        }
         w(text(DIV.trimEnd()))
         // Table label - double-height for easy reading
         w(BOLD_ON)
@@ -210,6 +257,11 @@ object EscPosHelper {
             w(BOLD_ON)
             w(text(rowLine(prefix + nameTrunc, right)))
             w(BOLD_OFF)
+            @Suppress("UNCHECKED_CAST")
+            val addonList = item["addons"] as? List<String> ?: emptyList()
+            for (addon in addonList) {
+                w(text("    + ${addon.take(COLS - 6)}"))
+            }
         }
 
         // Customer note (suggestions)

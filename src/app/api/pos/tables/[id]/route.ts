@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { requireManagerOrAdmin } from '@/lib/auth/requireDashboardSession'
 
 export const dynamic = 'force-dynamic'
 
-// PATCH /api/pos/tables/[id] - update table number/label/capacity/section
+// PATCH /api/pos/tables/[id] - update table number/label/capacity/section (manager/admin only)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   let bodyNumber: number | undefined
@@ -42,10 +42,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// DELETE /api/pos/tables/[id] - soft-delete (is_active=false).
+// DELETE /api/pos/tables/[id] - soft-delete (is_active=false), manager/admin only.
 // Blocked if the table currently has a non-terminal order (occupied/kot_sent/billed).
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
+  const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
   try {

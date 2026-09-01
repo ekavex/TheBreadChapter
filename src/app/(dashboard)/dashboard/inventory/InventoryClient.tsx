@@ -1,12 +1,20 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, PackagePlus, AlertTriangle, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
-import type { Ingredient } from '@/lib/types'
+import type { Ingredient, UserRole } from '@/lib/types'
 import { formatPaisa } from '@/lib/money'
 import IngredientModal from './IngredientModal'
 import StockUpdateModal from './StockUpdateModal'
+
+function readRoleCookie(): UserRole {
+  if (typeof document === 'undefined') return 'staff'
+  const match = document.cookie.match(/(?:^|;\s*)sc_role=([^;]+)/)
+  const val = match?.[1]
+  if (val === 'admin' || val === 'manager' || val === 'staff') return val
+  return 'staff'
+}
 
 interface Props { ingredients: Ingredient[] }
 
@@ -45,6 +53,9 @@ export default function InventoryClient({ ingredients }: Props) {
   const [stockFor, setStockFor] = useState<Ingredient | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Ingredient | null>(null)
+  const [canEdit, setCanEdit] = useState(false)
+
+  useEffect(() => { setCanEdit(readRoleCookie() !== 'staff') }, [])
 
   const lowStockCount = ingredients.filter((i) => i.current_stock <= i.low_stock_threshold).length
   const expiringCount = ingredients.filter((i) => {
@@ -91,12 +102,14 @@ export default function InventoryClient({ ingredients }: Props) {
             {expiringCount > 0 && <span className="text-amber-600"> · {expiringCount} expiring soon</span>}
           </p>
         </div>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 rounded-xl bg-ink text-surface px-4 py-2.5 text-sm font-medium shrink-0"
-        >
-          <Plus size={16} /> Add Ingredient
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-ink text-surface px-4 py-2.5 text-sm font-medium shrink-0"
+          >
+            <Plus size={16} /> Add Ingredient
+          </button>
+        )}
       </div>
 
       {/* ── Desktop table (md+) ── */}
@@ -109,13 +122,13 @@ export default function InventoryClient({ ingredients }: Props) {
                 <th className="px-5 py-3 font-medium">Stock</th>
                 <th className="px-5 py-3 font-medium">Cost/unit</th>
                 <th className="px-5 py-3 font-medium">Expiry</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
+                {canEdit && <th className="px-5 py-3 font-medium text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/5">
               {ingredients.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-ink-faint">
+                  <td colSpan={canEdit ? 5 : 4} className="px-5 py-8 text-center text-ink-faint">
                     No ingredients yet - add your first one.
                   </td>
                 </tr>
@@ -152,19 +165,21 @@ export default function InventoryClient({ ingredients }: Props) {
                         <span className="text-ink-faint">-</span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setStockFor(i)} title="Update stock" className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink">
-                          <PackagePlus size={16} />
-                        </button>
-                        <button onClick={() => setEditing(i)} title="Edit" className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink">
-                          <Pencil size={16} />
-                        </button>
-                        <button onClick={() => handleDelete(i)} disabled={deleting === i.id} title="Delete" className="p-2 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+                    {canEdit && (
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => setStockFor(i)} title="Update stock" className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink">
+                            <PackagePlus size={16} />
+                          </button>
+                          <button onClick={() => setEditing(i)} title="Edit" className="p-2 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink">
+                            <Pencil size={16} />
+                          </button>
+                          <button onClick={() => handleDelete(i)} disabled={deleting === i.id} title="Delete" className="p-2 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -219,27 +234,29 @@ export default function InventoryClient({ ingredients }: Props) {
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 pt-2 border-t border-ink/5">
-                <button
-                  onClick={() => setStockFor(i)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors border border-ink/8"
-                >
-                  <PackagePlus size={13} /> Update stock
-                </button>
-                <button
-                  onClick={() => setEditing(i)}
-                  className="p-2.5 rounded-xl text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors border border-ink/8"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  onClick={() => handleDelete(i)}
-                  disabled={deleting === i.id}
-                  className="p-2.5 rounded-xl text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors border border-ink/8"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+              {canEdit && (
+                <div className="flex items-center gap-2 pt-2 border-t border-ink/5">
+                  <button
+                    onClick={() => setStockFor(i)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors border border-ink/8"
+                  >
+                    <PackagePlus size={13} /> Update stock
+                  </button>
+                  <button
+                    onClick={() => setEditing(i)}
+                    className="p-2.5 rounded-xl text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors border border-ink/8"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(i)}
+                    disabled={deleting === i.id}
+                    className="p-2.5 rounded-xl text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors border border-ink/8"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}

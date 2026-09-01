@@ -49,6 +49,45 @@ export default function AdminClient() {
 
   useEffect(() => { setViewerRole(readRoleCookie()) }, [])
 
+  // ── My account (self-service name/password change) ────────────────
+  const [myUserId, setMyUserId] = useState('')
+  const [myDisplayName, setMyDisplayName] = useState('')
+  const [myPassword, setMyPassword] = useState('')
+  const [myLoading, setMyLoading] = useState(true)
+  const [mySaving, setMySaving] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/account')
+      .then(r => r.json())
+      .then(j => {
+        if (j.data) {
+          setMyUserId(j.data.user_id)
+          setMyDisplayName(j.data.display_name ?? '')
+        }
+      })
+      .finally(() => setMyLoading(false))
+  }, [])
+
+  async function saveMyAccount(e: React.FormEvent) {
+    e.preventDefault()
+    setMySaving(true)
+    try {
+      const body: Record<string, unknown> = { displayName: myDisplayName }
+      if (myPassword) body.password = myPassword
+      const res = await fetch('/api/account', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Failed to update account'); return }
+      toast.success('Account updated')
+      setMyPassword('')
+    } finally {
+      setMySaving(false)
+    }
+  }
+
   // ── Delete modals ────────────────────────────────────────────────
   const [deleteUser, setDeleteUser] = useState<UserRow | null>(null)
   const [deleteTerminal, setDeleteTerminal] = useState<TerminalRow | null>(null)
@@ -246,6 +285,50 @@ export default function AdminClient() {
         >
           <Plus size={14} /> Add user
         </button>
+      </div>
+
+      {/* My account */}
+      <div className="mb-6 p-4 bg-surface-raised rounded-2xl border border-ink/8">
+        <p className="font-semibold text-sm text-ink mb-3">My account</p>
+        {myLoading ? (
+          <p className="text-sm text-ink-faint">Loading…</p>
+        ) : (
+          <form onSubmit={saveMyAccount} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-ink-muted mb-1">User ID</label>
+                <input
+                  disabled
+                  className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink-faint bg-surface-overlay"
+                  value={myUserId}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink-muted mb-1">Display name</label>
+                <input
+                  className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  value={myDisplayName} onChange={e => setMyDisplayName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink-muted mb-1">New password</label>
+                <input
+                  type="password"
+                  className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  value={myPassword} onChange={e => setMyPassword(e.target.value)}
+                  placeholder="Leave blank to keep"
+                  minLength={6}
+                />
+              </div>
+            </div>
+            <button
+              type="submit" disabled={mySaving}
+              className="px-4 py-2 rounded-xl bg-ink text-surface text-sm font-medium disabled:opacity-50"
+            >
+              {mySaving ? 'Saving…' : 'Save changes'}
+            </button>
+          </form>
+        )}
       </div>
 
       {/* Add user form */}

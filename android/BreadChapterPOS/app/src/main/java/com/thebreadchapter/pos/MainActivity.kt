@@ -88,7 +88,11 @@ class MainActivity : AppCompatActivity() {
                                     headers:{'Content-Type':'application/json'},
                                     body:${JSONObject.quote(bodyJson)}
                                 }).then(function(r){return r.json();}).then(function(d){
-                                    if(d&&d.data&&d.data.role)window.location.href='/pos';
+                                    if(d&&d.data&&d.data.role){
+                                        var params = new URLSearchParams(window.location.search);
+                                        var next = params.get('next');
+                                        window.location.href = next || (d.data.role === 'staff' ? '/pos' : '/dashboard');
+                                    }
                                 }).catch(function(){});
                             })();
                         """.trimIndent()

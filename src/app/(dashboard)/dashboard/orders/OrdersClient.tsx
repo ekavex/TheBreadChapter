@@ -44,95 +44,19 @@ interface Props {
 
 // ─── Order detail popup print ────────────────────────────────────────────────
 
-function buildReceiptHtml(order: Order): string {
-  const tableInfo = (order as any).table
-  const tableLabel = tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : 'Takeaway')
-  const shortId = order.id.slice(-6).toUpperCase()
-  const items: OrderItem[] = (order.items ?? []) as OrderItem[]
-  const note = (order as any).customer_note as string | null | undefined
-
-  const itemRows = items.map((item) => {
-    const addons = ((item as any).addons_json ?? []) as { name: string }[]
-    const addonLine = addons.length > 0
-      ? `<div class="addon">${addons.map(a => escHtml(a.name)).join(', ')}</div>`
-      : ''
-    return `
-      <div class="item-row">
-        <span class="item-qty">${item.quantity}×</span>
-        <span class="item-name">${escHtml(item.name)}</span>
-        <span class="item-price">₹${Math.round((item as any).subtotal ?? 0)}</span>
-      </div>${addonLine}`
-  }).join('')
-
-  const noteBlock = note?.trim()
-    ? `<div class="div-line"></div><div class="note"><b>Note:</b> ${escHtml(note.trim())}</div>`
-    : ''
-
-  const payMethod = order.payment_status === 'paid' ? `Paid · ${(order as any).payment_method ?? 'UPI'}` : 'Unpaid'
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Receipt · ${order.order_number}</title>
-<style>
-  @page { size: 80mm auto; margin: 4mm 3mm; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; background: #fff; width: 74mm; }
-  .center { text-align: center; }
-  .cafe-name { font-size: 18px; font-weight: 900; letter-spacing: 1px; text-align: center; margin-bottom: 2px; }
-  .meta { font-size: 10px; color: #444; text-align: center; margin: 1px 0; }
-  .div-line { border-top: 1px dashed #888; margin: 4px 0; }
-  .section-label { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: .5px; color: #666; margin: 4px 0 2px; }
-  .item-row { display: flex; gap: 4px; margin: 2px 0; font-weight: bold; font-size: 12px; }
-  .item-qty { min-width: 20px; flex-shrink: 0; }
-  .item-name { flex: 1; word-break: break-word; }
-  .item-price { flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
-  .addon { font-size: 10px; font-weight: normal; color: #444; padding-left: 24px; margin-bottom: 2px; }
-  .note { font-size: 10px; margin: 3px 0; word-break: break-word; }
-  .total-row { display: flex; justify-content: space-between; font-size: 15px; font-weight: 900; margin: 3px 0; font-variant-numeric: tabular-nums; }
-  .payment-line { font-size: 10px; text-align: center; margin-top: 4px; color: #444; }
-  .footer { font-size: 9px; text-align: center; color: #888; margin-top: 6px; }
-</style>
-</head>
-<body>
-  <div class="cafe-name">THE BREAD CHAPTER</div>
-  <div class="div-line"></div>
-  <div class="meta"><b>${tableLabel}</b></div>
-  <div class="meta">Order ${order.order_number} · #${shortId}</div>
-  <div class="meta">${format(new Date(order.created_at), 'd MMM yyyy, h:mm a')}</div>
-  <div class="div-line"></div>
-  <div class="section-label">Items</div>
-  ${itemRows}
-  ${noteBlock}
-  <div class="div-line"></div>
-  <div class="total-row"><span>TOTAL</span><span>₹${Math.round(order.total_amount)}</span></div>
-  <div class="div-line"></div>
-  <div class="payment-line">${payMethod}</div>
-  <div class="footer">Thank you for visiting!</div>
-</body>
-</html>`
-}
-
-function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function printOrder(order: Order) {
-  const html = buildReceiptHtml(order)
-  const existing = document.getElementById('__receipt_print_frame__')
-  if (existing) existing.remove()
-  const iframe = document.createElement('iframe')
-  iframe.id = '__receipt_print_frame__'
-  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;opacity:0'
-  document.body.appendChild(iframe)
-  const doc = iframe.contentDocument ?? iframe.contentWindow?.document
-  if (!doc) { toast.error('Print not supported'); return }
-  doc.open(); doc.write(html); doc.close()
-  setTimeout(() => {
-    iframe.contentWindow?.print()
-    setTimeout(() => iframe.remove(), 2000)
-  }, 300)
+// Queues a thermal reprint on the beverage/bill printer via the Android print
+// bridge - the same Bluetooth-routed pipeline the POS checkout screen uses,
+// rather than the browser's own print dialog (which has no notion of which
+// physical printer should receive it).
+async function reprintBill(order: Order) {
+  try {
+    const res = await fetch(`/api/pos/orders/${order.id}/reprint-bill`, { method: 'POST' })
+    const { error } = await res.json()
+    if (error) throw new Error(error)
+    toast.success('Sent to printer')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Failed to print')
+  }
 }
 
 function downloadReceipt(orderId: string) {
@@ -155,8 +79,15 @@ function OrderDetailDrawer({ order, onClose, onAdvance, advancing, isAdmin, onDe
   const tableLabel = tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : 'Takeaway')
   const nextStatus = NEXT_STATUS[order.status]
   const note = (order as any).customer_note as string | null | undefined
+  const [printCooldown, setPrintCooldown] = useState(false)
 
   const subtotal = items.reduce((s, i) => s + ((i as any).subtotal ?? 0), 0)
+
+  function handlePrint() {
+    setPrintCooldown(true)
+    reprintBill(order)
+    setTimeout(() => setPrintCooldown(false), 3000)
+  }
 
   return (
     <>
@@ -278,8 +209,9 @@ function OrderDetailDrawer({ order, onClose, onAdvance, advancing, isAdmin, onDe
           )}
           <div className="flex gap-2 ml-auto">
             <button
-              onClick={() => printOrder(order)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-ink/10 text-sm text-ink-muted hover:bg-surface-overlay transition-colors"
+              onClick={handlePrint}
+              disabled={printCooldown}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-ink/10 text-sm text-ink-muted hover:bg-surface-overlay transition-colors disabled:opacity-50"
               title="Print receipt"
             >
               <Printer size={14} /> Print
