@@ -33,9 +33,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [role, setRole] = useState<UserRole>('manager')
+  const [displayName, setDisplayName] = useState<string | null>(null)
 
   useEffect(() => {
     setRole(readRoleCookie())
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => setDisplayName(json?.data?.displayName || null))
+      .catch(() => {})
   }, [])
 
   const nav = ALL_NAV.filter(n => n.roles.includes(role))
@@ -80,8 +85,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Desktop sidebar ── */}
       <aside className="hidden md:flex flex-col w-56 bg-surface-raised border-r border-ink/5 shrink-0">
         <div className="px-5 py-4 border-b border-ink/5 flex items-center justify-between">
-          <div>
-            <span className="font-display text-lg font-bold text-ink">The Bread Chapter</span>
+          <div className="min-w-0">
+            <span className="font-display text-lg font-bold text-ink truncate block">{displayName || 'The Bread Chapter'}</span>
             <p className="text-xs text-ink-faint mt-0.5 capitalize">{roleLabel} dashboard</p>
           </div>
           <NotificationBell side="left" />
@@ -110,8 +115,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         drawerOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-ink/5">
-          <div>
-            <span className="font-display text-base font-bold text-ink">The Bread Chapter</span>
+          <div className="min-w-0">
+            <span className="font-display text-base font-bold text-ink truncate block">{displayName || 'The Bread Chapter'}</span>
             <p className="text-xs text-ink-faint mt-0.5 capitalize">{roleLabel} dashboard</p>
           </div>
           <button
