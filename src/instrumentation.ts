@@ -18,6 +18,27 @@ export async function register() {
       '009_drop_supabase_realtime_publication',
       `DROP PUBLICATION IF EXISTS supabase_realtime;`,
     ],
+    [
+      '010_inventory_webhook_outbox',
+      `CREATE TABLE IF NOT EXISTS public.inventory_webhook_outbox (
+         id              uuid        DEFAULT gen_random_uuid() NOT NULL,
+         event_type      text        NOT NULL,
+         payload         jsonb       NOT NULL,
+         status          text        DEFAULT 'pending' NOT NULL,
+         attempts        integer     DEFAULT 0 NOT NULL,
+         last_error      text,
+         last_attempt_at timestamptz,
+         delivered_at    timestamptz,
+         created_at      timestamptz DEFAULT now() NOT NULL,
+         CONSTRAINT inventory_webhook_outbox_pkey PRIMARY KEY (id),
+         CONSTRAINT inventory_webhook_outbox_event_type_check
+           CHECK (event_type IN ('pos-kot', 'pos-cancel')),
+         CONSTRAINT inventory_webhook_outbox_status_check
+           CHECK (status IN ('pending', 'delivered', 'failed'))
+       );
+       CREATE INDEX IF NOT EXISTS idx_inventory_webhook_outbox_pending
+         ON public.inventory_webhook_outbox (created_at) WHERE status = 'pending';`,
+    ],
   ]
 
   try {

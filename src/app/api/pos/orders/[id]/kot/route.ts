@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { logger } from '@/lib/logger'
+import { enqueueInventoryWebhook, kickInventoryWebhookFlush } from '@/lib/inventory/webhook'
 import type { KotStation, MenuItemCategory } from '@/lib/types'
 
 const STATION_BY_CATEGORY: Record<MenuItemCategory, KotStation> = {
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // For add-on KOT: only items added after the last kot_sent_at are included.
     const allOrderItems = await sql`SELECT * FROM order_items WHERE order_id = ${params.id} ORDER BY created_at`
-    type DbOrderItem = { category?: MenuItemCategory; name: string; quantity: number; created_at: string; addons_json?: { name: string }[] }
+    type DbOrderItem = { id: string; menu_item_id: string; category?: MenuItemCategory; name: string; quantity: number; created_at: string; addons_json?: { id?: string; name: string; price?: number }[] }
     const allTypedFull = allOrderItems as unknown as DbOrderItem[]
 
     const orderItems = isAddon && order.kot_sent_at
@@ -92,6 +93,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const now = new Date().toISOString()
 
+    // Stock deduction is delegated to the standalone TBC Inventory system. Only
+    // the items actually sent to the kitchen in THIS round are reported (add-on
+    // KOTs report just the new items), keyed by order_item_id so a retried
+    // delivery there can't double-deduct. Enqueued in the same transaction as
+    // the status change; delivery is out-of-band and never blocks this response.
+    const kotRoundId = crypto.randomUUID()
+    const inventoryItems = orderItems.map((i) => ({
+      order_item_id: i.id,
+      menu_item_id: i.menu_item_id,
+      quantity: i.quantity,
+      addons: i.addons_json ?? [],
+    }))
+
     if (!isAddon) {
       await sql.begin(async (tx) => {
         await tx`UPDATE tables SET status = 'kot_sent' WHERE id = ${order.table_id}`
@@ -100,11 +114,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           SET pos_status = 'KOT_SENT', kot_sent_at = ${now}, status = 'confirmed', confirmed_at = ${now}
           WHERE id = ${params.id} AND pos_status = 'OPEN'
         `
+        await enqueueInventoryWebhook(tx, 'pos-kot', {
+          order_id: order.id, kot_ticket_id: kotRoundId, items: inventoryItems,
+        })
       })
     } else {
       // Add-on: just advance the kot_sent_at watermark so the next add-on batch starts fresh
-      await sql`UPDATE orders SET kot_sent_at = ${now} WHERE id = ${params.id}`
+      await sql.begin(async (tx) => {
+        await tx`UPDATE orders SET kot_sent_at = ${now} WHERE id = ${params.id}`
+        await enqueueInventoryWebhook(tx, 'pos-kot', {
+          order_id: order.id, kot_ticket_id: kotRoundId, items: inventoryItems,
+        })
+      })
     }
+    kickInventoryWebhookFlush()
 
     const updatedOrder = await fetchOrderWithItems(params.id)
     return NextResponse.json({ data: updatedOrder, error: null })
