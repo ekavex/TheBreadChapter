@@ -1130,34 +1130,6 @@ CREATE INDEX IF NOT EXISTS idx_orders_unsettled ON public.orders USING btree (po
 
 
 --
--- Outbound webhook outbox for the standalone TBC Inventory system
--- (supabase/migrations/010_inventory_webhook_outbox.sql). Enqueued in the same
--- transaction as a KOT-send / order-cancel, delivered out-of-band by a flusher.
---
-
-CREATE TABLE IF NOT EXISTS public.inventory_webhook_outbox (
-    id              uuid        DEFAULT gen_random_uuid() NOT NULL,
-    event_type      text        NOT NULL,
-    payload         jsonb       NOT NULL,
-    status          text        DEFAULT 'pending' NOT NULL,
-    attempts        integer     DEFAULT 0 NOT NULL,
-    last_error      text,
-    last_attempt_at timestamp with time zone,
-    delivered_at    timestamp with time zone,
-    created_at      timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT inventory_webhook_outbox_pkey PRIMARY KEY (id),
-    CONSTRAINT inventory_webhook_outbox_event_type_check
-        CHECK (event_type = ANY (ARRAY['pos-kot'::text, 'pos-cancel'::text])),
-    CONSTRAINT inventory_webhook_outbox_status_check
-        CHECK (status = ANY (ARRAY['pending'::text, 'delivered'::text, 'failed'::text]))
-);
-
-CREATE INDEX IF NOT EXISTS idx_inventory_webhook_outbox_pending
-    ON public.inventory_webhook_outbox USING btree (created_at)
-    WHERE (status = 'pending'::text);
-
-
---
 -- Name: order_items Public can create order items; Type: POLICY; Schema: public; Owner: -
 --
 

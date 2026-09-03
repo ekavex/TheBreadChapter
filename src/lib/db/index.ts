@@ -1,6 +1,5 @@
 import postgres from 'postgres'
 import { startReconcilerOnce } from '@/lib/payment/scheduler'
-import { startInventoryWebhookFlusherOnce } from '@/lib/inventory/webhook'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -94,7 +93,6 @@ export function getDb(): postgres.Sql {
   }
   // First DB use also arms the reconciler and runs pending migrations.
   startReconcilerOnce()
-  startInventoryWebhookFlusherOnce()
   void runMigrations(global.__db)
   return global.__db
 }

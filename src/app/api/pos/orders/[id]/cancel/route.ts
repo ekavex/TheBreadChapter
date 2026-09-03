@@ -4,7 +4,6 @@ import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { paymentProvider } from '@/lib/payment/provider'
 import { resolveStoreId } from '@/lib/payment/terminals'
 import { logger } from '@/lib/logger'
-import { enqueueInventoryWebhook, kickInventoryWebhookFlush } from '@/lib/inventory/webhook'
 import type { PaymentResult } from '@/lib/payment/types'
 
 async function fetchOrderWithItems(orderId: string) {
@@ -117,19 +116,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await sql`UPDATE payments SET status = 'cancelled' WHERE id = ${latestPayment.id}`
     }
 
-    const alreadyDeducted = Boolean(order.kot_sent_at)
+    await sql`UPDATE tables SET status = 'free' WHERE id = ${order.table_id}`
 
-    await sql.begin(async (tx) => {
-      await tx`UPDATE tables SET status = 'free' WHERE id = ${order.table_id}`
-      await tx`UPDATE orders SET pos_status = 'CANCELLED', status = 'cancelled' WHERE id = ${params.id}`
-      // If a KOT was sent, stock was (or is about to be) deducted in the
-      // inventory system - tell it to reverse the whole order. The inventory
-      // side no-ops any line it never deducted, and is idempotent per item.
-      if (alreadyDeducted) {
-        await enqueueInventoryWebhook(tx, 'pos-cancel', { order_id: params.id })
-      }
-    })
-    if (alreadyDeducted) kickInventoryWebhookFlush()
+    await sql`UPDATE orders SET pos_status = 'CANCELLED', status = 'cancelled' WHERE id = ${params.id}`
 
     const cancelledOrder = await fetchOrderWithItems(params.id)
     return NextResponse.json({ data: cancelledOrder, error: null })
