@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth/requireDashboardSession'
 import { logger } from '@/lib/logger'
+import { recordPrintEvent, isMissingConflictTarget } from '@/lib/printLog'
 import type { KotStation, MenuItemCategory } from '@/lib/types'
 
 const STATION_BY_CATEGORY: Record<MenuItemCategory, KotStation> = {
@@ -82,12 +83,57 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (items.length === 0) continue
       if (alreadyTicketed.has(station)) {
         logger.warn('kot.print.skipped_duplicate', { orderId: order.id, station })
+        await recordPrintEvent(sql, {
+          orderId: order.id, station, jobType: 'kot', event: 'skipped_duplicate',
+          detail: 'station already ticketed', actor: takenBy,
+        })
         continue
       }
 
       const printStatus = process.env.PRINT_BRIDGE_TOKEN ? 'queued' : 'mock_printed'
-      await sql`INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type, taken_by) VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus}, 'kot', ${takenBy})`
+
+      // ON CONFLICT targets uniq_active_kot_ticket (migration 010): at most one
+      // active (queued/processing) ticket per order+station+type. A near-
+      // simultaneous duplicate request (double-tap, retry) hits this instead of
+      // queuing a second physical print - it just does nothing (rows.length===0).
+      let insertedId: string | null = null
+      try {
+        const rows = await sql`
+          INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type, taken_by)
+          VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus}, 'kot', ${takenBy})
+          ON CONFLICT (order_id, station, job_type) WHERE print_status IN ('queued', 'processing')
+          DO NOTHING
+          RETURNING id
+        `
+        insertedId = (rows[0] as { id: string } | undefined)?.id ?? null
+      } catch (err) {
+        if (!isMissingConflictTarget(err)) throw err
+        // Migration 010 hasn't applied on this instance yet - never let that
+        // block KOT printing (see printLog.ts for why). Fall back to a plain
+        // insert; duplicate protection just isn't active until it applies.
+        logger.error('kot.print.conflict_index_missing', { orderId: order.id, station })
+        const rows = await sql`
+          INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type, taken_by)
+          VALUES (${order.id}, ${station}, ${sql.json(items)}, ${printStatus}, 'kot', ${takenBy})
+          RETURNING id
+        `
+        insertedId = (rows[0] as { id: string } | undefined)?.id ?? null
+      }
+
+      if (!insertedId) {
+        logger.warn('kot.print.skipped_duplicate', { orderId: order.id, station, reason: 'concurrent_active_ticket' })
+        await recordPrintEvent(sql, {
+          orderId: order.id, station, jobType: 'kot', event: 'skipped_duplicate',
+          detail: 'concurrent active ticket', actor: takenBy,
+        })
+        continue
+      }
+
       logger.info('kot.print.queued', { orderId: order.id, station, itemCount: items.length, isAddon })
+      await recordPrintEvent(sql, {
+        orderId: order.id, station, jobType: 'kot', event: 'queued',
+        kotTicketId: insertedId, actor: takenBy,
+      })
     }
 
     const now = new Date().toISOString()

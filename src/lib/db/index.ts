@@ -49,6 +49,42 @@ async function runMigrations(sql: postgres.Sql) {
     // 011: staff name captured at KOT print time
     await sql`ALTER TABLE public.kot_tickets ADD COLUMN IF NOT EXISTS taken_by TEXT`
   } catch { /* Non-fatal */ }
+  try {
+    // 012: print reliability + audit log (supabase/migrations/010_print_reliability_and_logging.sql).
+    // Mirrored here, not just in src/instrumentation.ts's runner, because
+    // *this* function is the one that has actually been running on every
+    // deploy - src/instrumentation.ts only executes when
+    // experimental.instrumentationHook is set in next.config.js, which it
+    // was not until this same change. Relying on that alone for a KOT-path
+    // schema change is exactly what broke KOT sending in commit 0fcd1b7's
+    // incident - don't repeat it.
+    await sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_kot_ticket
+          ON public.kot_tickets USING btree (order_id, station, job_type)
+          WHERE (print_status = ANY (ARRAY['queued'::text, 'processing'::text]))
+    `
+  } catch { /* Non-fatal */ }
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS public.print_log (
+          id            uuid        DEFAULT public.uuid_generate_v4() NOT NULL,
+          kot_ticket_id uuid,
+          order_id      uuid        NOT NULL,
+          station       text        NOT NULL,
+          job_type      text        NOT NULL,
+          event         text        NOT NULL,
+          detail        text,
+          actor         text,
+          created_at    timestamptz DEFAULT now() NOT NULL,
+          CONSTRAINT print_log_pkey PRIMARY KEY (id),
+          CONSTRAINT print_log_event_check
+              CHECK (event = ANY (ARRAY['queued'::text, 'printed'::text, 'stale_reclaimed'::text, 'skipped_duplicate'::text])),
+          CONSTRAINT print_log_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE CASCADE
+      )
+    `
+    await sql`CREATE INDEX IF NOT EXISTS idx_print_log_order_created ON public.print_log USING btree (order_id, created_at DESC)`
+    await sql`CREATE INDEX IF NOT EXISTS idx_print_log_created ON public.print_log USING btree (created_at DESC)`
+  } catch { /* Non-fatal */ }
 }
 
 export function getDb(): postgres.Sql {

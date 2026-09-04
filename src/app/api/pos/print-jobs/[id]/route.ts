@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
+import { recordPrintEvent } from '@/lib/printLog'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     UPDATE kot_tickets
     SET print_status = 'printed', printed_at = now()
     WHERE id = ${params.id} AND print_status IN ('queued', 'processing')
-    RETURNING id
+    RETURNING id, order_id, station, job_type
   `
 
   if (!row) {
@@ -34,5 +35,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   logger.info('print_bridge.job_done', { jobId: params.id })
+  await recordPrintEvent(sql, {
+    orderId: row.order_id, station: row.station, jobType: row.job_type, event: 'printed',
+    kotTicketId: row.id,
+  })
   return NextResponse.json({ data: { ok: true }, error: null })
 }

@@ -94,6 +94,11 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   const [customerName, setCustomerName] = useState('')
   const [customerNote, setCustomerNote] = useState((initialOrder?.customer_note as string | null) ?? '')
   const [busy, setBusy] = useState(false)
+  // Blocks a same-tick double-tap from firing a second request before React
+  // has re-rendered the disabled button - `busy` state alone isn't fast
+  // enough on a laggy device, which is exactly when a frustrated double-tap
+  // is most likely.
+  const printInFlightRef = useRef(false)
   const [qrBillSent, setQrBillSent] = useState(false)
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -223,7 +228,9 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   }
 
   async function sendToBarista() {
+    if (printInFlightRef.current) return
     if (!order || (order.items ?? []).length === 0) return toast.error('Add at least one item first')
+    printInFlightRef.current = true
     setBusy(true)
     try {
       const res = await fetch(`/api/pos/orders/${order.id}/kot`, { method: 'POST' })
@@ -237,6 +244,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       toast.error(err instanceof Error ? err.message : 'Failed to send KOT')
     } finally {
       setBusy(false)
+      printInFlightRef.current = false
     }
   }
 
@@ -254,7 +262,9 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
   }
 
   async function printQrBill() {
+    if (printInFlightRef.current) return
     if (!order) return
+    printInFlightRef.current = true
     setBusy(true)
     try {
       await api(`/api/pos/orders/${order.id}/qr-bill`, 'POST')
@@ -264,6 +274,7 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
       toast.error(err instanceof Error ? err.message : 'Failed to send QR bill to printer')
     } finally {
       setBusy(false)
+      printInFlightRef.current = false
     }
   }
 

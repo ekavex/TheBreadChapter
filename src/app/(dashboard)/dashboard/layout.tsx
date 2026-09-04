@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ClipboardList, UtensilsCrossed, BarChart3,
-  ChevronRight, Package, LogOut, Utensils, FileBarChart, Menu, X, ShieldCheck,
+  ChevronRight, Package, LogOut, Utensils, FileBarChart, Menu, X, ShieldCheck, Printer,
 } from 'lucide-react'
 import NotificationBell from '@/components/dashboard/NotificationBell'
 import type { UserRole } from '@/lib/types'
@@ -18,6 +18,7 @@ const ALL_NAV = [
   { href: '/dashboard/analytics',    label: 'Analytics',   icon: BarChart3,        roles: ['admin'] as UserRole[] },
   { href: '/dashboard/reports',      label: 'Reports',     icon: FileBarChart,     roles: ['admin', 'manager'] as UserRole[] },
   { href: '/dashboard/admin',        label: 'Admin',       icon: ShieldCheck,      roles: ['admin', 'manager'] as UserRole[] },
+  { href: '/dashboard/admin/printing', label: 'Printing',  icon: Printer,          roles: ['admin'] as UserRole[] },
 ]
 
 function readRoleCookie(): UserRole {

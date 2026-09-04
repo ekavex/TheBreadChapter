@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
+import { recordPrintEvent } from '@/lib/printLog'
+
+// How long a job can sit at 'processing' (claimed by the bridge, never
+// confirmed) before it's treated as stuck and put back to 'queued' for
+// another poll to pick up. Tunable per-deployment via env instead of a
+// hardcoded guess - see docs discussion on print reliability.
+const STALE_PROCESSING_SECONDS = Number(process.env.PRINT_JOB_STALE_SECONDS ?? 45)
 
 export const dynamic = 'force-dynamic'
 
@@ -44,12 +51,25 @@ export async function GET(req: NextRequest) {
     // would otherwise sit stuck forever, since claiming is a one-way door. Anything
     // still 'processing' well past a normal print cycle goes back to 'queued' so
     // the next poll (from this device or another) picks it up again.
-    await sql`
+    //
+    // If the bridge actually did print before going silent, this reclaim causes
+    // a genuine second physical print on the next claim - unavoidable without the
+    // bridge confirming reliably, but every reclaim is logged so it shows up on
+    // the admin Printing page instead of being invisible.
+    const reclaimed = await sql`
       UPDATE kot_tickets
       SET print_status = 'queued'
       WHERE print_status = 'processing'
-        AND printed_at < now() - interval '45 seconds'
+        AND printed_at < now() - (${STALE_PROCESSING_SECONDS} * interval '1 second')
+      RETURNING id, order_id, station, job_type
     `
+    for (const row of reclaimed as unknown as { id: string; order_id: string; station: string; job_type: string }[]) {
+      logger.warn('print_bridge.stale_reclaim', { jobId: row.id, orderId: row.order_id, station: row.station })
+      await recordPrintEvent(sql, {
+        orderId: row.order_id, station: row.station, jobType: row.job_type, event: 'stale_reclaimed',
+        kotTicketId: row.id, detail: `no print-bridge confirmation within ${STALE_PROCESSING_SECONDS}s`,
+      })
+    }
 
     // Atomically claim queued jobs by marking them 'processing' so a second poll
     // within the same 3-second window cannot pick up the same ticket again.

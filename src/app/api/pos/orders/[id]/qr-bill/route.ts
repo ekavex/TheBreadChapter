@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
+import { getSessionUser } from '@/lib/auth/requireDashboardSession'
+import { queueBillQrTicket } from '@/lib/printQueue'
 
 // POST /api/pos/orders/[id]/qr-bill
 // Queues a bill_qr print job to the beverage counter printer.
@@ -8,8 +9,10 @@ import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 // a pre-filled UPI QR code. After the customer pays, the waiter calls
 // POST /pay with mode=upi_qr to mark the order PAID.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionGuard = await requireDashboardSession(req)
-  if (sessionGuard) return sessionGuard
+  const sessionUser = await getSessionUser(req)
+  if (!sessionUser) {
+    return NextResponse.json({ data: null, error: 'Authentication required' }, { status: 401 })
+  }
 
   try {
     const sql = getDb()
@@ -49,18 +52,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       addons: ((i['addons_json'] as { name: string }[] | null) ?? []).map((a) => a.name).filter(Boolean),
     }))
 
-    await sql`
-      INSERT INTO kot_tickets (order_id, station, items_json, print_status, job_type)
-      VALUES (
-        ${params.id},
-        'beverage_counter',
-        ${sql.json(itemsJson)},
-        'queued',
-        'bill_qr'
-      )
-    `
+    const result = await queueBillQrTicket(sql, params.id, itemsJson, sessionUser.displayName || sessionUser.userId)
 
-    return NextResponse.json({ data: { ok: true }, error: null })
+    return NextResponse.json({ data: result, error: null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to queue QR bill'
     return NextResponse.json({ data: null, error: message }, { status: 500 })

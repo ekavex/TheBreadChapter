@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
 import { ChevronDown, ArrowRight, X, Printer, FileDown, ChevronRight, Trash2 } from 'lucide-react'
@@ -16,6 +16,10 @@ function readRoleCookie(): UserRole {
 }
 
 const STATUSES: OrderStatus[] = ['pending', 'confirmed', 'making', 'ready', 'served', 'completed', 'cancelled']
+
+// How long the Print button stays disabled after a click, to stop double-prints
+// on a slow Bluetooth link to the print bridge.
+const PRINT_COOLDOWN_SECONDS = 5
 
 const STATUS_STYLE: Record<string, string> = {
   pending:   'bg-green-50 text-green-700 border-green-200',
@@ -79,14 +83,28 @@ function OrderDetailDrawer({ order, onClose, onAdvance, advancing, isAdmin, onDe
   const tableLabel = tableInfo?.label ?? (tableInfo?.number ? `Table ${tableInfo.number}` : 'Takeaway')
   const nextStatus = NEXT_STATUS[order.status]
   const note = (order as any).customer_note as string | null | undefined
-  const [printCooldown, setPrintCooldown] = useState(false)
+  const [printCooldown, setPrintCooldown] = useState(0)
+  // Blocks a same-tick double-click from firing a second reprint before
+  // React re-renders the disabled button - printCooldown state alone isn't
+  // fast enough for that.
+  const printInFlightRef = useRef(false)
 
   const subtotal = items.reduce((s, i) => s + ((i as any).subtotal ?? 0), 0)
 
   function handlePrint() {
-    setPrintCooldown(true)
-    reprintBill(order)
-    setTimeout(() => setPrintCooldown(false), 3000)
+    if (printInFlightRef.current) return
+    printInFlightRef.current = true
+    reprintBill(order).finally(() => { printInFlightRef.current = false })
+    setPrintCooldown(PRINT_COOLDOWN_SECONDS)
+    const iv = setInterval(() => {
+      setPrintCooldown((s) => {
+        if (s <= 1) {
+          clearInterval(iv)
+          return 0
+        }
+        return s - 1
+      })
+    }, 1000)
   }
 
   return (
@@ -210,11 +228,11 @@ function OrderDetailDrawer({ order, onClose, onAdvance, advancing, isAdmin, onDe
           <div className="flex gap-2 ml-auto">
             <button
               onClick={handlePrint}
-              disabled={printCooldown}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-ink/10 text-sm text-ink-muted hover:bg-surface-overlay transition-colors disabled:opacity-50"
+              disabled={printCooldown > 0}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-ink/10 text-sm text-ink-muted hover:bg-surface-overlay transition-colors disabled:opacity-50 tabular-nums"
               title="Print receipt"
             >
-              <Printer size={14} /> Print
+              <Printer size={14} /> {printCooldown > 0 ? `Print (${printCooldown}s)` : 'Print'}
             </button>
             <button
               onClick={() => downloadReceipt(order.id)}
