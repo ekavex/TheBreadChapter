@@ -14,7 +14,7 @@ const ALL_NAV = [
   { href: '/dashboard/orders',       label: 'Orders',      icon: ClipboardList,    roles: ['admin', 'manager', 'staff'] as UserRole[] },
   { href: '/dashboard',              label: 'Overview',    icon: LayoutDashboard,  roles: ['admin', 'manager', 'staff'] as UserRole[] },
   { href: '/dashboard/inventory',    label: 'Inventory',   icon: Package,          roles: ['admin', 'manager', 'staff'] as UserRole[] },
-  { href: '/dashboard/menu-manager', label: 'Menu',        icon: UtensilsCrossed,  roles: ['admin', 'manager'] as UserRole[] },
+  { href: '/dashboard/menu-manager', label: 'Menu',        icon: UtensilsCrossed,  roles: ['admin', 'manager', 'staff'] as UserRole[] },
   { href: '/dashboard/analytics',    label: 'Analytics',   icon: BarChart3,        roles: ['admin'] as UserRole[] },
   { href: '/dashboard/reports',      label: 'Reports',     icon: FileBarChart,     roles: ['admin', 'manager'] as UserRole[] },
   { href: '/dashboard/admin',        label: 'Admin',       icon: ShieldCheck,      roles: ['admin', 'manager'] as UserRole[] },

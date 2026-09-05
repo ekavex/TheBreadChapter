@@ -54,6 +54,7 @@ interface Props {
   categories: MenuCategory[]
   ingredients: Ingredient[]
   addons: Addon[]
+  readOnly?: boolean
 }
 
 type ModalKind =
@@ -66,6 +67,7 @@ function ItemCard({
   item,
   toggling,
   deleting,
+  readOnly,
   onToggle,
   onRecipe,
   onEdit,
@@ -74,6 +76,7 @@ function ItemCard({
   item: MenuItem
   toggling: boolean
   deleting: boolean
+  readOnly: boolean
   onToggle: () => void
   onRecipe: () => void
   onEdit: () => void
@@ -87,7 +90,7 @@ function ItemCard({
 
   return (
     <div className="flex flex-col bg-surface-raised rounded-2xl border border-ink/8 overflow-hidden h-full">
-      {/* Availability toggle + category pill */}
+      {/* Availability + category pill */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="flex items-center gap-2">
           {item.category === 'beverage'
@@ -102,18 +105,27 @@ function ItemCard({
             </span>
           )}
         </div>
-        <button
-          onClick={onToggle}
-          disabled={toggling}
-          title={item.is_available ? 'Mark unavailable' : 'Mark available'}
-          className={`p-1.5 rounded-lg transition-colors ${
-            item.is_available
-              ? 'text-green-600 hover:bg-red-50 hover:text-red-500'
-              : 'text-ink-faint hover:bg-green-50 hover:text-green-600'
-          } disabled:opacity-40`}
-        >
-          {item.is_available ? <Eye size={14} /> : <EyeOff size={14} />}
-        </button>
+        {readOnly ? (
+          <span
+            title={item.is_available ? 'Available' : 'Unavailable'}
+            className={`p-1.5 rounded-lg ${item.is_available ? 'text-green-600' : 'text-ink-faint'}`}
+          >
+            {item.is_available ? <Eye size={14} /> : <EyeOff size={14} />}
+          </span>
+        ) : (
+          <button
+            onClick={onToggle}
+            disabled={toggling}
+            title={item.is_available ? 'Mark unavailable' : 'Mark available'}
+            className={`p-1.5 rounded-lg transition-colors ${
+              item.is_available
+                ? 'text-green-600 hover:bg-red-50 hover:text-red-500'
+                : 'text-ink-faint hover:bg-green-50 hover:text-green-600'
+            } disabled:opacity-40`}
+          >
+            {item.is_available ? <Eye size={14} /> : <EyeOff size={14} />}
+          </button>
+        )}
       </div>
 
       {/* Item name + description */}
@@ -128,7 +140,7 @@ function ItemCard({
       <div className="px-4 pt-3 pb-3 mt-2 border-t border-ink/5">
         <div className="flex items-baseline justify-between">
           <span className="font-display text-2xl font-bold text-ink">₹{item.price}</span>
-          {profitPct !== null && (
+          {!readOnly && profitPct !== null && (
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
               profitPct >= 50 ? 'bg-green-50 text-green-700' :
               profitPct >= 20 ? 'bg-amber-50 text-amber-700' :
@@ -138,52 +150,56 @@ function ItemCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 mt-1.5 text-xs">
-          {hasRecipe ? (
-            <>
-              <span className="text-ink-faint">Cost {formatPaisa(item.cost_price_paisa)}</span>
-              <span className={`font-medium ${profitPaisa < 0 ? 'text-red-500' : 'text-green-600'}`}>
-                {profitPaisa >= 0 ? '+' : ''}{formatPaisa(profitPaisa)} profit
-              </span>
-            </>
-          ) : (
-            <span className="text-ink-faint italic">No recipe · cost unknown</span>
-          )}
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-3 mt-1.5 text-xs">
+            {hasRecipe ? (
+              <>
+                <span className="text-ink-faint">Cost {formatPaisa(item.cost_price_paisa)}</span>
+                <span className={`font-medium ${profitPaisa < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                  {profitPaisa >= 0 ? '+' : ''}{formatPaisa(profitPaisa)} profit
+                </span>
+              </>
+            ) : (
+              <span className="text-ink-faint italic">No recipe · cost unknown</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Action bar */}
-      <div className="flex items-center gap-1 px-3 pb-3 pt-1 border-t border-ink/5">
-        <button
-          onClick={onRecipe}
-          title="Recipe & costing"
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors"
-        >
-          <ChefHat size={13} /> Recipe
-        </button>
-        <div className="w-px h-4 bg-ink/8" />
-        <button
-          onClick={onEdit}
-          title="Edit item"
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors"
-        >
-          <Pencil size={13} /> Edit
-        </button>
-        <div className="w-px h-4 bg-ink/8" />
-        <button
-          onClick={onDelete}
-          disabled={deleting}
-          title="Delete item"
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
-        >
-          <Trash2 size={13} /> Delete
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-1 px-3 pb-3 pt-1 border-t border-ink/5">
+          <button
+            onClick={onRecipe}
+            title="Recipe & costing"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors"
+          >
+            <ChefHat size={13} /> Recipe
+          </button>
+          <div className="w-px h-4 bg-ink/8" />
+          <button
+            onClick={onEdit}
+            title="Edit item"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors"
+          >
+            <Pencil size={13} /> Edit
+          </button>
+          <div className="w-px h-4 bg-ink/8" />
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            title="Delete item"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
+          >
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
-export default function MenuManagerClient({ categories, ingredients, addons: initialAddons }: Props) {
+export default function MenuManagerClient({ categories, ingredients, addons: initialAddons, readOnly = false }: Props) {
   const [addons, setAddons] = useState<Addon[]>(initialAddons)
   const [addingAddon, setAddingAddon] = useState(false)
   const [addonForm, setAddonForm] = useState({ name: '', price: '' })
@@ -385,17 +401,19 @@ export default function MenuManagerClient({ categories, ingredients, addons: ini
       {/* ── Page header ── */}
       <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink">Menu Manager</h1>
+          <h1 className="font-display text-2xl font-bold text-ink">{readOnly ? 'Menu' : 'Menu Manager'}</h1>
           <p className="text-ink-muted text-sm mt-0.5">
             {totalItems} items · {categories.length} categories · {unavailable} unavailable
           </p>
         </div>
-        <button
-          onClick={() => setActiveModal({ kind: 'add-category' })}
-          className="flex items-center gap-1.5 rounded-xl bg-ink text-surface px-4 py-2.5 text-sm font-medium shrink-0"
-        >
-          <Plus size={15} /> Add Category
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setActiveModal({ kind: 'add-category' })}
+            className="flex items-center gap-1.5 rounded-xl bg-ink text-surface px-4 py-2.5 text-sm font-medium shrink-0"
+          >
+            <Plus size={15} /> Add Category
+          </button>
+        )}
       </div>
 
       {/* ── Search bar ── */}
@@ -440,6 +458,7 @@ export default function MenuManagerClient({ categories, ingredients, addons: ini
                     item={item}
                     toggling={toggling === item.id}
                     deleting={deleting}
+                    readOnly={readOnly}
                     onToggle={() => toggleAvailability(item)}
                     onRecipe={() => setRecipeFor(item)}
                     onEdit={() => setActiveModal({ kind: 'edit-item', item })}
@@ -505,41 +524,45 @@ export default function MenuManagerClient({ categories, ingredients, addons: ini
                 </div>
                 <div className="flex-1 h-px bg-ink/5" />
                 {/* Category actions */}
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setActiveModal({ kind: 'add-item', category: cat })}
-                    className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink px-2.5 py-1.5 rounded-lg hover:bg-surface-overlay transition-colors"
-                  >
-                    <Plus size={13} /> Add item
-                  </button>
-                  <button
-                    onClick={() => setActiveModal({ kind: 'edit-category', category: cat })}
-                    title="Edit category"
-                    className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={() => deleteCategory(cat)}
-                    disabled={deleting}
-                    title="Delete category"
-                    className="p-1.5 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                {!readOnly && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setActiveModal({ kind: 'add-item', category: cat })}
+                      className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink px-2.5 py-1.5 rounded-lg hover:bg-surface-overlay transition-colors"
+                    >
+                      <Plus size={13} /> Add item
+                    </button>
+                    <button
+                      onClick={() => setActiveModal({ kind: 'edit-category', category: cat })}
+                      title="Edit category"
+                      className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-overlay hover:text-ink transition-colors"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteCategory(cat)}
+                      disabled={deleting}
+                      title="Delete category"
+                      className="p-1.5 rounded-lg text-ink-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Items grid */}
               {items.length === 0 ? (
                 <div className="border-2 border-dashed border-ink/8 rounded-2xl p-8 text-center">
                   <p className="text-ink-faint text-sm">No items in this category yet.</p>
-                  <button
-                    onClick={() => setActiveModal({ kind: 'add-item', category: cat })}
-                    className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    + Add first item
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => setActiveModal({ kind: 'add-item', category: cat })}
+                      className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+                    >
+                      + Add first item
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -549,6 +572,7 @@ export default function MenuManagerClient({ categories, ingredients, addons: ini
                       item={item}
                       toggling={toggling === item.id}
                       deleting={deleting}
+                      readOnly={readOnly}
                       onToggle={() => toggleAvailability(item)}
                       onRecipe={() => setRecipeFor(item)}
                       onEdit={() => setActiveModal({ kind: 'edit-item', item })}
@@ -574,15 +598,17 @@ export default function MenuManagerClient({ categories, ingredients, addons: ini
             <span className="text-xs text-ink-faint">{addons.length} configured</span>
           </div>
           <div className="flex-1 h-px bg-ink/5" />
-          <button
-            onClick={() => setAddingAddon(true)}
-            className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink px-2.5 py-1.5 rounded-lg hover:bg-surface-overlay transition-colors"
-          >
-            <Plus size={13} /> Add
-          </button>
+          {!readOnly && (
+            <button
+              onClick={() => setAddingAddon(true)}
+              className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink px-2.5 py-1.5 rounded-lg hover:bg-surface-overlay transition-colors"
+            >
+              <Plus size={13} /> Add
+            </button>
+          )}
         </div>
 
-        {addingAddon && (
+        {!readOnly && addingAddon && (
           <div className="mb-4 flex items-center gap-2 bg-surface-raised border border-ink/8 rounded-xl p-3">
             <input
               type="text"
@@ -624,12 +650,14 @@ export default function MenuManagerClient({ categories, ingredients, addons: ini
           <div className="border-2 border-dashed border-ink/8 rounded-2xl p-8 text-center">
             <Tag size={20} className="mx-auto text-ink-faint mb-2" />
             <p className="text-ink-faint text-sm">No add-ons configured yet.</p>
-            <button
-              onClick={() => setAddingAddon(true)}
-              className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
-            >
-              + Add first add-on
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => setAddingAddon(true)}
+                className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+              >
+                + Add first add-on
+              </button>
+            )}
           </div>
         )}
 
@@ -642,27 +670,35 @@ export default function MenuManagerClient({ categories, ingredients, addons: ini
                   {addon.price > 0 && <span className="ml-2 text-xs text-ink-muted">+₹{addon.price}</span>}
                   {!addon.is_active && <span className="ml-2 text-xs text-ink-faint">(inactive)</span>}
                 </div>
-                <button
-                  onClick={() => toggleAddon(addon)}
-                  disabled={addonBusy}
-                  title={addon.is_active ? 'Deactivate' : 'Activate'}
-                  className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${addon.is_active ? 'text-green-600 hover:bg-red-50 hover:text-red-500' : 'text-ink-faint hover:bg-green-50 hover:text-green-600'}`}
-                >
-                  {addon.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
-                </button>
-                <button
-                  onClick={() => { setEditingAddon(addon); setEditAddonForm({ name: addon.name, price: String(addon.price) }) }}
-                  className="p-1.5 rounded-lg text-ink-faint hover:bg-surface-overlay hover:text-ink transition-colors"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  onClick={() => deleteAddon(addon)}
-                  disabled={addonBusy}
-                  className="p-1.5 rounded-lg text-ink-faint hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
-                >
-                  <Trash2 size={14} />
-                </button>
+                {readOnly ? (
+                  <span className={`p-1.5 rounded-lg ${addon.is_active ? 'text-green-600' : 'text-ink-faint'}`}>
+                    {addon.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => toggleAddon(addon)}
+                      disabled={addonBusy}
+                      title={addon.is_active ? 'Deactivate' : 'Activate'}
+                      className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${addon.is_active ? 'text-green-600 hover:bg-red-50 hover:text-red-500' : 'text-ink-faint hover:bg-green-50 hover:text-green-600'}`}
+                    >
+                      {addon.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                    <button
+                      onClick={() => { setEditingAddon(addon); setEditAddonForm({ name: addon.name, price: String(addon.price) }) }}
+                      className="p-1.5 rounded-lg text-ink-faint hover:bg-surface-overlay hover:text-ink transition-colors"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteAddon(addon)}
+                      disabled={addonBusy}
+                      className="p-1.5 rounded-lg text-ink-faint hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>

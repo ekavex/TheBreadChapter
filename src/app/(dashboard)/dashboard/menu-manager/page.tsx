@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers'
 import { getDb } from '@/lib/db'
 import { DEMO_CAFE_ID } from '@/lib/constants'
+import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 import type { MenuCategory, Ingredient, Addon } from '@/lib/types'
 import MenuManagerClient from './MenuManagerClient'
 
@@ -8,6 +10,9 @@ export const metadata = { title: 'Menu Manager' }
 
 export default async function MenuManagerPage() {
   const sql = getDb()
+  const token = cookies().get(SESSION_COOKIE_NAME)?.value
+  const session = await getSession(token)
+  const readOnly = session?.role === 'staff'
 
   const [categoriesRaw, itemsRaw, ingredientsRaw, addonsRaw] = await Promise.all([
     sql`SELECT * FROM menu_categories WHERE cafe_id = ${DEMO_CAFE_ID} AND is_active = true ORDER BY sort_order ASC`,
@@ -28,6 +33,7 @@ export default async function MenuManagerPage() {
       categories={categories}
       ingredients={ingredientsRaw as unknown as Ingredient[]}
       addons={addonsRaw as unknown as Addon[]}
+      readOnly={readOnly}
     />
   )
 }
