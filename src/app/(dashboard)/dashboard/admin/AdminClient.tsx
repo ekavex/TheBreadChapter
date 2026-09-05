@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, CreditCard, Percent } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
+import PasswordInput from '@/components/PasswordInput'
 import toast from 'react-hot-toast'
 
 interface TerminalRow {
@@ -312,8 +313,7 @@ export default function AdminClient() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-ink-muted mb-1">New password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"
                   value={myPassword} onChange={e => setMyPassword(e.target.value)}
                   placeholder="Leave blank to keep"
@@ -357,8 +357,7 @@ export default function AdminClient() {
             </div>
             <div>
               <label className="block text-xs font-medium text-ink-muted mb-1">Password</label>
-              <input
-                type="password"
+              <PasswordInput
                 className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"
                 value={newPassword} onChange={e => setNewPassword(e.target.value)}
                 required minLength={6}
@@ -435,8 +434,7 @@ export default function AdminClient() {
                       )}
                       <div>
                         <label className="block text-xs font-medium text-ink-muted mb-1">New password (optional)</label>
-                        <input
-                          type="password"
+                        <PasswordInput
                           className="w-full rounded-xl border border-ink/10 px-3 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"
                           value={editPassword} onChange={e => setEditPassword(e.target.value)}
                           placeholder="Leave blank to keep"

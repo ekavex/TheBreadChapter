@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { UserRole } from '@/lib/types'
+import PasswordInput from '@/components/PasswordInput'
 
 function defaultRedirect(role: UserRole): string {
   return role === 'staff' ? '/pos' : '/dashboard'
@@ -56,8 +57,7 @@ export default function LoginForm() {
       </div>
       <div>
         <label className="block text-sm font-medium text-ink-muted mb-1">Password</label>
-        <input
-          type="password"
+        <PasswordInput
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full rounded-xl border border-ink/10 px-4 py-2.5 text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"

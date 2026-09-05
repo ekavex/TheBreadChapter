@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import PasswordInput from '@/components/PasswordInput'
 
 export default function ForgotPasswordPage() {
   const router = useRouter()
@@ -89,8 +90,7 @@ export default function ForgotPasswordPage() {
 
         <div>
           <label className="block text-sm font-medium text-ink-muted mb-1">Security Key</label>
-          <input
-            type="password"
+          <PasswordInput
             value={securityKey}
             onChange={(e) => setSecurityKey(e.target.value)}
             placeholder="Server ADMIN_RESET_KEY value"
@@ -103,8 +103,7 @@ export default function ForgotPasswordPage() {
 
         <div>
           <label className="block text-sm font-medium text-ink-muted mb-1">New Password</label>
-          <input
-            type="password"
+          <PasswordInput
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="Minimum 8 characters"
@@ -116,8 +115,7 @@ export default function ForgotPasswordPage() {
 
         <div>
           <label className="block text-sm font-medium text-ink-muted mb-1">Confirm New Password</label>
-          <input
-            type="password"
+          <PasswordInput
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             className="w-full rounded-xl border border-ink/10 px-4 py-2.5 text-ink focus:outline-none focus:ring-2 focus:ring-brand-400"
