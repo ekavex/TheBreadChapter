@@ -8,6 +8,9 @@ export const dynamic = 'force-dynamic'
 // and payments cascade automatically (FK ON DELETE CASCADE); stock_transactions
 // rows keep their history but have reference_order_id cleared first since that
 // FK has no cascade - deleting an order shouldn't erase the ingredient ledger.
+// Also releases the order's table - otherwise deleting an order left mid-flow
+// (occupied/kot_sent/billed) strands the table in that status with no order
+// left to explain it, tripping the "data inconsistency" guard on table open.
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const roleGuard = await requireAdmin(req)
   if (roleGuard) return roleGuard
@@ -16,7 +19,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const sql = getDb()
     const deleted = await sql.begin(async (tx) => {
       await tx`UPDATE stock_transactions SET reference_order_id = NULL WHERE reference_order_id = ${params.id}`
-      const [row] = await tx`DELETE FROM orders WHERE id = ${params.id} RETURNING id`
+      const [row] = await tx`DELETE FROM orders WHERE id = ${params.id} RETURNING id, table_id, pos_status`
+      // Only free the table if this order was still the one occupying it -
+      // an already PAID/CANCELLED order's table may since have been reused
+      // by a newer active order, which a blind free() would wrongly evict.
+      if (row?.table_id && !['PAID', 'CANCELLED'].includes(row.pos_status)) {
+        await tx`UPDATE tables SET status = 'free' WHERE id = ${row.table_id}`
+      }
       return row
     })
 

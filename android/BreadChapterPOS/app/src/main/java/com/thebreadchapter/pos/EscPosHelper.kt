@@ -25,6 +25,21 @@ object EscPosHelper {
     private val FULL_CUT      = byteArrayOf(0x1D, 0x56, 0x00)
     private val LF            = byteArrayOf(0x0A)
 
+    // Customer bill runs in Font B (condensed, ~9-dot glyphs) instead of the
+    // KOT's Font A, since fitting the legal/GST/address block plus item+price
+    // rows within 48mm needs more than 32 columns. The font bit lives inside
+    // the same ESC ! byte as bold/height/width, so it's baked into each of
+    // these rather than selected separately - that avoids ESC ! calls
+    // elsewhere silently resetting the font back to A.
+    private val FONT_B_NORMAL        = byteArrayOf(0x1B, 0x21, 0x01)
+    private val FONT_B_DOUBLE_HEIGHT = byteArrayOf(0x1B, 0x21, 0x11)
+    private const val BILL_COLS = 42
+    private val BILL_DIV = "-".repeat(BILL_COLS)
+    // ~8 dots/mm on a 384-dot / 48mm printable head.
+    private const val DOTS_PER_MM = 8
+    private const val LOGO_WIDTH_DOTS = 33 * DOTS_PER_MM  // ~33mm, within the 32-35mm target
+    private const val QR_MODULE_SIZE = 4                  // ~19-21mm square (0.5x of prior 8) for a typical UPI payload
+
     private fun feed() = byteArrayOf(0x1B, 0x64, 0x04)
     private fun text(s: String) = (s + "\n").toByteArray(Charsets.UTF_8)
 
@@ -33,11 +48,60 @@ object EscPosHelper {
     private fun padRight(s: String, len: Int): String =
         if (s.length >= len) s.substring(0, len) else s + " ".repeat(len - s.length)
 
-    // Returns a left+right row that fills exactly COLS characters.
-    private fun rowLine(left: String, right: String): String {
-        val space = COLS - left.length - right.length
-        return if (space <= 0) "${left.take(COLS - right.length - 1)} $right"
+    // Returns a left+right row that fills exactly `cols` characters.
+    private fun rowLine(left: String, right: String, cols: Int = COLS): String {
+        val space = cols - left.length - right.length
+        return if (space <= 0) "${left.take(cols - right.length - 1)} $right"
         else left + " ".repeat(space) + right
+    }
+
+    // Greedy word-wrap to a fixed width - used for the bill's static legal/
+    // address block and for any item name/addon too long for one line.
+    private fun wrapText(s: String, cols: Int): List<String> {
+        val lines = mutableListOf<String>()
+        var cur = StringBuilder()
+        for (word in s.split(" ")) {
+            val next = if (cur.isEmpty()) word else "$cur $word"
+            if (next.length <= cols) {
+                cur = StringBuilder(next)
+            } else {
+                if (cur.isNotEmpty()) lines.add(cur.toString())
+                cur = StringBuilder(word)
+            }
+        }
+        if (cur.isNotEmpty()) lines.add(cur.toString())
+        return lines
+    }
+
+    // Prints "<label>  <price>" on one line if it fits; otherwise wraps the
+    // label across lines and keeps the price right-aligned on the last one,
+    // so a long item name can never push the price off the printable area.
+    private fun printPricedLine(w: (ByteArray) -> Unit, label: String, price: String, cols: Int) {
+        if (label.length + 1 + price.length <= cols) {
+            w(text(rowLine(label, price, cols)))
+            return
+        }
+        val wrapped = wrapText(label, cols)
+        for ((i, line) in wrapped.withIndex()) {
+            when {
+                i != wrapped.lastIndex -> w(text(line))
+                line.length + 1 + price.length <= cols -> w(text(rowLine(line, price, cols)))
+                else -> {
+                    w(text(line))
+                    w(text(rowLine("", price, cols)))
+                }
+            }
+        }
+    }
+
+    // Scales a bitmap down to a target dot width for the raster print
+    // command, preserving aspect ratio - the source logo resource is
+    // higher-res than the ~33mm the bill calls for.
+    private fun scaleToWidth(bitmap: Bitmap, targetWidthDots: Int): Bitmap {
+        if (bitmap.width <= targetWidthDots) return bitmap
+        val ratio = targetWidthDots.toFloat() / bitmap.width
+        val targetHeight = (bitmap.height * ratio).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(bitmap, targetWidthDots, targetHeight, true)
     }
 
     // ESC/POS GS ( k sequence to print a QR code (Model 2, error level L).
@@ -199,6 +263,10 @@ object EscPosHelper {
     // items: each map has keys "name" (String), "quantity" (Int), "subtotal" (Int, rupees).
     // amountPaisa: bill total in paisa (used for the display total).
     // upiUrl: fully-built upi:// deep link with am= already set by the server.
+    //
+    // Runs in Font B (42 cols on a 58mm/384-dot head) instead of the KOT's
+    // Font A (32 cols) - the legal name, GST number and full address below
+    // the logo don't fit otherwise. See FONT_B_NORMAL/FONT_B_DOUBLE_HEIGHT.
     fun buildBillWithQr(
         tableLabel: String,
         orderId: String,
@@ -211,94 +279,97 @@ object EscPosHelper {
         val out = ByteArrayOutputStream()
         fun w(b: ByteArray) = out.write(b)
 
-        val time = SimpleDateFormat("HH:mm  dd/MM/yy", Locale.getDefault()).format(Date())
+        val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        val dateStr = SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(Date())
         val shortId = orderId.takeLast(6).uppercase()
         val totalRupees = amountPaisa / 100.0
         val totalStr = "Rs. %.2f".format(totalRupees)
 
-        // ── Header ────────────────────────────────────────────────────────────
         w(INIT)
+        w(FONT_B_NORMAL)
         w(ALIGN_CENTER)
+
+        // ── Logo + brand ─────────────────────────────────────────────────────
         if (logo != null) {
-            w(rasterImage(logo))
+            w(rasterImage(scaleToWidth(logo, LOGO_WIDTH_DOTS)))
             w(LF)
-            w(BOLD_ON)
-            w(text("THE BREAD CHAPTER"))
-            w(BOLD_OFF)
-        } else {
-            // Text fallback if the logo bitmap failed to load.
-            w(BOLD_ON)
-            w(DOUBLE_SIZE)
-            w(text("THE BREAD"))
-            w(text("CHAPTER"))
-            w(NORMAL_SIZE)
-            w(BOLD_OFF)
         }
-        w(text(DIV.trimEnd()))
-        // Table label - double-height for easy reading
         w(BOLD_ON)
-        w(DOUBLE_HEIGHT)
-        w(text("Table: $tableLabel"))
-        w(NORMAL_SIZE)
+        w(text("THE BREAD CHAPTER"))
         w(BOLD_OFF)
-        w(text("Order #$shortId   $time"))
-        w(text(DIV.trimEnd()))
+
+        // ── Legal name / GST / address ───────────────────────────────────────
+        for (line in wrapText("The Bread Chapter (ANV HOSPITALITY PVT. LTD)", BILL_COLS)) w(text(line))
+        for (line in wrapText("GST NO - 27ABFCA1460M1ZK", BILL_COLS)) w(text(line))
+        for (line in wrapText(
+            "ADDRESS - VEDAS CENTRE DP ROAD NR SHIV SAGAR AUNDH PUNE, Aundh, Pune Municipal Corporation, Maharashtra - 411007",
+            BILL_COLS,
+        )) w(text(line))
+
+        w(text(BILL_DIV))
+
+        // ── Table ─────────────────────────────────────────────────────────────
+        w(BOLD_ON)
+        w(text("Table: $tableLabel"))
+        w(BOLD_OFF)
+
+        // ── Order # / time / date ────────────────────────────────────────────
+        w(ALIGN_LEFT)
+        w(text(rowLine("Order #$shortId", "$timeStr   $dateStr", BILL_COLS)))
+
+        w(ALIGN_CENTER)
+        w(text(BILL_DIV))
+        w(ALIGN_LEFT)
 
         // ── Items ─────────────────────────────────────────────────────────────
-        w(ALIGN_LEFT)
         for (item in items) {
-            val qty     = (item["quantity"] as? Number)?.toInt() ?: 1
-            val name    = (item["name"] as? String) ?: ""
-            val sub     = (item["subtotal"] as? Number)?.toInt() ?: 0
-            val right   = "Rs.%d".format(sub)
-            val prefix  = "${qty.toString().padStart(2)}x "
-            val maxName = COLS - prefix.length - right.length - 1
-            val nameTrunc = if (name.length > maxName) name.substring(0, maxName) else name
-            w(BOLD_ON)
-            w(text(rowLine(prefix + nameTrunc, right)))
-            w(BOLD_OFF)
+            val qty   = (item["quantity"] as? Number)?.toInt() ?: 1
+            val name  = (item["name"] as? String) ?: ""
+            val sub   = (item["subtotal"] as? Number)?.toInt() ?: 0
+            val price = "Rs. %d".format(sub)
+            printPricedLine(::w, "${qty}x $name", price, BILL_COLS)
+
             @Suppress("UNCHECKED_CAST")
             val addonList = item["addons"] as? List<String> ?: emptyList()
             for (addon in addonList) {
-                w(text("    + ${addon.take(COLS - 6)}"))
+                for (line in wrapText("  + $addon", BILL_COLS)) w(text(line))
             }
         }
 
-        // Customer note (suggestions)
+        // Customer note - a real order detail, not part of the fixed layout
+        // below, but it must not silently vanish from the printed bill.
         if (!customerNote.isNullOrBlank()) {
-            w(ALIGN_LEFT)
-            w(text(DIV.trimEnd()))
             w(BOLD_ON)
-            w(text("NOTE:"))
+            for (line in wrapText("Note: ${customerNote.trim()}", BILL_COLS)) w(text(line))
             w(BOLD_OFF)
-            w(text(customerNote.trim().take(COLS * 3)))
         }
 
-        // ── Total ─────────────────────────────────────────────────────────────
         w(ALIGN_CENTER)
-        w(text(DIV.trimEnd()))
-        w(BOLD_ON)
-        w(DOUBLE_HEIGHT)
-        w(text(rowLine("TOTAL", totalStr)))
-        w(NORMAL_SIZE)
-        w(BOLD_OFF)
-        w(text(DIV.trimEnd()))
+        w(text(BILL_DIV))
+        w(ALIGN_LEFT)
 
-        // ── QR Code ───────────────────────────────────────────────────────────
-        w(LF)
+        // ── Total ─────────────────────────────────────────────────────────────
+        w(BOLD_ON)
+        w(FONT_B_DOUBLE_HEIGHT)
+        w(text(rowLine("TOTAL", totalStr, BILL_COLS)))
+        w(FONT_B_NORMAL)
+        w(BOLD_OFF)
+
+        w(ALIGN_CENTER)
+        w(text(BILL_DIV))
+
+        // ── QR code ───────────────────────────────────────────────────────────
         w(BOLD_ON)
         w(text("Scan & Pay via UPI"))
         w(BOLD_OFF)
         w(LF)
-        w(qrCode(upiUrl, moduleSize = 6))
+        w(qrCode(upiUrl, moduleSize = QR_MODULE_SIZE))
         w(LF)
-        // Net total below QR - large and bold
         w(BOLD_ON)
-        w(DOUBLE_HEIGHT)
         w(text(totalStr))
-        w(NORMAL_SIZE)
         w(BOLD_OFF)
-        w(text(DIV.trimEnd()))
+
+        w(text(BILL_DIV))
 
         w(feed())
         w(FULL_CUT)

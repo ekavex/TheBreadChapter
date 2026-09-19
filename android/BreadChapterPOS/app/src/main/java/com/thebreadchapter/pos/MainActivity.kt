@@ -37,8 +37,17 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
         setupSettingsButton()
-        requestBluetoothPermissions()
+
+        // Print bridge is opt-in per device (SettingsActivity.KEY_BRIDGE_ENABLED,
+        // default off) so installing/updating the app on a new staff phone never
+        // silently turns it into a second poller fighting the dedicated bridge
+        // phone over the same Bluetooth printers.
+        if (isPrintBridgeEnabled()) requestBluetoothPermissions()
     }
+
+    private fun isPrintBridgeEnabled(): Boolean =
+        getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE)
+            .getBoolean(SettingsActivity.KEY_BRIDGE_ENABLED, false)
 
     private fun setupWebView() {
         webView = findViewById(R.id.webView)

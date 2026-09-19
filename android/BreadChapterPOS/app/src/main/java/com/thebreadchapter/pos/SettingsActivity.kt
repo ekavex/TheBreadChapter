@@ -26,6 +26,11 @@ class SettingsActivity : AppCompatActivity() {
         const val KEY_KITCHEN_MAC    = "kitchen_mac"
         const val KEY_BEVERAGE_MAC   = "beverage_mac"
         const val KEY_BRIDGE_TOKEN   = "bridge_token"
+        // Per-device opt-in for the print bridge - default OFF. Only the one
+        // phone wired to the printers should ever have this on; every other
+        // staff phone must never poll /api/pos/print-jobs at all, or it fights
+        // the dedicated bridge for the same exclusive Bluetooth connections.
+        const val KEY_BRIDGE_ENABLED = "bridge_enabled"
         // Pine Labs Application ID - provisioned by Pine Labs for this billing app
         const val KEY_PINE_APP_ID    = "pine_app_id"
         // Auto-login credentials stored for POS kiosk convenience
@@ -49,6 +54,7 @@ class SettingsActivity : AppCompatActivity() {
 
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
 
+        val swBridgeEnabled = findViewById<Switch>(R.id.swBridgeEnabled)
         val etUrl     = findViewById<EditText>(R.id.etServerUrl)
         val etStation = findViewById<EditText>(R.id.etStationFilter)
         val spKitchen = findViewById<Spinner>(R.id.spKitchenPrinter)
@@ -70,6 +76,7 @@ class SettingsActivity : AppCompatActivity() {
         spBev.adapter = adapter
 
         // Load saved prefs
+        swBridgeEnabled.isChecked = prefs.getBoolean(KEY_BRIDGE_ENABLED, false)
         etUrl.setText(prefs.getString(KEY_SERVER_URL, "https://automation.thebreadchapter.in"))
         etStation.setText(prefs.getString(KEY_STATION, "all"))
         etToken.setText(prefs.getString(KEY_BRIDGE_TOKEN, ""))
@@ -108,7 +115,10 @@ class SettingsActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
+            val bridgeEnabled = swBridgeEnabled.isChecked
+
             prefs.edit {
+                putBoolean(KEY_BRIDGE_ENABLED, bridgeEnabled)
                 putString(KEY_SERVER_URL, url)
                 putString(KEY_STATION, station)
                 putString(KEY_KITCHEN_MAC, kitchen?.mac ?: "")
@@ -122,10 +132,14 @@ class SettingsActivity : AppCompatActivity() {
             // Re-initialise Pine SDK if the Application ID was just set.
             (application as? BreadChapterApp)?.tryInitPineSdk()
 
+            // Only ever run the bridge on this device if it was explicitly
+            // switched on above - never start it just because settings were
+            // saved, or every staff phone would end up polling the printers.
             stopService(Intent(this, PrintBridgeService::class.java))
-            startService(Intent(this, PrintBridgeService::class.java))
+            if (bridgeEnabled) startService(Intent(this, PrintBridgeService::class.java))
 
-            Toast.makeText(this, "Saved. Bridge restarted.", Toast.LENGTH_SHORT).show()
+            val msg = if (bridgeEnabled) "Saved. Bridge running on this device." else "Saved. Bridge is off on this device."
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
             finish()
         }
     }

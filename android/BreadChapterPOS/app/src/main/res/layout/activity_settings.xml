@@ -19,6 +19,43 @@
             android:textSize="24sp"
             android:textStyle="bold" />
 
+        <!-- Print bridge on/off - must be on for exactly ONE device (the phone
+             wired to the printers). Every other staff phone should leave this
+             off so it never polls the server for print jobs. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Print bridge on this device"
+                android:textColor="@color/colorPrimary"
+                android:textStyle="bold" />
+
+            <Switch
+                android:id="@+id/swBridgeEnabled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="Turn this on for only ONE phone - the one connected to the printers. Leave it off on every other staff phone."
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="8dp"
+            android:background="@color/divider" />
+
         <!-- Server URL -->
         <TextView
             style="@style/SettingsLabel"

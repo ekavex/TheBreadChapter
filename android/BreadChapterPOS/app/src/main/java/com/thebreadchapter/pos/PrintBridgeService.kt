@@ -172,11 +172,37 @@ class PrintBridgeService : Service() {
         return json.optJSONArray("data") ?: JSONArray()
     }
 
+    // The print has already physically happened by the time this is called -
+    // losing this confirmation (unlike losing the original job fetch) means the
+    // server's stale-reclaim will hand the same ticket out again in 45s and
+    // cause a genuine second physical print. A transient network blip here is
+    // worth retrying hard before letting that happen.
+    private val CONFIRM_BACKOFF_MS = longArrayOf(500, 1500, 3000)
+
     private fun markJobDone(serverUrl: String, jobId: String, token: String) {
         val url = "$serverUrl/api/pos/print-jobs/$jobId?token=$token"
         val body = "{}".toRequestBody("application/json".toMediaType())
         val req = Request.Builder().url(url).patch(body).build()
-        http.newCall(req).execute().close()
+
+        var lastError: Exception? = null
+        for (attempt in 0..CONFIRM_BACKOFF_MS.size) {
+            try {
+                http.newCall(req).execute().use { resp ->
+                    // 404 means the job is already marked done - e.g. a previous
+                    // attempt's PATCH landed but its response was lost. Treat
+                    // that as success rather than retrying forever.
+                    if (resp.isSuccessful || resp.code == 404) return
+                    lastError = IOException("Confirm returned ${resp.code}")
+                }
+            } catch (e: Exception) {
+                lastError = e
+            }
+            if (attempt < CONFIRM_BACKOFF_MS.size) {
+                AppLogManager.log("⚠ Confirm for $jobId failed (${lastError?.message}), retrying…")
+                Thread.sleep(CONFIRM_BACKOFF_MS[attempt])
+            }
+        }
+        throw lastError ?: IOException("Confirm failed for unknown reason")
     }
 
     // ── Print one job ─────────────────────────────────────────────────────────
