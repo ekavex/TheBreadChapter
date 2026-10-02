@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { recordPrintEvent } from '@/lib/printLog'
+import { rupeesToPaisa } from '@/lib/money'
 
 // How long a job can sit at 'processing' (claimed by the bridge, never
 // confirmed) before it's treated as stuck and put back to 'queued' for
@@ -95,6 +96,8 @@ export async function GET(req: NextRequest) {
         c.job_type           AS "jobType",
         c.taken_by           AS "takenBy",
         o.total_paisa        AS "amountPaisa",
+        o.subtotal           AS "subtotal",
+        o.tax_amount         AS "taxAmount",
         o.customer_note      AS "customerNote",
         COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"
       FROM claimed c
@@ -102,10 +105,19 @@ export async function GET(req: NextRequest) {
       LEFT JOIN tables t ON t.id = o.table_id
     `
 
-    // For bill_qr jobs, attach the pre-built UPI URL with the order total.
+    // For bill_qr jobs, attach the pre-built UPI URL plus the subtotal/GST
+    // split (in paisa) so the printer can render CGST/SGST rows that always
+    // agree with the order's own already-billed total - not a live re-read
+    // of the cafe's current tax setting, which could drift from what this
+    // specific order was actually billed at.
     const data = (rows as Record<string, unknown>[]).map((row) => {
       if (row['jobType'] === 'bill_qr') {
-        return { ...row, upiUrl: buildUpiUrl(Number(row['amountPaisa'])) }
+        return {
+          ...row,
+          upiUrl: buildUpiUrl(Number(row['amountPaisa'])),
+          subtotalPaisa: rupeesToPaisa(Number(row['subtotal'] ?? 0)),
+          taxAmountPaisa: rupeesToPaisa(Number(row['taxAmount'] ?? 0)),
+        }
       }
       return row
     })

@@ -241,8 +241,10 @@ class PrintBridgeService : Service() {
             AppLogManager.log("Printing $jobId ($station / $jobType) to $targetMac")
 
             val payload = if (jobType == "bill_qr") {
-                val upiUrl      = job.optString("upiUrl", "")
-                val amountPaisa = job.optLong("amountPaisa", 0L)
+                val upiUrl        = job.optString("upiUrl", "")
+                val amountPaisa   = job.optLong("amountPaisa", 0L)
+                val subtotalPaisa = job.optLong("subtotalPaisa", 0L)
+                val taxAmountPaisa = job.optLong("taxAmountPaisa", 0L)
                 val items = (0 until itemsJson.length()).map { i ->
                     val obj = itemsJson.getJSONObject(i)
                     val addonArray = obj.optJSONArray("addons")
@@ -256,7 +258,10 @@ class PrintBridgeService : Service() {
                         "addons"   to addonNames,
                     )
                 }
-                EscPosHelper.buildBillWithQr(tableLabel, orderId, items, amountPaisa, upiUrl, customerNote, logoBitmap)
+                EscPosHelper.buildBillWithQr(
+                    tableLabel, orderId, items, amountPaisa, upiUrl, customerNote, logoBitmap,
+                    subtotalPaisa = subtotalPaisa, taxAmountPaisa = taxAmountPaisa,
+                )
             } else {
                 val items = (0 until itemsJson.length()).map { i ->
                     val obj = itemsJson.getJSONObject(i)

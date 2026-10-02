@@ -48,6 +48,13 @@ object EscPosHelper {
     private fun padRight(s: String, len: Int): String =
         if (s.length >= len) s.substring(0, len) else s + " ".repeat(len - s.length)
 
+    // Formats a GST-split percentage without a pointless trailing ".0"
+    // (2.5% CGST, but plain 6% / 9% CGST for 12%/18% GST).
+    private fun formatPercent(value: Double): String {
+        val oneDecimal = "%.1f".format(value)
+        return if (oneDecimal.endsWith(".0")) oneDecimal.dropLast(2) else oneDecimal
+    }
+
     // Returns a left+right row that fills exactly `cols` characters.
     private fun rowLine(left: String, right: String, cols: Int = COLS): String {
         val space = cols - left.length - right.length
@@ -275,6 +282,11 @@ object EscPosHelper {
         upiUrl: String,
         customerNote: String? = null,
         logo: Bitmap? = null,
+        // GST split (CGST/SGST), both in paisa, frozen on the order at bill
+        // time - not re-read from live settings, so the printed breakdown
+        // always agrees with TOTAL even if the cafe's tax % changes later.
+        subtotalPaisa: Long = 0,
+        taxAmountPaisa: Long = 0,
     ): ByteArray {
         val out = ByteArrayOutputStream()
         fun w(b: ByteArray) = out.write(b)
@@ -347,6 +359,22 @@ object EscPosHelper {
         w(ALIGN_CENTER)
         w(text(BILL_DIV))
         w(ALIGN_LEFT)
+
+        // ── CGST / SGST ───────────────────────────────────────────────────────
+        // Split straight from the order's own already-billed subtotal/tax -
+        // the existing GST % is never re-read or re-applied here, just halved.
+        if (taxAmountPaisa > 0) {
+            val cgstPaisa = taxAmountPaisa / 2
+            val sgstPaisa = taxAmountPaisa - cgstPaisa // absorbs the odd paisa so CGST+SGST == taxAmountPaisa
+            val halfPercent = if (subtotalPaisa > 0) (taxAmountPaisa * 100.0 / subtotalPaisa) / 2 else 0.0
+            val percentStr = formatPercent(halfPercent)
+            printPricedLine(::w, "$percentStr% CGST", "Rs. %.2f".format(cgstPaisa / 100.0), BILL_COLS)
+            printPricedLine(::w, "$percentStr% SGST", "Rs. %.2f".format(sgstPaisa / 100.0), BILL_COLS)
+
+            w(ALIGN_CENTER)
+            w(text(BILL_DIV))
+            w(ALIGN_LEFT)
+        }
 
         // ── Total ─────────────────────────────────────────────────────────────
         w(BOLD_ON)
