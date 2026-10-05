@@ -18,6 +18,9 @@ android/**/build/
 android/**/app/release/
 android/**/.idea/
 android/**/local.properties
+android/**/keystore.properties
+*.jks
+*.keystore
 android/**/build/reports/
 .sample.env
 breadchapter.jks
