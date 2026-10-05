@@ -222,8 +222,8 @@ class PrintBridgeService : Service() {
         val itemsJson    = job.getJSONArray("items")
         val customerNote = if (job.has("customerNote") && !job.isNull("customerNote")) job.getString("customerNote") else null
         val takenBy = if (job.has("takenBy") && !job.isNull("takenBy")) job.getString("takenBy") else null
-        // Human-readable bill number (e.g. ORD-0042). Absent from older servers.
-        val orderNumber = if (job.has("orderNumber") && !job.isNull("orderNumber")) job.getString("orderNumber") else null
+        // Human-readable order number (e.g. ORD-0042). Absent from older servers.
+        val orderNumber = job.optStringOrNull("orderNumber")
 
         val targetMac = when (station.lowercase()) {
             "kitchen" -> kitchenMac
@@ -263,7 +263,13 @@ class PrintBridgeService : Service() {
                 EscPosHelper.buildBillWithQr(
                     tableLabel, orderId, items, amountPaisa, upiUrl, customerNote, logoBitmap,
                     subtotalPaisa = subtotalPaisa, taxAmountPaisa = taxAmountPaisa,
-                    billNo = orderNumber,
+                    billNo      = job.optStringOrNull("billNumber"),
+                    orderNumber = orderNumber,
+                    staffName   = job.optStringOrNull("staffName"),
+                    fssaiNumber = job.optStringOrNull("fssaiNumber"),
+                    paid        = job.optBoolean("paid", false),
+                    paymentMode = job.optStringOrNull("paymentMode"),
+                    paymentRef  = job.optStringOrNull("paymentRef"),
                 )
             } else {
                 val items = (0 until itemsJson.length()).map { i ->
@@ -290,6 +296,10 @@ class PrintBridgeService : Service() {
             AppLogManager.log("✖ $err")
         }
     }
+
+    // Optional string field: null when missing, JSON null or blank.
+    private fun JSONObject.optStringOrNull(key: String): String? =
+        if (has(key) && !isNull(key)) getString(key).takeIf { it.isNotBlank() } else null
 
     // ── Bluetooth ─────────────────────────────────────────────────────────────
     // Sockets are cached per MAC and reused across jobs. A job only pays the

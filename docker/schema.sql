@@ -472,6 +472,7 @@ CREATE TABLE public.orders (
     billed_at timestamp with time zone,
     stock_deducted_at timestamp with time zone,
     last_reconciled_at timestamp with time zone,
+    bill_number text,
     CONSTRAINT orders_pos_status_check CHECK ((pos_status = ANY (ARRAY['OPEN'::text, 'KOT_SENT'::text, 'BILLED'::text, 'AWAITING_PAYMENT'::text, 'PAID'::text, 'PAYMENT_FAILED'::text, 'REQUIRES_VERIFICATION'::text, 'CANCELLED'::text])))
 );
 
@@ -1159,6 +1160,26 @@ CREATE TABLE IF NOT EXISTS public.print_log (
 
 CREATE INDEX IF NOT EXISTS idx_print_log_order_created ON public.print_log USING btree (order_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_print_log_created ON public.print_log USING btree (created_at DESC);
+
+
+--
+-- Bill numbers (supabase/migrations/011_bill_numbers.sql): a per-financial-year
+-- invoice series (TBC/26-27/0001), separate from orders.order_number.
+--
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_orders_bill_number
+    ON public.orders USING btree (cafe_id, bill_number)
+    WHERE (bill_number IS NOT NULL);
+
+-- One row per cafe per financial year ("26-27"); last_value is the last
+-- sequence number handed out. Incremented inside the billing transaction.
+CREATE TABLE IF NOT EXISTS public.bill_number_counters (
+    cafe_id        uuid    NOT NULL,
+    financial_year text    NOT NULL,
+    last_value     integer DEFAULT 0 NOT NULL,
+    CONSTRAINT bill_number_counters_pkey PRIMARY KEY (cafe_id, financial_year),
+    CONSTRAINT bill_number_counters_cafe_id_fkey FOREIGN KEY (cafe_id) REFERENCES public.cafes(id) ON DELETE CASCADE
+);
 
 
 --

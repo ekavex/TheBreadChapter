@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { rupeesToPaisa } from '@/lib/money'
 import { DEMO_CAFE_ID } from '@/lib/constants'
+import { nextBillNumber } from '@/lib/billNumber'
 import type { CafeSettings } from '@/lib/types'
 
 async function fetchOrderWithItems(orderId: string) {
@@ -18,6 +19,8 @@ async function fetchOrderWithItems(orderId: string) {
 // POST /api/pos/orders/[id]/bill - Module 5 "Bill Generation & Printing":
 // itemised total, table → billed. Safe to re-generate while still BILLED
 // (e.g. a network retry) - recomputes from current order_items either way.
+// The first bill also assigns the order its bill number (TBC/26-27/0001);
+// re-generating keeps the number it already has.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionGuard = await requireDashboardSession(req)
   if (sessionGuard) return sessionGuard
@@ -43,11 +46,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const totalAmount = subtotal + taxAmount + serviceCharge
     const totalPaisa = rupeesToPaisa(totalAmount)
 
-    // Totals and table status move together - a crash between them would
-    // leave a billed table with a stale total.
+    // Totals, bill number and table status move together - a crash between
+    // them would leave a billed table with a stale total or a burnt number.
     const now = new Date().toISOString()
-    await sql.begin(async (tx) => {
-      if (order.pos_status === 'KOT_SENT' && order.table_id) {
+    const billed = await sql.begin(async (tx) => {
+      // Row lock: a concurrent bill request (double-tap, retry) waits here, then
+      // sees the bill number this one assigned instead of taking a second one.
+      const [locked] = await tx`
+        SELECT pos_status, bill_number FROM orders WHERE id = ${params.id} FOR UPDATE
+      `
+      if (!locked || !['KOT_SENT', 'BILLED'].includes(locked.pos_status)) return false
+
+      const billNumber: string = locked.bill_number ?? (await nextBillNumber(tx, DEMO_CAFE_ID))
+
+      if (locked.pos_status === 'KOT_SENT' && order.table_id) {
         await tx`UPDATE tables SET status = 'billed' WHERE id = ${order.table_id}`
       }
       await tx`
@@ -57,11 +69,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             service_charge = ${serviceCharge},
             total_amount = ${totalAmount},
             total_paisa = ${totalPaisa},
+            bill_number = ${billNumber},
             pos_status = 'BILLED',
             billed_at = ${now}
-        WHERE id = ${params.id} AND pos_status IN ('KOT_SENT', 'BILLED')
+        WHERE id = ${params.id}
       `
+      return true
     })
+    if (!billed) {
+      return NextResponse.json({ data: null, error: 'Order changed while billing - refresh and retry' }, { status: 409 })
+    }
 
     const updatedOrder = await fetchOrderWithItems(params.id)
     return NextResponse.json({ data: updatedOrder, error: null })

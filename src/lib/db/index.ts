@@ -85,6 +85,26 @@ async function runMigrations(sql: postgres.Sql) {
     await sql`CREATE INDEX IF NOT EXISTS idx_print_log_order_created ON public.print_log USING btree (order_id, created_at DESC)`
     await sql`CREATE INDEX IF NOT EXISTS idx_print_log_created ON public.print_log USING btree (created_at DESC)`
   } catch { /* Non-fatal */ }
+  try {
+    // 013: bill numbers (supabase/migrations/011_bill_numbers.sql). Mirrored
+    // here for the same reason as 012 - bill generation writes these, so it
+    // must not depend on the instrumentation runner alone.
+    await sql`ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS bill_number text`
+    await sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_orders_bill_number
+          ON public.orders USING btree (cafe_id, bill_number)
+          WHERE (bill_number IS NOT NULL)
+    `
+    await sql`
+      CREATE TABLE IF NOT EXISTS public.bill_number_counters (
+          cafe_id        uuid    NOT NULL,
+          financial_year text    NOT NULL,
+          last_value     integer DEFAULT 0 NOT NULL,
+          CONSTRAINT bill_number_counters_pkey PRIMARY KEY (cafe_id, financial_year),
+          CONSTRAINT bill_number_counters_cafe_id_fkey FOREIGN KEY (cafe_id) REFERENCES public.cafes(id) ON DELETE CASCADE
+      )
+    `
+  } catch { /* Non-fatal */ }
 }
 
 export function getDb(): postgres.Sql {

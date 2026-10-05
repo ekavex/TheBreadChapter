@@ -61,6 +61,24 @@ export type Database = {
         }
         Relationships: []
       }
+      bill_number_counters: {
+        Row: {
+          cafe_id: string
+          financial_year: string
+          last_value: number
+        }
+        Insert: {
+          cafe_id: string
+          financial_year: string
+          last_value?: number
+        }
+        Update: {
+          cafe_id?: string
+          financial_year?: string
+          last_value?: number
+        }
+        Relationships: []
+      }
       staff_notifications: {
         Row: {
           id: string
@@ -471,6 +489,7 @@ export type Database = {
       orders: {
         Row: {
           billed_at: string | null
+          bill_number: string | null
           cafe_id: string
           completed_at: string | null
           confirmed_at: string | null
@@ -501,6 +520,7 @@ export type Database = {
         }
         Insert: {
           billed_at?: string | null
+          bill_number?: string | null
           cafe_id: string
           completed_at?: string | null
           confirmed_at?: string | null
@@ -531,6 +551,7 @@ export type Database = {
         }
         Update: {
           billed_at?: string | null
+          bill_number?: string | null
           cafe_id?: string
           completed_at?: string | null
           confirmed_at?: string | null

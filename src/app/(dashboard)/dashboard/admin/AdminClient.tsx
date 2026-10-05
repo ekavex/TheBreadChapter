@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, CreditCard, Percent } from 'lucide-react'
+import { Plus, Trash2, Edit2, X, Check, ShieldCheck, User, Users, Printer, CreditCard, Percent, Receipt } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import PasswordInput from '@/components/PasswordInput'
@@ -99,6 +99,10 @@ export default function AdminClient() {
   const [taxLoading, setTaxLoading] = useState(true)
   const [taxSaving, setTaxSaving] = useState(false)
 
+  // ── Bill details (printed on customer bills) ─────────────────────
+  const [fssaiNumber, setFssaiNumber] = useState('')
+  const [fssaiSaving, setFssaiSaving] = useState(false)
+
   // ── Terminal (A910S) management ──────────────────────────────────
   const [terminals, setTerminals] = useState<TerminalRow[]>([])
   const [termLoading, setTermLoading] = useState(true)
@@ -185,6 +189,7 @@ export default function AdminClient() {
         if (j.data) {
           setTaxPercent(String(j.data.tax_percent ?? 0))
           setServiceChargePercent(String(j.data.service_charge_percent ?? 0))
+          setFssaiNumber(j.data.fssai_number ?? '')
         }
       })
       .finally(() => setTaxLoading(false))
@@ -207,6 +212,29 @@ export default function AdminClient() {
       toast.success('Tax settings saved')
     } finally {
       setTaxSaving(false)
+    }
+  }
+
+  async function saveBillDetails(e: React.FormEvent) {
+    e.preventDefault()
+    const fssai = fssaiNumber.replace(/\s+/g, '')
+    if (fssai && !/^\d{14}$/.test(fssai)) {
+      toast.error('FSSAI number must be exactly 14 digits')
+      return
+    }
+    setFssaiSaving(true)
+    try {
+      const res = await fetch('/api/admin/settings/cafe', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fssai_number: fssai }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Failed to save'); return }
+      setFssaiNumber(json.data?.fssai_number ?? '')
+      toast.success(fssai ? 'FSSAI number saved' : 'FSSAI number removed from bills')
+    } finally {
+      setFssaiSaving(false)
     }
   }
 
@@ -655,6 +683,45 @@ export default function AdminClient() {
               className="px-5 py-2 rounded-xl bg-ink text-surface text-sm font-medium disabled:opacity-50"
             >
               {taxSaving ? 'Saving…' : 'Save tax settings'}
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* ── Bill Details ──────────────────────────────────────────────────── */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Receipt size={18} className="text-ink-muted" />
+          <h2 className="font-display text-xl font-bold text-ink">Bill Details</h2>
+        </div>
+        <p className="text-sm text-ink-muted mb-4">
+          Printed on every customer bill. Leave the FSSAI number empty to leave it off the bill.
+        </p>
+        {taxLoading ? (
+          <div className="p-6 text-center text-sm text-ink-faint">Loading…</div>
+        ) : (
+          <form onSubmit={saveBillDetails} className="p-4 bg-surface-raised rounded-2xl border border-ink/8 space-y-4">
+            <div className="sm:max-w-sm">
+              <label htmlFor="fssai-number" className="block text-xs font-medium text-ink-muted mb-1">FSSAI licence number</label>
+              <input
+                id="fssai-number"
+                type="text" inputMode="numeric" maxLength={14} autoComplete="off"
+                className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm text-ink font-mono tracking-wide focus:outline-none focus:ring-2 focus:ring-brand-400"
+                value={fssaiNumber}
+                onChange={e => setFssaiNumber(e.target.value.replace(/\D/g, ''))}
+                placeholder="14-digit number"
+              />
+              <p className="text-[10px] text-ink-faint mt-0.5">
+                {fssaiNumber.length > 0 && fssaiNumber.length < 14
+                  ? `${fssaiNumber.length}/14 digits`
+                  : 'Shown under the GST number on the bill'}
+              </p>
+            </div>
+            <button
+              type="submit" disabled={fssaiSaving}
+              className="px-5 py-2 rounded-xl bg-ink text-surface text-sm font-medium disabled:opacity-50"
+            >
+              {fssaiSaving ? 'Saving…' : 'Save bill details'}
             </button>
           </form>
         )}

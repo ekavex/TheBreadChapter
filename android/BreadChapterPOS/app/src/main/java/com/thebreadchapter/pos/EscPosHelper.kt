@@ -287,9 +287,19 @@ object EscPosHelper {
         // always agrees with TOTAL even if the cafe's tax % changes later.
         subtotalPaisa: Long = 0,
         taxAmountPaisa: Long = 0,
-        // Sequential order number shown to the customer as the bill number;
-        // falls back to the short order id when the server didn't send one.
+        // Bill (invoice) number, e.g. TBC/26-27/0001 - null for orders billed
+        // before bill numbers existed, in which case the line is left out.
         billNo: String? = null,
+        // Order number, e.g. ORD-0042; falls back to the short order id.
+        orderNumber: String? = null,
+        // Waiter who took the order (first KOT).
+        staffName: String? = null,
+        // Only printed when an admin has set one.
+        fssaiNumber: String? = null,
+        // Already paid: print PAYMENT SUCCESSFUL instead of the Scan & Pay QR.
+        paid: Boolean = false,
+        paymentMode: String? = null,
+        paymentRef: String? = null,
     ): ByteArray {
         val out = ByteArrayOutputStream()
         fun w(b: ByteArray) = out.write(b)
@@ -316,6 +326,9 @@ object EscPosHelper {
         // ── Legal name / GST / address ───────────────────────────────────────
         for (line in wrapText("The Bread Chapter (ANV HOSPITALITY PVT. LTD)", BILL_COLS)) w(text(line))
         for (line in wrapText("GST NO - 27ABFCA1460M1ZK", BILL_COLS)) w(text(line))
+        if (!fssaiNumber.isNullOrBlank()) {
+            for (line in wrapText("FSSAI NO - ${fssaiNumber.trim()}", BILL_COLS)) w(text(line))
+        }
         for (line in wrapText(
             "ADDRESS - VEDAS CENTRE DP ROAD NR SHIV SAGAR AUNDH PUNE, Aundh, Pune Municipal Corporation, Maharashtra - 411007",
             BILL_COLS,
@@ -328,10 +341,18 @@ object EscPosHelper {
         w(text("Table: $tableLabel"))
         w(BOLD_OFF)
 
-        // ── Bill no / time / date ────────────────────────────────────────────
-        val billLabel = if (!billNo.isNullOrBlank()) "Bill No: ${billNo.trim()}" else "Order #$shortId"
+        // ── Bill no / order no / staff / time / date ─────────────────────────
+        val orderLabel = if (!orderNumber.isNullOrBlank()) "Order No: ${orderNumber.trim()}" else "Order #$shortId"
         w(ALIGN_LEFT)
-        w(text(rowLine(billLabel, "$timeStr   $dateStr", BILL_COLS)))
+        if (!billNo.isNullOrBlank()) {
+            w(text(rowLine("Bill No: ${billNo.trim()}", dateStr, BILL_COLS)))
+            w(text(rowLine(orderLabel, timeStr, BILL_COLS)))
+        } else {
+            w(text(rowLine(orderLabel, "$timeStr   $dateStr", BILL_COLS)))
+        }
+        if (!staffName.isNullOrBlank()) {
+            for (line in wrapText("Staff: ${staffName.trim()}", BILL_COLS)) w(text(line))
+        }
 
         w(ALIGN_CENTER)
         w(text(BILL_DIV))
@@ -390,16 +411,32 @@ object EscPosHelper {
         w(ALIGN_CENTER)
         w(text(BILL_DIV))
 
-        // ── QR code ───────────────────────────────────────────────────────────
-        w(BOLD_ON)
-        w(text("Scan & Pay via UPI"))
-        w(BOLD_OFF)
-        w(LF)
-        w(qrCode(upiUrl, moduleSize = QR_MODULE_SIZE))
-        w(LF)
-        w(BOLD_ON)
-        w(text(totalStr))
-        w(BOLD_OFF)
+        if (paid) {
+            // ── Payment confirmation (already paid - no QR to scan) ─────────
+            w(BOLD_ON)
+            w(FONT_B_DOUBLE_HEIGHT)
+            w(text("PAYMENT SUCCESSFUL"))
+            w(FONT_B_NORMAL)
+            w(BOLD_OFF)
+            if (!paymentMode.isNullOrBlank()) w(text("Paid via ${paymentMode.trim()}"))
+            if (!paymentRef.isNullOrBlank()) {
+                for (line in wrapText("Ref: ${paymentRef.trim()}", BILL_COLS)) w(text(line))
+            }
+            w(BOLD_ON)
+            w(text(totalStr))
+            w(BOLD_OFF)
+        } else {
+            // ── QR code ─────────────────────────────────────────────────────
+            w(BOLD_ON)
+            w(text("Scan & Pay via UPI"))
+            w(BOLD_OFF)
+            w(LF)
+            w(qrCode(upiUrl, moduleSize = QR_MODULE_SIZE))
+            w(LF)
+            w(BOLD_ON)
+            w(text(totalStr))
+            w(BOLD_OFF)
+        }
 
         w(text(BILL_DIV))
 

@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { recordPrintEvent } from '@/lib/printLog'
 import { rupeesToPaisa } from '@/lib/money'
+import { getBillPrintDetails } from '@/lib/billDetails'
 
 // How long a job can sit at 'processing' (claimed by the bridge, never
 // confirmed) before it's treated as stuck and put back to 'queued' for
@@ -110,18 +111,22 @@ export async function GET(req: NextRequest) {
     // split (in paisa) so the printer can render CGST/SGST rows that always
     // agree with the order's own already-billed total - not a live re-read
     // of the cafe's current tax setting, which could drift from what this
-    // specific order was actually billed at.
-    const data = (rows as Record<string, unknown>[]).map((row) => {
+    // specific order was actually billed at. Also the bill header details
+    // (bill no, staff, FSSAI) and, for an already-paid order, the payment
+    // mode/reference that replace the Scan & Pay QR.
+    const data = await Promise.all((rows as Record<string, unknown>[]).map(async (row) => {
       if (row['jobType'] === 'bill_qr') {
+        const details = await getBillPrintDetails(sql, String(row['orderId']))
         return {
           ...row,
+          ...details,
           upiUrl: buildUpiUrl(Number(row['amountPaisa'])),
           subtotalPaisa: rupeesToPaisa(Number(row['subtotal'] ?? 0)),
           taxAmountPaisa: rupeesToPaisa(Number(row['taxAmount'] ?? 0)),
         }
       }
       return row
-    })
+    }))
 
     return NextResponse.json({ data, error: null })
   } catch (err) {

@@ -35,6 +35,8 @@ export type CafeSettings = {
   service_charge_percent: number
   show_social_proof: boolean
   languages: string[]
+  // Printed on the bill only when set (admin-managed, Admin → Bill Details).
+  fssai_number?: string
 }
 
 export type Cafe = Omit<Tables['cafes']['Row'], 'settings'> & { settings: CafeSettings }

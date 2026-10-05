@@ -3,12 +3,18 @@ import { getDb } from '@/lib/db'
 import { requireDashboardSession } from '@/lib/auth/requireDashboardSession'
 import { format } from 'date-fns'
 import { DEMO_CAFE_ID } from '@/lib/constants'
+import { getBillPrintDetails, type BillPrintDetails } from '@/lib/billDetails'
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function buildReceiptHtml(order: Record<string, unknown>, items: Record<string, unknown>[], table: Record<string, unknown> | null): string {
+function buildReceiptHtml(
+  order: Record<string, unknown>,
+  items: Record<string, unknown>[],
+  table: Record<string, unknown> | null,
+  details: BillPrintDetails | null,
+): string {
   const tableLabel = (table?.label as string) ?? (table?.number ? `Table ${table.number}` : 'Takeaway')
   const note = order.customer_note as string | null | undefined
 
@@ -29,9 +35,20 @@ function buildReceiptHtml(order: Record<string, unknown>, items: Record<string, 
     ? `<div class="div-line"></div><div class="note"><b>Note:</b> ${escHtml(note.trim())}</div>`
     : ''
 
-  const payMethod = order.payment_status === 'paid'
-    ? `Paid · ${(order.payment_method as string) ?? 'UPI'}`
+  const payMethod = details?.paid
+    ? `<b>PAYMENT SUCCESSFUL</b>${details.paymentMode ? ` · ${details.paymentMode}` : ''}${
+        details.paymentRef ? `<br>Ref: ${escHtml(details.paymentRef)}` : ''}`
     : 'Unpaid'
+
+  const fssaiLine = details?.fssaiNumber
+    ? `<div class="meta">FSSAI No: ${escHtml(details.fssaiNumber)}</div>`
+    : ''
+  const billNoLine = details?.billNumber
+    ? `<div class="meta">Bill No: ${escHtml(details.billNumber)}</div>`
+    : ''
+  const staffLine = details?.staffName
+    ? `<div class="meta">Staff: ${escHtml(details.staffName)}</div>`
+    : ''
 
   return `<!DOCTYPE html>
 <html>
@@ -59,9 +76,12 @@ function buildReceiptHtml(order: Record<string, unknown>, items: Record<string, 
 </head>
 <body>
   <div class="cafe-name">THE BREAD CHAPTER</div>
+  ${fssaiLine}
   <div class="div-line"></div>
   <div class="meta"><b>${tableLabel}</b></div>
-  <div class="meta">Bill No: ${order.order_number}</div>
+  ${billNoLine}
+  <div class="meta">Order No: ${escHtml(String(order.order_number ?? ''))}</div>
+  ${staffLine}
   <div class="meta">${format(new Date(order.created_at as string), 'd MMM yyyy, h:mm a')}</div>
   <div class="div-line"></div>
   <div class="section-label">Items</div>
@@ -90,10 +110,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       ? await sql`SELECT * FROM tables WHERE id = ${order.table_id}`
       : [undefined]
 
+    const details = await getBillPrintDetails(sql, params.id)
+
     const html = buildReceiptHtml(
       order as Record<string, unknown>,
       items as Record<string, unknown>[],
       (table ?? null) as Record<string, unknown> | null,
+      details,
     )
     const filename = `receipt-${order.order_number}.html`
 
