@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Download } from 'lucide-react'
 import type { ReportData, ReportRange } from '@/lib/reports'
+import DateRangeFilter, { type DateRangeValue } from '@/components/dashboard/DateRangeFilter'
 
 interface Props {
   initial: ReportData
@@ -14,23 +15,57 @@ function fmt(rupees: number): string {
 
 export default function ReportsClient({ initial, ranges }: Props) {
   const [data, setData] = useState<ReportData>(initial)
-  const [range, setRange] = useState<ReportRange>('monthly')
+  const [range, setRange] = useState<ReportRange | 'custom'>('monthly')
+  // The calendar selection - set only while range === 'custom'.
+  const [custom, setCustom] = useState<DateRangeValue | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // Ignores a slow response that lands after a newer selection was made.
+  const latestRequest = useRef(0)
 
-  async function switchRange(r: ReportRange) {
-    if (r === range) return
-    setRange(r)
+  const customQuery = (v: DateRangeValue) => `from=${v.from}&to=${v.to}`
+
+  async function loadReport(url: string) {
+    const requestId = ++latestRequest.current
     setLoading(true)
+    setError(null)
     try {
-      const res = await fetch(`/api/reports/${r}`, { cache: 'no-store' })
+      const res = await fetch(url, { cache: 'no-store' })
       const json = await res.json()
+      if (requestId !== latestRequest.current) return
       if (json.data) setData(json.data)
+      else setError(json.error ?? 'Failed to load report')
+    } catch {
+      if (requestId === latestRequest.current) setError('Failed to load report')
     } finally {
-      setLoading(false)
+      if (requestId === latestRequest.current) setLoading(false)
     }
   }
 
-  const exportUrl = (format: 'csv' | 'excel' | 'pdf') => `/api/reports/${range}/export?format=${format}`
+  function switchRange(r: ReportRange) {
+    if (r === range) return
+    setRange(r)
+    setCustom(null)
+    void loadReport(`/api/reports/${r}`)
+  }
+
+  function applyCustom(v: DateRangeValue | null) {
+    if (!v) {
+      // Cleared - back to the default preset.
+      setCustom(null)
+      setRange('monthly')
+      void loadReport('/api/reports/monthly')
+      return
+    }
+    setCustom(v)
+    setRange('custom')
+    void loadReport(`/api/reports/custom?${customQuery(v)}`)
+  }
+
+  const exportUrl = (format: 'csv' | 'excel' | 'pdf') =>
+    range === 'custom' && custom
+      ? `/api/reports/custom/export?${customQuery(custom)}&format=${format}`
+      : `/api/reports/${range}/export?format=${format}`
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 print-area">
@@ -56,6 +91,9 @@ export default function ReportsClient({ initial, ranges }: Props) {
         </div>
       </div>
 
+      <DateRangeFilter value={custom} onChange={applyCustom} disabled={loading} />
+      {error && <p className="text-sm text-status-overdue no-print">{error}</p>}
+
       {/* Export bar */}
       <div className="flex flex-wrap gap-2 no-print">
         <a href={exportUrl('csv')} download className="flex items-center gap-1.5 rounded-xl border border-ink/10 px-3 py-2 text-sm hover:bg-surface-overlay">
@@ -75,7 +113,9 @@ export default function ReportsClient({ initial, ranges }: Props) {
         <>
           {/* Summary */}
           <section className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
-            <h2 className="font-display font-semibold text-ink mb-4 capitalize">{range} summary</h2>
+            <h2 className="font-display font-semibold text-ink mb-4 capitalize">
+              {range === 'custom' ? 'Selected period summary' : `${range} summary`}
+            </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { l: 'Revenue', v: fmt(data.summary.revenue) },

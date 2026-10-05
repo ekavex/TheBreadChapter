@@ -1,5 +1,7 @@
-import { getPnLData, getAreaAnalytics, getCustomerAnalytics, type PnLData } from '@/lib/analytics'
+import { getPnLData, getPnLDataForWindow, getAreaAnalytics, getCustomerAnalytics } from '@/lib/analytics'
+import { parseDateRange, formatWindowLabel } from '@/lib/dateRange'
 import PnLClient from './PnLClient'
+import AnalyticsDateFilter from './AnalyticsDateFilter'
 import { formatPaisa } from '@/lib/money'
 
 export const metadata = { title: 'Analytics' }
@@ -11,16 +13,27 @@ function formatHour(hour: number): string {
   return `${h12} ${period}`
 }
 
-export default async function AnalyticsPage() {
+interface Props {
+  searchParams: { from?: string; to?: string }
+}
+
+export default async function AnalyticsPage({ searchParams }: Props) {
+  // ?from=&to= (YYYY-MM-DD) narrows everything on the page to that date or
+  // range; without it the page shows its default windows.
+  const parsed = parseDateRange(searchParams.from, searchParams.to)
+  const selected = parsed?.ok ? parsed : null
+  const period = selected?.window ?? 30
+
   // P&L across all four ranges up front - the range switcher is client-side
   // (no refetch). Each range is bounded so this stays light.
-  const [daily, weekly, monthly, yearly, area, customer] = await Promise.all([
+  const [daily, weekly, monthly, yearly, custom, area, customer] = await Promise.all([
     getPnLData('daily'),
     getPnLData('weekly'),
     getPnLData('monthly'),
     getPnLData('yearly'),
-    getAreaAnalytics(30),
-    getCustomerAnalytics(30),
+    selected ? getPnLDataForWindow(selected.window) : Promise.resolve(null),
+    getAreaAnalytics(period),
+    getCustomerAnalytics(period),
   ])
 
   const maxVisitors = Math.max(...area.visitors.map((v) => v.value), 1)
@@ -29,11 +42,18 @@ export default async function AnalyticsPage() {
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-ink">Analytics</h1>
-        <p className="text-ink-muted text-sm mt-0.5">Profit &amp; loss, area, customer · last 30 days</p>
+        <p className="text-ink-muted text-sm mt-0.5">
+          Profit &amp; loss, area, customer · {selected ? formatWindowLabel(selected.window) : 'last 30 days'}
+        </p>
       </div>
 
+      <AnalyticsDateFilter value={selected ? { from: selected.from, to: selected.to } : null} />
+      {parsed && !parsed.ok && (
+        <p className="text-sm text-status-overdue">{parsed.error} - showing the default period instead.</p>
+      )}
+
       {/* P&L - Module 6 */}
-      <PnLClient initial={{ daily, weekly, monthly, yearly }} />
+      <PnLClient initial={{ daily, weekly, monthly, yearly }} custom={custom} />
 
       {/* Area analytics - Module 7 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

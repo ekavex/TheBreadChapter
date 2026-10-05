@@ -1,28 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireManagerOrAdmin } from '@/lib/auth/requireDashboardSession'
-import { getReportData, type ReportRange } from '@/lib/reports'
+import { format } from 'date-fns'
+import { getReportData, getReportDataForWindow, resolveReportRequest } from '@/lib/reports'
 import { reportToCsv, reportToExcelBuffer, reportToPdfBuffer } from '@/lib/reports-export'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/reports/daily|weekly|monthly/export?format=csv|excel|pdf
+// GET /api/reports/custom/export?from=YYYY-MM-DD&to=YYYY-MM-DD&format=...
 // Module 11 export options.
 export async function GET(req: NextRequest, { params }: { params: { range: string } }) {
   const sessionGuard = await requireManagerOrAdmin(req)
   if (sessionGuard) return sessionGuard
 
-  if (!['daily', 'weekly', 'monthly'].includes(params.range)) {
-    return NextResponse.json({ data: null, error: 'range must be daily|weekly|monthly' }, { status: 400 })
+  const searchParams = new URL(req.url).searchParams
+  const resolved = resolveReportRequest(params.range, searchParams)
+  if (!resolved.ok) {
+    return NextResponse.json({ data: null, error: resolved.error }, { status: 400 })
   }
-  const format = new URL(req.url).searchParams.get('format') ?? 'csv'
-  if (!['csv', 'excel', 'pdf'].includes(format)) {
+  const exportFormat = searchParams.get('format') ?? 'csv'
+  if (!['csv', 'excel', 'pdf'].includes(exportFormat)) {
     return NextResponse.json({ data: null, error: 'format must be csv|excel|pdf' }, { status: 400 })
   }
 
-  const data = await getReportData(params.range as ReportRange)
-  const rangeLabel = params.range
+  const data = resolved.range === 'custom'
+    ? await getReportDataForWindow(resolved.window)
+    : await getReportData(resolved.range)
 
-  if (format === 'csv') {
+  // e.g. report-monthly, report-2026-10-05, report-2026-10-01_to_2026-10-05
+  let rangeLabel: string = params.range
+  if (resolved.range === 'custom') {
+    const fromStr = format(resolved.window.from, 'yyyy-MM-dd')
+    const toStr = format(resolved.window.to, 'yyyy-MM-dd')
+    rangeLabel = fromStr === toStr ? fromStr : `${fromStr}_to_${toStr}`
+  }
+
+  if (exportFormat === 'csv') {
     const csv = reportToCsv(data)
     return new NextResponse(csv, {
       headers: {
@@ -32,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: { range: strin
     })
   }
 
-  if (format === 'excel') {
+  if (exportFormat === 'excel') {
     const buf = reportToExcelBuffer(data)
     return new NextResponse(new Uint8Array(buf), {
       headers: {

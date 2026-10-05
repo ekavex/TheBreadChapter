@@ -15,6 +15,9 @@ function fmtMoney(rupees: number): string {
 function reportTitle(data: ReportData): string {
   const from = new Date(data.window.from).toLocaleDateString('en-IN')
   const to = new Date(data.window.to).toLocaleDateString('en-IN')
+  if (data.range === 'custom') {
+    return from === to ? `Smart Cafe - Report for ${from}` : `Smart Cafe - Report (${from} → ${to})`
+  }
   const rangeLabel = data.range.charAt(0).toUpperCase() + data.range.slice(1)
   return `Smart Cafe - ${rangeLabel} report (${from} → ${to})`
 }

@@ -4,9 +4,11 @@ import {
   startOfWeek, endOfWeek, subWeeks,
   startOfMonth, endOfMonth, subMonths,
   startOfYear, endOfYear, subYears,
+  differenceInCalendarDays, eachDayOfInterval, eachMonthOfInterval, max as maxDate, min as minDate,
 } from 'date-fns'
 import { getDb } from '@/lib/db'
 import { DEMO_CAFE_ID } from '@/lib/constants'
+import type { DateWindow } from '@/lib/dateRange'
 
 export interface NamedValue {
   name: string
@@ -24,7 +26,7 @@ export interface PnLRow {
 }
 
 export interface PnLData {
-  range: 'daily' | 'weekly' | 'monthly' | 'yearly'
+  range: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom'
   rows: PnLRow[]
   totals: { revenue: number; ingredientCost: number; profit: number; marginPct: number; orderCount: number }
 }
@@ -82,13 +84,14 @@ export function orderIngredientCost(order: {
   )
 }
 
+type PnLBucket = { start: Date; end: Date; label: string }
+
 export async function getPnLData(
   range: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'monthly'
 ): Promise<PnLData> {
   const today = new Date()
 
-  type Bucket = { start: Date; end: Date; label: string }
-  const buckets: Bucket[] = []
+  const buckets: PnLBucket[] = []
 
   if (range === 'daily') {
     for (let i = 6; i >= 0; i--) {
@@ -118,6 +121,31 @@ export async function getPnLData(
     }
   }
 
+  return buildPnL(range, buckets)
+}
+
+// Custom window: one bar per day for windows up to ~2 months, one per month
+// beyond that (clipped to the window so partial months only count in-range orders).
+const CUSTOM_DAILY_BUCKET_MAX_DAYS = 62
+
+export async function getPnLDataForWindow(win: DateWindow): Promise<PnLData> {
+  const spanDays = differenceInCalendarDays(win.to, win.from) + 1
+  const buckets: PnLBucket[] =
+    spanDays <= CUSTOM_DAILY_BUCKET_MAX_DAYS
+      ? eachDayOfInterval({ start: win.from, end: win.to }).map((d) => ({
+          start: startOfDay(d),
+          end: endOfDay(d),
+          label: d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+        }))
+      : eachMonthOfInterval({ start: win.from, end: win.to }).map((m) => ({
+          start: maxDate([startOfMonth(m), win.from]),
+          end: minDate([endOfMonth(m), win.to]),
+          label: m.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+        }))
+  return buildPnL('custom', buckets)
+}
+
+async function buildPnL(range: PnLData['range'], buckets: PnLBucket[]): Promise<PnLData> {
   const fromISO = buckets[0].start.toISOString()
   const toISO = buckets[buckets.length - 1].end.toISOString()
   const orders = await fetchPaidOrdersWithCost(fromISO, toISO)
@@ -160,11 +188,21 @@ export interface AreaAnalytics {
   peakHourByArea: { area: string; peakHour: { hour: number; count: number } | null }[]
 }
 
-export async function getAreaAnalytics(days = 30): Promise<AreaAnalytics> {
+// `period` is either "last N days" (ending today) or an explicit date window.
+function resolvePeriod(period: number | DateWindow): { fromISO: string; toISO: string } {
+  if (typeof period === 'number') {
+    const today = new Date()
+    return {
+      fromISO: startOfDay(subDays(today, period - 1)).toISOString(),
+      toISO: endOfDay(today).toISOString(),
+    }
+  }
+  return { fromISO: period.from.toISOString(), toISO: period.to.toISOString() }
+}
+
+export async function getAreaAnalytics(period: number | DateWindow = 30): Promise<AreaAnalytics> {
   const sql = getDb()
-  const today = new Date()
-  const fromISO = startOfDay(subDays(today, days - 1)).toISOString()
-  const toISO = endOfDay(today).toISOString()
+  const { fromISO, toISO } = resolvePeriod(period)
 
   const orders = await sql`
     SELECT o.id, o.created_at, s.name AS section_name
@@ -242,10 +280,9 @@ export interface CustomerAnalytics {
   avgBillValue: number
 }
 
-export async function getCustomerAnalytics(days = 30): Promise<CustomerAnalytics> {
+export async function getCustomerAnalytics(period: number | DateWindow = 30): Promise<CustomerAnalytics> {
   const sql = getDb()
-  const today = new Date()
-  const fromISO = startOfDay(subDays(today, days - 1)).toISOString()
+  const { fromISO, toISO } = resolvePeriod(period)
 
   const orders = await sql`
     SELECT o.id, o.created_at, o.total_amount, o.customer_id
@@ -253,6 +290,7 @@ export async function getCustomerAnalytics(days = 30): Promise<CustomerAnalytics
     WHERE o.cafe_id = ${DEMO_CAFE_ID}
       AND o.payment_status = 'paid'
       AND o.created_at >= ${fromISO}
+      AND o.created_at <= ${toISO}
   `
   type ORow = { id: string; created_at: string; total_amount: number; customer_id: string | null }
   type IRow = { order_id: string; name: string; quantity: number }

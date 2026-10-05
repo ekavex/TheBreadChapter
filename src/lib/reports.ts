@@ -3,13 +3,14 @@ import { startOfDay, endOfDay, subDays } from 'date-fns'
 import { getDb } from '@/lib/db'
 import { DEMO_CAFE_ID } from '@/lib/constants'
 import { getCustomerAnalytics, orderIngredientCost } from './analytics'
+import { parseDateRange, type DateWindow } from './dateRange'
 
 export type ReportRange = 'daily' | 'weekly' | 'monthly'
 
 export const REPORT_RANGE_DAYS: Record<ReportRange, number> = { daily: 1, weekly: 7, monthly: 30 }
 
 export interface ReportData {
-  range: ReportRange
+  range: ReportRange | 'custom'
   window: { from: string; to: string }
   summary: {
     revenue: number
@@ -75,12 +76,41 @@ async function getWindowOrders(fromISO: string, toISO: string): Promise<WindowOr
   }))
 }
 
+const REPORT_RANGES: ReportRange[] = ['daily', 'weekly', 'monthly']
+
+// Resolves a `/api/reports/[range]` request: a preset range, or
+// `custom` with `from`/`to` (YYYY-MM-DD) query params.
+export function resolveReportRequest(
+  rangeParam: string,
+  searchParams: URLSearchParams,
+):
+  | { ok: true; range: ReportRange }
+  | { ok: true; range: 'custom'; window: DateWindow }
+  | { ok: false; error: string } {
+  if (rangeParam === 'custom') {
+    const parsed = parseDateRange(searchParams.get('from'), searchParams.get('to'))
+    if (!parsed) return { ok: false, error: 'from (YYYY-MM-DD) is required for a custom range' }
+    if (!parsed.ok) return parsed
+    return { ok: true, range: 'custom', window: parsed.window }
+  }
+  if (!REPORT_RANGES.includes(rangeParam as ReportRange)) {
+    return { ok: false, error: 'range must be daily|weekly|monthly|custom' }
+  }
+  return { ok: true, range: rangeParam as ReportRange }
+}
+
 export async function getReportData(range: ReportRange): Promise<ReportData> {
-  const sql = getDb()
-  const days = REPORT_RANGE_DAYS[range]
   const today = new Date()
-  const from = startOfDay(subDays(today, days - 1))
-  const to = endOfDay(today)
+  const from = startOfDay(subDays(today, REPORT_RANGE_DAYS[range] - 1))
+  return buildReport(range, { from, to: endOfDay(today) })
+}
+
+export async function getReportDataForWindow(win: DateWindow): Promise<ReportData> {
+  return buildReport('custom', win)
+}
+
+async function buildReport(range: ReportRange | 'custom', { from, to }: DateWindow): Promise<ReportData> {
+  const sql = getDb()
   const fromISO = from.toISOString()
   const toISO = to.toISOString()
 
@@ -143,7 +173,7 @@ export async function getReportData(range: ReportRange): Promise<ReportData> {
   const marginPct = revenue > 0 ? (profit / revenue) * 100 : 0
   const orderCount = orders.length
 
-  const customer = await getCustomerAnalytics(days)
+  const customer = await getCustomerAnalytics({ from, to })
 
   return {
     range,

@@ -7,28 +7,39 @@ type Range = 'daily' | 'weekly' | 'monthly' | 'yearly'
 
 const RANGES: Range[] = ['daily', 'weekly', 'monthly', 'yearly']
 
-export default function PnLClient({ initial }: { initial: Record<Range, PnLData> }) {
+interface Props {
+  initial: Record<Range, PnLData>
+  // Set when a date/range is picked in the page's calendar filter - replaces
+  // the preset ranges until the filter is cleared.
+  custom?: PnLData | null
+}
+
+export default function PnLClient({ initial, custom }: Props) {
   const [range, setRange] = useState<Range>('monthly')
-  const data = initial[range]
+  const data = custom ?? initial[range]
   const maxProfit = Math.max(...data.rows.map((r) => Math.max(r.profit, 0)), 1)
 
   return (
     <div className="bg-surface-raised rounded-2xl border border-ink/5 p-5">
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <h2 className="font-display font-semibold text-ink">Profit &amp; Loss</h2>
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${
-                range === r ? 'bg-ink text-surface' : 'bg-surface-overlay text-ink-muted hover:text-ink'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
+        {custom ? (
+          <span className="text-xs text-ink-muted">Selected period</span>
+        ) : (
+          <div className="flex gap-1">
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${
+                  range === r ? 'bg-ink text-surface' : 'bg-surface-overlay text-ink-muted hover:text-ink'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Totals */}
@@ -49,7 +60,7 @@ export default function PnLClient({ initial }: { initial: Record<Range, PnLData>
       {/* Per-period bars */}
       <div className="space-y-2">
         {data.rows.map((r, i) => (
-          <div key={`${range}-${i}`} className="flex items-center gap-2 sm:gap-3">
+          <div key={`${custom ? 'custom' : range}-${i}`} className="flex items-center gap-2 sm:gap-3">
             <span className="text-xs text-ink-muted w-12 sm:w-16 shrink-0 truncate">{r.label}</span>
             <div className="flex-1 h-6 bg-surface-overlay rounded-lg overflow-hidden relative">
               <div
