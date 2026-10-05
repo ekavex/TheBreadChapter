@@ -287,6 +287,9 @@ object EscPosHelper {
         // always agrees with TOTAL even if the cafe's tax % changes later.
         subtotalPaisa: Long = 0,
         taxAmountPaisa: Long = 0,
+        // Sequential order number shown to the customer as the bill number;
+        // falls back to the short order id when the server didn't send one.
+        billNo: String? = null,
     ): ByteArray {
         val out = ByteArrayOutputStream()
         fun w(b: ByteArray) = out.write(b)
@@ -325,9 +328,10 @@ object EscPosHelper {
         w(text("Table: $tableLabel"))
         w(BOLD_OFF)
 
-        // ── Order # / time / date ────────────────────────────────────────────
+        // ── Bill no / time / date ────────────────────────────────────────────
+        val billLabel = if (!billNo.isNullOrBlank()) "Bill No: ${billNo.trim()}" else "Order #$shortId"
         w(ALIGN_LEFT)
-        w(text(rowLine("Order #$shortId", "$timeStr   $dateStr", BILL_COLS)))
+        w(text(rowLine(billLabel, "$timeStr   $dateStr", BILL_COLS)))
 
         w(ALIGN_CENTER)
         w(text(BILL_DIV))

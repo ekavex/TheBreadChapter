@@ -10,7 +10,6 @@ function escHtml(s: string): string {
 
 function buildReceiptHtml(order: Record<string, unknown>, items: Record<string, unknown>[], table: Record<string, unknown> | null): string {
   const tableLabel = (table?.label as string) ?? (table?.number ? `Table ${table.number}` : 'Takeaway')
-  const shortId = (order.id as string).slice(-6).toUpperCase()
   const note = order.customer_note as string | null | undefined
 
   const itemRows = items.map((item) => {
@@ -62,7 +61,7 @@ function buildReceiptHtml(order: Record<string, unknown>, items: Record<string, 
   <div class="cafe-name">THE BREAD CHAPTER</div>
   <div class="div-line"></div>
   <div class="meta"><b>${tableLabel}</b></div>
-  <div class="meta">Order ${order.order_number} · #${shortId}</div>
+  <div class="meta">Bill No: ${order.order_number}</div>
   <div class="meta">${format(new Date(order.created_at as string), 'd MMM yyyy, h:mm a')}</div>
   <div class="div-line"></div>
   <div class="section-label">Items</div>

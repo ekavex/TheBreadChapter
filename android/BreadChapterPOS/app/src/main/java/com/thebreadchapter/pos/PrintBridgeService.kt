@@ -222,6 +222,8 @@ class PrintBridgeService : Service() {
         val itemsJson    = job.getJSONArray("items")
         val customerNote = if (job.has("customerNote") && !job.isNull("customerNote")) job.getString("customerNote") else null
         val takenBy = if (job.has("takenBy") && !job.isNull("takenBy")) job.getString("takenBy") else null
+        // Human-readable bill number (e.g. ORD-0042). Absent from older servers.
+        val orderNumber = if (job.has("orderNumber") && !job.isNull("orderNumber")) job.getString("orderNumber") else null
 
         val targetMac = when (station.lowercase()) {
             "kitchen" -> kitchenMac
@@ -261,6 +263,7 @@ class PrintBridgeService : Service() {
                 EscPosHelper.buildBillWithQr(
                     tableLabel, orderId, items, amountPaisa, upiUrl, customerNote, logoBitmap,
                     subtotalPaisa = subtotalPaisa, taxAmountPaisa = taxAmountPaisa,
+                    billNo = orderNumber,
                 )
             } else {
                 val items = (0 until itemsJson.length()).map { i ->

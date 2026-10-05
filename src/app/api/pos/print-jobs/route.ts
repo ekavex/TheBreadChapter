@@ -95,6 +95,7 @@ export async function GET(req: NextRequest) {
         c.items_json         AS items,
         c.job_type           AS "jobType",
         c.taken_by           AS "takenBy",
+        o.order_number       AS "orderNumber",
         o.total_paisa        AS "amountPaisa",
         o.subtotal           AS "subtotal",
         o.tax_amount         AS "taxAmount",
