@@ -55,9 +55,14 @@ interface Props {
 async function reprintBill(order: Order) {
   try {
     const res = await fetch(`/api/pos/orders/${order.id}/reprint-bill`, { method: 'POST' })
-    const { error } = await res.json()
+    const { data, error } = await res.json()
     if (error) throw new Error(error)
-    toast.success('Sent to printer')
+    if (data?.duplicate) {
+      // An earlier print of this bill hasn't come out yet - nothing new queued.
+      toast('This bill is already printing - wait for it before reprinting', { icon: '⏳', duration: 5000 })
+    } else {
+      toast.success('Sent to printer')
+    }
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Failed to print')
   }

@@ -9,8 +9,10 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import android.annotation.SuppressLint
@@ -24,6 +26,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class PrintBridgeService : Service() {
@@ -40,10 +43,14 @@ class PrintBridgeService : Service() {
         // zombie: reusing it would mean a blocking write that can hang for many
         // seconds before finally failing, which looks identical to "still slow".
         private const val SOCKET_IDLE_TIMEOUT_MS = 30_000L
-        // Upper bound on a single write - if it hangs past this, the watchdog
-        // force-closes the socket so the caller fails fast and can reconnect,
-        // instead of the write blocking indefinitely.
-        private const val WRITE_TIMEOUT_MS = 4_000L
+        // A write is only treated as dead when the printer accepts *nothing* for
+        // this long (see StallGuardedWriter). The old fixed 4s limit on the whole
+        // write cut off logo bills (~8 KB, which a Bluetooth printer takes in only
+        // as fast as it prints) and then resent them - duplicate bills.
+        private const val STALL_TIMEOUT_MS = 8_000L
+        // BluetoothSocket.connect() has no timeout of its own; an unreachable or
+        // switched-off printer could otherwise hang the bridge for a long time.
+        private const val CONNECT_TIMEOUT_MS = 8_000L
         // SPP UUID - standard Serial Port Profile
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
@@ -63,8 +70,29 @@ class PrintBridgeService : Service() {
     // a fresh RFCOMM connection (SDP lookup + channel handshake) typically costs
     // 1–4 seconds - the dominant cost in the old per-job connect/disconnect flow.
     private data class CachedSocket(val socket: BluetoothSocket, var lastUsedAt: Long)
-    private val sockets = mutableMapOf<String, CachedSocket>()
-    private val socketLock = Any()
+    private val sockets = ConcurrentHashMap<String, CachedSocket>()
+    // One lock per printer: connecting to (or waiting on) the kitchen printer
+    // must never hold up a bill on the barista printer, and vice versa.
+    private val printerLocks = ConcurrentHashMap<String, Any>()
+    private fun lockFor(mac: String): Any = printerLocks.getOrPut(mac) { Any() }
+
+    // Only ever one polling loop per service. onStartCommand runs again every
+    // time the app is opened (MainActivity starts the service on each launch);
+    // before this guard each launch added another loop, so a phone that had been
+    // reopened a few times was several bridges at once, all claiming jobs and
+    // writing to the same printer sockets concurrently.
+    private var pollJob: Job? = null
+
+    // A foreground service keeps the process alive but does NOT keep the CPU or
+    // Wi-Fi awake once the screen is off - the poll loop would simply stop until
+    // something woke the phone, which is how bills sat unprinted for minutes.
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+
+    // The printer took part of the job before the connection dropped, so some
+    // of it may already be on paper.
+    private class PartialPrintException(val bytesSent: Int, val totalBytes: Int) :
+        IOException("connection dropped after $bytesSent of $totalBytes bytes")
 
     // Decoded once and reused for every bill print - bills print far less often
     // than KOTs, so the decode cost per job is a non-issue either way.
@@ -85,7 +113,12 @@ class PrintBridgeService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification("Starting print bridge…"))
         isRunning = true
-        scope.launch { pollLoop() }
+        acquireAwakeLocks()
+        if (pollJob?.isActive != true) {
+            pollJob = scope.launch { pollLoop() }
+        } else {
+            AppLogManager.log("Bridge already running - not starting a second poll loop")
+        }
         return START_STICKY
     }
 
@@ -93,7 +126,39 @@ class PrintBridgeService : Service() {
         isRunning = false
         scope.cancel()
         closeAllSockets()
+        releaseAwakeLocks()
         super.onDestroy()
+    }
+
+    @SuppressLint("WakelockTimeout") // held for exactly as long as the bridge runs
+    private fun acquireAwakeLocks() {
+        if (wakeLock == null) {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BreadChapterPOS:PrintBridge").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }
+        if (wifiLock == null) {
+            val wm = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            @Suppress("DEPRECATION") // HIGH_PERF is the mode that keeps Wi-Fi fully up on all supported versions
+            wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "BreadChapterPOS:PrintBridge").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        AppLogManager.log(
+            if (pm.isIgnoringBatteryOptimizations(packageName)) "Battery optimisation: off for this app ✓"
+            else "⚠ Battery optimisation is ON for this app - the phone may still pause printing when idle"
+        )
+    }
+
+    private fun releaseAwakeLocks() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wifiLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
+        wifiLock = null
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -124,10 +189,7 @@ class PrintBridgeService : Service() {
                 if (jobs.length() > 0) {
                     AppLogManager.log("Found ${jobs.length()} pending jobs")
                     updateNotification("Processing ${jobs.length()} job(s)…")
-                    for (i in 0 until jobs.length()) {
-                        val job = jobs.getJSONObject(i)
-                        processJob(job, serverUrl, token, kitchenMac, beverageMac)
-                    }
+                    processJobsPerPrinter(jobs, serverUrl, token, kitchenMac, beverageMac)
                     updateNotification("✓ Bridge active · listening: $station")
                 } else {
                     updateNotification("✓ Bridge active · listening: $station")
@@ -179,9 +241,12 @@ class PrintBridgeService : Service() {
     // worth retrying hard before letting that happen.
     private val CONFIRM_BACKOFF_MS = longArrayOf(500, 1500, 3000)
 
-    private fun markJobDone(serverUrl: String, jobId: String, token: String) {
+    // detail != null: confirmed even though the connection dropped part-way, so
+    // the server records it on the admin Printing page instead of reprinting.
+    private fun markJobDone(serverUrl: String, jobId: String, token: String, detail: String? = null) {
         val url = "$serverUrl/api/pos/print-jobs/$jobId?token=$token"
-        val body = "{}".toRequestBody("application/json".toMediaType())
+        val json = JSONObject().apply { if (detail != null) { put("outcome", "partial"); put("detail", detail) } }
+        val body = json.toString().toRequestBody("application/json".toMediaType())
         val req = Request.Builder().url(url).patch(body).build()
 
         var lastError: Exception? = null
@@ -205,15 +270,51 @@ class PrintBridgeService : Service() {
         throw lastError ?: IOException("Confirm failed for unknown reason")
     }
 
-    // ── Print one job ─────────────────────────────────────────────────────────
+    // ── Print jobs ────────────────────────────────────────────────────────────
 
+    private fun targetMacFor(station: String, kitchenMac: String, beverageMac: String): String? =
+        when (station.lowercase()) {
+            "kitchen" -> kitchenMac
+            "beverage_counter", "beverage", "beverages" -> beverageMac
+            else -> null
+        }
+
+    // Each printer's jobs run in order, but the two printers run side by side,
+    // so a switched-off kitchen printer can't keep bills waiting (and vice versa).
+    private suspend fun processJobsPerPrinter(
+        jobs: JSONArray,
+        serverUrl: String,
+        token: String,
+        kitchenMac: String,
+        beverageMac: String,
+    ) = coroutineScope {
+        val byPrinter = (0 until jobs.length())
+            .map { jobs.getJSONObject(it) }
+            .groupBy { targetMacFor(it.optString("station"), kitchenMac, beverageMac) ?: "" }
+
+        byPrinter.map { (mac, printerJobs) ->
+            async(Dispatchers.IO) {
+                for (job in printerJobs) {
+                    val printerReachable = processJob(job, serverUrl, token, kitchenMac, beverageMac)
+                    if (!printerReachable) {
+                        // Leave the rest unconfirmed; the server hands them out again
+                        // shortly instead of every one waiting on a dead connection.
+                        AppLogManager.log("⚠ Printer $mac unreachable - ${printerJobs.size - printerJobs.indexOf(job) - 1} more job(s) for it will be retried")
+                        break
+                    }
+                }
+            }
+        }.awaitAll()
+    }
+
+    /** Returns false when the printer couldn't be reached at all. */
     private fun processJob(
         job: JSONObject,
         serverUrl: String,
         token: String,
         kitchenMac: String,
         beverageMac: String,
-    ) {
+    ): Boolean {
         val jobId        = job.getString("id")
         val tableLabel   = job.getString("tableLabel")
         val orderId      = job.getString("orderId")
@@ -225,18 +326,15 @@ class PrintBridgeService : Service() {
         // Human-readable order number (e.g. ORD-0042). Absent from older servers.
         val orderNumber = job.optStringOrNull("orderNumber")
 
-        val targetMac = when (station.lowercase()) {
-            "kitchen" -> kitchenMac
-            "beverage_counter", "beverage", "beverages" -> beverageMac
-            else -> {
-                AppLogManager.log("⚠ Job $jobId station '$station' unknown, skipping")
-                return
-            }
+        val targetMac = targetMacFor(station, kitchenMac, beverageMac)
+        if (targetMac == null) {
+            AppLogManager.log("⚠ Job $jobId station '$station' unknown, skipping")
+            return true
         }
 
         if (targetMac.isBlank()) {
             AppLogManager.log("⚠ Job $jobId: No MAC for station '$station', skipped")
-            return
+            return true
         }
 
         try {
@@ -287,15 +385,37 @@ class PrintBridgeService : Service() {
                 EscPosHelper.buildKotTicket(tableLabel, orderId, station, items, customerNote, takenBy)
             }
 
-            sendViaBluetooth(targetMac, payload)
+            try {
+                sendViaBluetooth(targetMac, payload)
+            } catch (e: PartialPrintException) {
+                if (jobType == "bill_qr") {
+                    // Part of the bill may already be on paper. Resending risks a
+                    // second bill, so confirm it and let staff reprint if it came
+                    // out incomplete (it's flagged on the admin Printing page).
+                    AppLogManager.log("⚠ Bill $jobId: ${e.message} - NOT resending; reprint if the bill is incomplete")
+                    markJobDone(serverUrl, jobId, token, detail = "Connection dropped after ${e.bytesSent} of ${e.totalBytes} bytes - check the printout and reprint if incomplete")
+                    return true
+                }
+                // A KOT is better printed twice than missed: leave it unconfirmed
+                // so the server hands it out again.
+                throw e
+            }
             markJobDone(serverUrl, jobId, token)
             AppLogManager.log("✓ Printed $jobId for table $tableLabel")
+            return true
+        } catch (e: PrinterUnreachableException) {
+            AppLogManager.log("✖ Failed job $jobId: ${e.message}")
+            return false
         } catch (e: Exception) {
             val err = "Failed job $jobId: ${e.message}"
             Log.e(TAG, err)
             AppLogManager.log("✖ $err")
+            return true
         }
     }
+
+    private class PrinterUnreachableException(mac: String, cause: Throwable) :
+        IOException("printer $mac unreachable: ${cause.message}", cause)
 
     // Optional string field: null when missing, JSON null or blank.
     private fun JSONObject.optStringOrNull(key: String): String? =
@@ -307,65 +427,74 @@ class PrintBridgeService : Service() {
     // after a real disconnect) - every job after that just writes to an
     // already-open stream, which is milliseconds instead of seconds.
 
+    // One job at a time per printer (the per-printer lock also guards that
+    // printer's socket). Throws:
+    //  - PrinterUnreachableException: couldn't connect, nothing was printed;
+    //  - PartialPrintException: the connection dropped after the printer had
+    //    taken some of the job, so part of it may already be on paper.
     private fun sendViaBluetooth(mac: String, payload: ByteArray) {
-        val t0 = System.currentTimeMillis()
-        val socket = getOrConnectSocket(mac)
-        val tConnected = System.currentTimeMillis()
-        try {
-            writeWithTimeout(socket, payload)
-            Thread.sleep(500) // let printer buffer drain
-        } catch (e: Exception) {
-            // Write failed (or hung past the watchdog timeout) - the connection
-            // is dead (printer rebooted, walked out of range, silently dropped
-            // while idle, etc). Drop it and retry once with a fresh connection.
-            AppLogManager.log("⚠ Write to $mac failed (${e.message}), reconnecting")
-            closeSocket(mac)
-            val fresh = getOrConnectSocket(mac)
-            writeWithTimeout(fresh, payload)
-            Thread.sleep(500)
-        } finally {
-            val tDone = System.currentTimeMillis()
-            AppLogManager.log(
-                "Print to $mac: connect=${tConnected - t0}ms write+drain=${tDone - tConnected}ms"
-            )
-        }
-    }
-
-    // A blocking OutputStream.write() to a dead BluetoothSocket can hang far
-    // longer than any sane print job should take, since classic Bluetooth has
-    // no fast keepalive to surface a silently-vanished remote end. Run the
-    // write on this thread but arm a watchdog that force-closes the socket
-    // if it doesn't finish in time - closing from another thread reliably
-    // unblocks a stuck read/write with an IOException, turning an indefinite
-    // hang into a bounded failure the caller can reconnect and retry from.
-    private fun writeWithTimeout(socket: BluetoothSocket, payload: ByteArray) {
-        val watchdog = Thread {
+        synchronized(lockFor(mac)) {
+            val t0 = System.currentTimeMillis()
+            val socket = connectOrThrow(mac)
+            val tConnected = System.currentTimeMillis()
             try {
-                Thread.sleep(WRITE_TIMEOUT_MS)
-                AppLogManager.log("⚠ Write watchdog fired - forcing socket closed")
-                try { socket.close() } catch (_: Exception) {}
-            } catch (_: InterruptedException) {
-                // Write finished in time - nothing to do.
+                try {
+                    writeGuarded(mac, socket, payload)
+                } catch (e: StallGuardedWriter.WriteFailedException) {
+                    closeSocket(mac)
+                    if (e.bytesSent > 0) throw PartialPrintException(e.bytesSent, e.totalBytes)
+                    // Nothing reached the printer - the cached connection was
+                    // already dead. Resending can't duplicate anything.
+                    AppLogManager.log("⚠ Write to $mac failed before any data was sent (${e.cause?.message}), reconnecting")
+                    val fresh = connectOrThrow(mac)
+                    try {
+                        writeGuarded(mac, fresh, payload)
+                    } catch (e2: StallGuardedWriter.WriteFailedException) {
+                        closeSocket(mac)
+                        if (e2.bytesSent > 0) throw PartialPrintException(e2.bytesSent, e2.totalBytes)
+                        throw PrinterUnreachableException(mac, e2)
+                    }
+                }
+                Thread.sleep(500) // let printer buffer drain
+            } finally {
+                val tDone = System.currentTimeMillis()
+                AppLogManager.log(
+                    "Print to $mac: ${payload.size} bytes, connect=${tConnected - t0}ms write+drain=${tDone - tConnected}ms"
+                )
             }
         }
-        watchdog.start()
-        try {
-            socket.outputStream.write(payload)
-            socket.outputStream.flush()
-        } finally {
-            watchdog.interrupt()
-        }
     }
 
+    private fun writeGuarded(mac: String, socket: BluetoothSocket, payload: ByteArray) {
+        StallGuardedWriter.write(
+            out = socket.outputStream,
+            payload = payload,
+            stallTimeoutMs = STALL_TIMEOUT_MS,
+            abort = {
+                AppLogManager.log("⚠ Printer $mac accepted no data for ${STALL_TIMEOUT_MS / 1000}s - closing connection")
+                try { socket.close() } catch (_: Exception) {}
+            },
+        )
+        sockets[mac]?.lastUsedAt = System.currentTimeMillis()
+    }
+
+    private fun connectOrThrow(mac: String): BluetoothSocket =
+        try {
+            getOrConnectSocket(mac)
+        } catch (e: Exception) {
+            closeSocket(mac)
+            throw PrinterUnreachableException(mac, e)
+        }
+
     private fun getOrConnectSocket(mac: String): BluetoothSocket {
-        synchronized(socketLock) {
+        synchronized(lockFor(mac)) {
             sockets[mac]?.let { cached ->
                 val idleMs = System.currentTimeMillis() - cached.lastUsedAt
                 if (cached.socket.isConnected && idleMs < SOCKET_IDLE_TIMEOUT_MS) {
                     cached.lastUsedAt = System.currentTimeMillis()
                     return cached.socket
                 }
-                closeSocketLocked(mac)
+                closeSocket(mac)
             }
 
             val bm = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
@@ -389,28 +518,42 @@ class PrintBridgeService : Service() {
             @Suppress("MissingPermission")
             adapter.cancelDiscovery()
 
-            @Suppress("MissingPermission")
-            socket.connect()
+            connectWithTimeout(mac, socket)
             sockets[mac] = CachedSocket(socket, System.currentTimeMillis())
             AppLogManager.log("Connected to printer $mac")
             return socket
         }
     }
 
-    private fun closeSocket(mac: String) {
-        synchronized(socketLock) { closeSocketLocked(mac) }
+    // Closing the socket from another thread is the only way to abort a
+    // blocked BluetoothSocket.connect(); it then throws an IOException.
+    private fun connectWithTimeout(mac: String, socket: BluetoothSocket) {
+        val watchdog = Thread {
+            try {
+                Thread.sleep(CONNECT_TIMEOUT_MS)
+                AppLogManager.log("⚠ Connecting to printer $mac took over ${CONNECT_TIMEOUT_MS / 1000}s - giving up")
+                try { socket.close() } catch (_: Exception) {}
+            } catch (_: InterruptedException) {
+                // Connected (or failed) in time.
+            }
+        }.apply { isDaemon = true }
+        watchdog.start()
+        try {
+            @Suppress("MissingPermission")
+            socket.connect()
+        } finally {
+            watchdog.interrupt()
+        }
     }
 
-    private fun closeSocketLocked(mac: String) {
+    private fun closeSocket(mac: String) {
         sockets.remove(mac)?.let {
             try { it.socket.close() } catch (_: Exception) {}
         }
     }
 
     private fun closeAllSockets() {
-        synchronized(socketLock) {
-            sockets.keys.toList().forEach { closeSocketLocked(it) }
-        }
+        sockets.keys.toList().forEach { closeSocket(it) }
     }
 
     // ── Notifications ─────────────────────────────────────────────────────────

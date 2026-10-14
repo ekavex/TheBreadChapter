@@ -267,9 +267,14 @@ export default function PosOrderClient({ initialOrder, tableId, initialTable, ca
     printInFlightRef.current = true
     setBusy(true)
     try {
-      await api(`/api/pos/orders/${order.id}/qr-bill`, 'POST')
+      const result = await api<{ duplicate?: boolean }>(`/api/pos/orders/${order.id}/qr-bill`, 'POST')
       setQrBillSent(true)
-      toast.success('QR bill sent to printer at billing counter')
+      if (result?.duplicate) {
+        // An earlier print of this bill hasn't come out yet - nothing new queued.
+        toast('This bill is already printing - wait for it before reprinting', { icon: '⏳', duration: 5000 })
+      } else {
+        toast.success('QR bill sent to printer at billing counter')
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send QR bill to printer')
     } finally {

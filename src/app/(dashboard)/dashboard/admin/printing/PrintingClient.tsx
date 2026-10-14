@@ -231,7 +231,10 @@ export default function PrintingClient({ initial }: { initial: PrintingData }) {
                     <td className="py-2 pr-3 text-ink-muted">{row.tableLabel ?? '-'}</td>
                     <td className="py-2 pr-3 text-ink-muted capitalize">{row.station.replace('_', ' ')}</td>
                     <td className="py-2 pr-3 text-ink-muted">{JOB_LABEL[row.jobType] ?? row.jobType}</td>
-                    <td className="py-2 pr-3"><EventBadge event={row.event} /></td>
+                    <td className="py-2 pr-3">
+                      <EventBadge event={row.event} />
+                      {row.detail && <p className="text-[10px] text-ink-faint mt-0.5 max-w-[18rem]">{row.detail}</p>}
+                    </td>
                     <td className="py-2 pr-3 text-ink-muted">{row.actor ?? '-'}</td>
                   </tr>
                 ))}

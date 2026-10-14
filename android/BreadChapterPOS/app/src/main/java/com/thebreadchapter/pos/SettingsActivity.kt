@@ -36,6 +36,9 @@ class SettingsActivity : AppCompatActivity() {
         // Auto-login credentials stored for POS kiosk convenience
         const val KEY_AUTO_LOGIN_USER = "auto_login_user"
         const val KEY_AUTO_LOGIN_PASS = "auto_login_pass"
+        // Set once the bridge phone has been asked to exempt the app from
+        // battery optimisation, so the system prompt isn't shown on every launch.
+        const val KEY_BATTERY_PROMPTED = "battery_prompted"
 
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 

@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.View
 import android.webkit.*
 import android.widget.ImageButton
@@ -215,6 +217,26 @@ class MainActivity : AppCompatActivity() {
             != PackageManager.PERMISSION_GRANTED)) return
 
         startService(Intent(this, PrintBridgeService::class.java))
+        askToIgnoreBatteryOptimisationOnce()
+    }
+
+    // Battery optimisation can still pause the bridge on an idle phone even with
+    // its wake lock (some brands are aggressive about it), so ask once on the
+    // bridge phone to leave this app out. The bridge log shows the current state.
+    @SuppressLint("BatteryLife") // sideloaded kiosk app - the user grants this explicitly
+    private fun askToIgnoreBatteryOptimisationOnce() {
+        val prefs = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE)
+        if (prefs.getBoolean(SettingsActivity.KEY_BATTERY_PROMPTED, false)) return
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+        prefs.edit().putBoolean(SettingsActivity.KEY_BATTERY_PROMPTED, true).apply()
+        try {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+            )
+        } catch (_: Exception) {
+            Toast.makeText(this, "Turn off battery optimisation for this app in Android settings", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onBackPressed() {

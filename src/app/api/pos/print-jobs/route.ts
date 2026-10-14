@@ -7,9 +7,28 @@ import { getBillPrintDetails } from '@/lib/billDetails'
 
 // How long a job can sit at 'processing' (claimed by the bridge, never
 // confirmed) before it's treated as stuck and put back to 'queued' for
-// another poll to pick up. Tunable per-deployment via env instead of a
-// hardcoded guess - see docs discussion on print reliability.
+// another poll to pick up, counted from when the bridge claimed it. Bills get
+// longer than KOTs: with the logo they're ~20x the data, and a Bluetooth
+// printer only takes data as fast as it prints. Tunable per deployment.
 const STALE_PROCESSING_SECONDS = Number(process.env.PRINT_JOB_STALE_SECONDS ?? 45)
+const STALE_BILL_PROCESSING_SECONDS = Number(process.env.PRINT_BILL_STALE_SECONDS ?? 90)
+
+// kot_tickets.claimed_at (migration 012_print_job_claimed_at) is made sure of
+// here, once per process, before the first claim - this route is the KOT path,
+// so it must not depend on a startup migration runner having run. If the
+// column can't be added the route still works, with the old (queued-time)
+// stale timing.
+let claimedAtReady: Promise<boolean> | null = null
+function ensureClaimedAtColumn(sql: ReturnType<typeof getDb>): Promise<boolean> {
+  claimedAtReady ??= sql`ALTER TABLE public.kot_tickets ADD COLUMN IF NOT EXISTS claimed_at timestamptz`
+    .then(() => true)
+    .catch((err: unknown) => {
+      logger.error('print_jobs.claimed_at_unavailable', { error: err instanceof Error ? err.message : String(err) })
+      claimedAtReady = null // try again on a later poll
+      return false
+    })
+  return claimedAtReady
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +66,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const sql = getDb()
+    const hasClaimedAt = await ensureClaimedAtColumn(sql)
+    // Before claimed_at existed, printed_at (= when the job was queued) was the
+    // only clock, so a bill that had waited 45s was "stale" the moment it was
+    // claimed and a second poll could hand it out again mid-print.
+    const claimedSince = hasClaimedAt ? sql`COALESCE(claimed_at, printed_at)` : sql`printed_at`
 
     // Safety net: a job the bridge claimed ('processing') but never confirmed
     // via PATCH - bridge phone rebooted, lost Bluetooth, app got killed mid-print -
@@ -62,14 +86,18 @@ export async function GET(req: NextRequest) {
       UPDATE kot_tickets
       SET print_status = 'queued'
       WHERE print_status = 'processing'
-        AND printed_at < now() - (${STALE_PROCESSING_SECONDS} * interval '1 second')
+        AND ${claimedSince} < now() - (
+          CASE WHEN job_type = 'bill_qr' THEN ${STALE_BILL_PROCESSING_SECONDS}::int ELSE ${STALE_PROCESSING_SECONDS}::int END
+          * interval '1 second'
+        )
       RETURNING id, order_id, station, job_type
     `
     for (const row of reclaimed as unknown as { id: string; order_id: string; station: string; job_type: string }[]) {
+      const staleAfter = row.job_type === 'bill_qr' ? STALE_BILL_PROCESSING_SECONDS : STALE_PROCESSING_SECONDS
       logger.warn('print_bridge.stale_reclaim', { jobId: row.id, orderId: row.order_id, station: row.station })
       await recordPrintEvent(sql, {
         orderId: row.order_id, station: row.station, jobType: row.job_type, event: 'stale_reclaimed',
-        kotTicketId: row.id, detail: `no print-bridge confirmation within ${STALE_PROCESSING_SECONDS}s`,
+        kotTicketId: row.id, detail: `no print-bridge confirmation within ${staleAfter}s of pickup`,
       })
     }
 
@@ -78,7 +106,7 @@ export async function GET(req: NextRequest) {
     const rows = await sql`
       WITH claimed AS (
         UPDATE kot_tickets
-        SET print_status = 'processing'
+        SET print_status = 'processing'${hasClaimedAt ? sql`, claimed_at = now()` : sql``}
         WHERE id IN (
           SELECT id FROM kot_tickets
           WHERE (${station} = 'all' OR station = ${station})

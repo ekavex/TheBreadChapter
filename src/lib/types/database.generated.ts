@@ -253,6 +253,7 @@ export type Database = {
       }
       kot_tickets: {
         Row: {
+          claimed_at: string | null
           id: string
           items_json: Json
           order_id: string
@@ -261,6 +262,7 @@ export type Database = {
           station: string
         }
         Insert: {
+          claimed_at?: string | null
           id?: string
           items_json: Json
           order_id: string
@@ -269,6 +271,7 @@ export type Database = {
           station: string
         }
         Update: {
+          claimed_at?: string | null
           id?: string
           items_json?: Json
           order_id?: string

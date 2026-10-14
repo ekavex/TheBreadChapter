@@ -16,11 +16,19 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 // PATCH /api/pos/print-jobs/[id]?token=XYZ
-// Android APK calls this after successfully printing a ticket.
+// Android APK calls this after printing a ticket. Body (optional, APK 1.1.1+):
+// { outcome: 'partial', detail } when the Bluetooth connection dropped part-way
+// through a bill - it's confirmed anyway (resending could print a second bill)
+// and the detail is shown on the admin Printing page so staff can reprint.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 })
   }
+
+  const body = await req.json().catch(() => null) as { outcome?: unknown; detail?: unknown } | null
+  const partialDetail = body?.outcome === 'partial'
+    ? String(body.detail ?? 'connection dropped part-way through printing').slice(0, 300)
+    : null
 
   const sql = getDb()
   const [row] = await sql`
@@ -34,10 +42,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ data: null, error: 'Job not found or already done' }, { status: 404 })
   }
 
-  logger.info('print_bridge.job_done', { jobId: params.id })
+  if (partialDetail) {
+    logger.warn('print_bridge.job_partial', { jobId: params.id, orderId: row.order_id, detail: partialDetail })
+  } else {
+    logger.info('print_bridge.job_done', { jobId: params.id })
+  }
   await recordPrintEvent(sql, {
     orderId: row.order_id, station: row.station, jobType: row.job_type, event: 'printed',
-    kotTicketId: row.id,
+    kotTicketId: row.id, detail: partialDetail ?? undefined,
   })
   return NextResponse.json({ data: { ok: true }, error: null })
 }

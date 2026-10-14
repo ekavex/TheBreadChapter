@@ -70,6 +70,10 @@ export async function runMigrations(): Promise<void> {
         );
       `,
     ],
+    [
+      '012_print_job_claimed_at',
+      `ALTER TABLE kot_tickets ADD COLUMN IF NOT EXISTS claimed_at timestamptz;`,
+    ],
   ]
 
   try {
