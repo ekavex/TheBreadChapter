@@ -122,6 +122,66 @@ export type Database = {
         }
         Relationships: []
       }
+      print_templates: {
+        Row: {
+          cafe_id: string
+          kind: string
+          template: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          cafe_id: string
+          kind: string
+          template: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          cafe_id?: string
+          kind?: string
+          template?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      print_test_jobs: {
+        Row: {
+          cafe_id: string
+          created_at: string
+          id: string
+          kind: string
+          payload: string
+          printed_at: string | null
+          requested_by: string | null
+          station: string
+          status: string
+        }
+        Insert: {
+          cafe_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          payload: string
+          printed_at?: string | null
+          requested_by?: string | null
+          station: string
+          status?: string
+        }
+        Update: {
+          cafe_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          payload?: string
+          printed_at?: string | null
+          requested_by?: string | null
+          station?: string
+          status?: string
+        }
+        Relationships: []
+      }
       staff_notifications: {
         Row: {
           id: string

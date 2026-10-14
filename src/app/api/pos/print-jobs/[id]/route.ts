@@ -39,11 +39,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   `
 
   if (!row) {
+    // Not an order ticket - maybe a test print from the layout editor.
+    const [test] = await sql`
+      UPDATE print_test_jobs
+      SET status = 'printed', printed_at = now()
+      WHERE id = ${params.id} AND status IN ('queued', 'processing')
+      RETURNING id
+    `
+    if (test) {
+      logger.info('print_bridge.test_done', { jobId: params.id })
+      return NextResponse.json({ data: { ok: true }, error: null })
+    }
     return NextResponse.json({ data: null, error: 'Job not found or already done' }, { status: 404 })
   }
 
   if (partialDetail) {
-    logger.warn('print_bridge.job_partial', { jobId: params.id, orderId: row.order_id, detail: partialDetail })
+    logger.warn('print_bridge.job_partial', { jobId: params.id, orderId: row.order_id, message: partialDetail })
   } else {
     logger.info('print_bridge.job_done', { jobId: params.id })
   }

@@ -4,6 +4,8 @@ import { logger } from '@/lib/logger'
 import { recordPrintEvent } from '@/lib/printLog'
 import { rupeesToPaisa } from '@/lib/money'
 import { getBillPrintDetails } from '@/lib/billDetails'
+import { renderJobPayload, type ClaimedJobRow } from '@/lib/printTemplates'
+import type { PrintTemplate, TemplateKind } from '@/lib/printer/template/types'
 
 // How long a job can sit at 'processing' (claimed by the bridge, never
 // confirmed) before it's treated as stuck and put back to 'queued' for
@@ -30,6 +32,10 @@ function ensureClaimedAtColumn(sql: ReturnType<typeof getDb>): Promise<boolean> 
   return claimedAtReady
 }
 
+// Test prints from the layout editor are only handed out while fresh - a test
+// nobody's bridge picked up shouldn't print hours later.
+const TEST_PRINT_MAX_AGE_MINUTES = 10
+
 export const dynamic = 'force-dynamic'
 
 // UPI merchant details for the QR bill.
@@ -52,14 +58,19 @@ function isAuthorized(req: NextRequest): boolean {
   return provided === expected
 }
 
-// GET /api/pos/print-jobs?station=kitchen&token=XYZ
-// Returns pending (queued) KOT tickets for the Android print bridge.
+// GET /api/pos/print-jobs?station=kitchen&token=XYZ[&caps=payload]
+// Returns pending (queued) KOT tickets for the Android print bridge. Every job
+// carries payloadBase64: the ticket already rendered with the saved print
+// layout, which a bridge that sends caps=payload prints as-is. Older bridges
+// ignore it and keep rendering their built-in layout from the other fields.
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 })
   }
 
-  const station = new URL(req.url).searchParams.get('station')
+  const params = new URL(req.url).searchParams
+  const station = params.get('station')
+  const supportsPayload = (params.get('caps') ?? '').split(',').includes('payload')
   if (!station) {
     return NextResponse.json({ data: null, error: 'station param required' }, { status: 400 })
   }
@@ -128,6 +139,7 @@ export async function GET(req: NextRequest) {
         o.total_paisa        AS "amountPaisa",
         o.subtotal           AS "subtotal",
         o.tax_amount         AS "taxAmount",
+        o.service_charge     AS "serviceCharge",
         o.customer_note      AS "customerNote",
         COALESCE(t.label, t.number::text, 'N/A') AS "tableLabel"
       FROM claimed c
@@ -142,10 +154,12 @@ export async function GET(req: NextRequest) {
     // specific order was actually billed at. Also the bill header details
     // (bill no, staff, FSSAI) and, for an already-paid order, the payment
     // mode/reference that replace the Scan & Pay QR.
-    const data = await Promise.all((rows as Record<string, unknown>[]).map(async (row) => {
+    const templates = new Map<TemplateKind, PrintTemplate>()
+    const data: Record<string, unknown>[] = await Promise.all((rows as Record<string, unknown>[]).map(async (row) => {
+      let job: Record<string, unknown> = row
       if (row['jobType'] === 'bill_qr') {
         const details = await getBillPrintDetails(sql, String(row['orderId']))
-        return {
+        job = {
           ...row,
           ...details,
           upiUrl: buildUpiUrl(Number(row['amountPaisa'])),
@@ -153,8 +167,36 @@ export async function GET(req: NextRequest) {
           taxAmountPaisa: rupeesToPaisa(Number(row['taxAmount'] ?? 0)),
         }
       }
-      return row
+      const payloadBase64 = await renderJobPayload(sql, job as unknown as ClaimedJobRow, templates)
+      return payloadBase64 ? { ...job, payloadBase64 } : job
     }))
+
+    // Test prints carry only a payload, so only bridges that can print one get them.
+    if (supportsPayload) {
+      const tests = await sql`
+        UPDATE print_test_jobs
+        SET status = 'processing'
+        WHERE id IN (
+          SELECT id FROM print_test_jobs
+          WHERE (${station} = 'all' OR station = ${station})
+            AND status = 'queued'
+            AND created_at > now() - (${TEST_PRINT_MAX_AGE_MINUTES} * interval '1 minute')
+          ORDER BY created_at ASC
+          LIMIT 5
+          FOR UPDATE SKIP LOCKED
+        )
+        RETURNING id, station, kind, payload
+      `
+      for (const t of tests as unknown as { id: string; station: string; kind: string; payload: Buffer }[]) {
+        data.push({
+          id: t.id,
+          jobType: 'test',
+          station: t.station,
+          tableLabel: `TEST ${t.kind.toUpperCase()}`,
+          payloadBase64: Buffer.from(t.payload).toString('base64'),
+        })
+      }
+    }
 
     return NextResponse.json({ data, error: null })
   } catch (err) {

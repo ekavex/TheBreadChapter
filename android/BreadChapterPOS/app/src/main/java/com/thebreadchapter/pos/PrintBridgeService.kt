@@ -13,6 +13,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Base64
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import android.annotation.SuppressLint
@@ -224,7 +225,9 @@ class PrintBridgeService : Service() {
     // ── API calls ─────────────────────────────────────────────────────────────
 
     private fun fetchPendingJobs(serverUrl: String, station: String, token: String): JSONArray {
-        val url = "$serverUrl/api/pos/print-jobs?station=$station&token=$token"
+        // caps=payload: this bridge prints server-rendered tickets (the layout
+        // edited in the dashboard's Print Layout page) and test prints.
+        val url = "$serverUrl/api/pos/print-jobs?station=$station&token=$token&caps=payload"
         val req = Request.Builder().url(url).get().build()
         val resp = http.newCall(req).execute()
         
@@ -325,18 +328,16 @@ class PrintBridgeService : Service() {
         beverageMac: String,
     ): Boolean {
         val jobId        = job.getString("id")
-        val tableLabel   = job.getString("tableLabel")
-        val orderId      = job.getString("orderId")
+        val tableLabel   = job.optString("tableLabel", "")
         val station      = job.getString("station")
         val jobType      = job.optString("jobType", "kot")
-        val itemsJson    = job.getJSONArray("items")
-        val customerNote = if (job.has("customerNote") && !job.isNull("customerNote")) job.getString("customerNote") else null
-        val takenBy = if (job.has("takenBy") && !job.isNull("takenBy")) job.getString("takenBy") else null
-        // Human-readable order number (e.g. ORD-0042). Absent from older servers.
-        val orderNumber = job.optStringOrNull("orderNumber")
 
         val logOrderId = job.optStringOrNull("orderId")
-        val what = "${if (jobType == "bill_qr") "Bill" else "KOT"} for table $tableLabel (job $jobId)"
+        val what = when (jobType) {
+            "bill_qr" -> "Bill for table $tableLabel (job $jobId)"
+            "test" -> "Test print from Print Layout (job $jobId)"
+            else -> "KOT for table $tableLabel (job $jobId)"
+        }
 
         val targetMac = targetMacFor(station, kitchenMac, beverageMac)
         if (targetMac == null) {
@@ -352,7 +353,16 @@ class PrintBridgeService : Service() {
         try {
             AppLogManager.info("print.start", "Printing $what on $station ($targetMac)", logOrderId)
 
-            val payload = if (jobType == "bill_qr") {
+            // Ticket already rendered by the server with the saved print layout.
+            // Older servers don't send it; then the built-in layout below is used.
+            val serverPayload = job.optStringOrNull("payloadBase64")?.let { Base64.decode(it, Base64.DEFAULT) }
+            val payload = if (serverPayload != null) {
+                serverPayload
+            } else if (jobType == "bill_qr") {
+                val orderId       = job.getString("orderId")
+                val itemsJson     = job.getJSONArray("items")
+                val customerNote  = job.optStringOrNull("customerNote")
+                val orderNumber   = job.optStringOrNull("orderNumber")
                 val upiUrl        = job.optString("upiUrl", "")
                 val amountPaisa   = job.optLong("amountPaisa", 0L)
                 val subtotalPaisa = job.optLong("subtotalPaisa", 0L)
@@ -382,6 +392,10 @@ class PrintBridgeService : Service() {
                     paymentRef  = job.optStringOrNull("paymentRef"),
                 )
             } else {
+                val orderId      = job.getString("orderId")
+                val itemsJson    = job.getJSONArray("items")
+                val customerNote = job.optStringOrNull("customerNote")
+                val takenBy      = job.optStringOrNull("takenBy")
                 val items = (0 until itemsJson.length()).map { i ->
                     val obj = itemsJson.getJSONObject(i)
                     val addonArray = obj.optJSONArray("addons")
