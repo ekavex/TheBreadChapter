@@ -91,17 +91,19 @@ class PinePaymentBridge(
             transportOptions = null,
         )
 
-        AppLogManager.log("Pine pay → orderId=$orderId amount=${amountPaise}p mode=${paymentMode.name}")
+        AppLogManager.info("pine.pay_start", "Pine Labs payment started: ${amountPaise / 100.0} INR by ${paymentMode.name}", orderId)
 
         CoroutineScope(Dispatchers.IO).launch {
             PineBillingSdk.shared().doTransaction(request, object : TransactionListener {
                 override fun onStarted(eventId: String) {
-                    AppLogManager.log("Pine pay started eventId=$eventId")
+                    AppLogManager.debug("pine.pay_event", "Pine pay started eventId=$eventId", orderId)
                 }
 
                 override fun onResult(result: TransactionResult) {
                     val ok = result.status == TransactionStatus.SUCCESS
-                    AppLogManager.log("Pine pay result status=${result.status} txnId=${result.transactionId}")
+                    val resultMessage = "Pine Labs result ${result.status}: ${result.responseMessage ?: ""} (txn ${result.transactionId})"
+                    if (ok) AppLogManager.info("pine.pay_result", resultMessage, orderId)
+                    else AppLogManager.warn("pine.pay_result", resultMessage, orderId)
                     busy.set(false)
                     deliverResult(
                         ok      = ok,
@@ -112,7 +114,7 @@ class PinePaymentBridge(
                 }
 
                 override fun onFailure(error: SdkException) {
-                    AppLogManager.log("Pine pay failure: ${error.message}")
+                    AppLogManager.error("pine.pay_error", "Pine Labs SDK error: ${error.message}", orderId, error)
                     busy.set(false)
                     deliverResult(
                         ok      = false,

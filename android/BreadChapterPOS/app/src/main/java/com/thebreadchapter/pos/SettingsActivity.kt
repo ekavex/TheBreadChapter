@@ -132,6 +132,14 @@ class SettingsActivity : AppCompatActivity() {
                 putString(KEY_AUTO_LOGIN_PASS, autoPass)
             }
 
+            // Never log the token, Pine app id or auto-login password.
+            AppLogManager.info(
+                "settings.saved",
+                "Settings saved: print bridge ${if (bridgeEnabled) "ON" else "off"}, station '$station', server $url, " +
+                    "kitchen printer ${kitchen?.mac ?: "none"}, barista printer ${beverage?.mac ?: "none"}, " +
+                    "auto-login ${if (autoUser.isNotEmpty()) "set" else "off"}",
+            )
+
             // Re-initialise Pine SDK if the Application ID was just set.
             (application as? BreadChapterApp)?.tryInitPineSdk()
 

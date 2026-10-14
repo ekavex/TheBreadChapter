@@ -34,7 +34,9 @@ class LogActivity : AppCompatActivity() {
 
     private fun updateLogs() {
         val logs = AppLogManager.getLogs()
-        tvLogs.text = if (logs.isEmpty()) "No logs yet..." else logs
+        // Device ID lets a developer find this phone's entries in app_logs.
+        val header = "Device ${AppLogManager.deviceId} · ${AppLogManager.pendingCount()} entries waiting to upload\n\n"
+        tvLogs.text = header + if (logs.isEmpty()) "No logs yet..." else logs
     }
 
     override fun onDestroy() {

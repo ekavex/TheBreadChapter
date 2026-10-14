@@ -34,6 +34,49 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_logs: {
+        Row: {
+          app_version: string | null
+          data: Json | null
+          device_id: string | null
+          event: string
+          id: number
+          level: string
+          logged_at: string
+          message: string | null
+          order_id: string | null
+          received_at: string
+          request_id: string | null
+          source: string
+        }
+        Insert: {
+          app_version?: string | null
+          data?: Json | null
+          device_id?: string | null
+          event: string
+          level: string
+          logged_at: string
+          message?: string | null
+          order_id?: string | null
+          received_at?: string
+          request_id?: string | null
+          source: string
+        }
+        Update: {
+          app_version?: string | null
+          data?: Json | null
+          device_id?: string | null
+          event?: string
+          level?: string
+          logged_at?: string
+          message?: string | null
+          order_id?: string | null
+          received_at?: string
+          request_id?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
       auth_credentials: {
         Row: {
           id: string

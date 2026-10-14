@@ -4,6 +4,7 @@ import '@fontsource-variable/dm-sans'
 import '@fontsource-variable/playfair-display'
 import '@/styles/globals.css'
 import PwaRegister from '@/components/PwaRegister'
+import ErrorReporter from '@/components/ErrorReporter'
 
 export const metadata: Metadata = {
   title: { default: 'The Bread Chapter', template: '%s | The Bread Chapter' },
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="font-body bg-surface text-ink antialiased">
         <PwaRegister />
+        <ErrorReporter />
         {children}
         <Toaster
           position="bottom-center"

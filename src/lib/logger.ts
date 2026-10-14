@@ -6,9 +6,13 @@
 //     single payment can be followed across pay → webhook → reconciler.
 //   • Redaction - no card data, VPA or security token ever reaches the log,
 //     whatever a caller passes in.
+//
+// Every line is also kept in the app_logs table for developers (see
+// docs/LOGGING.md); writing there is buffered and can never fail the caller.
 
 import { headers } from 'next/headers'
 import { redactPaymentPayload } from '@/lib/observability/redact'
+import { storeLog } from '@/lib/observability/logStore'
 
 type LogLevel = 'info' | 'warn' | 'error'
 
@@ -37,6 +41,17 @@ function emit(level: LogLevel, event: string, fields: Record<string, unknown> = 
   if (level === 'error') console.error(line)
   else if (level === 'warn') console.warn(line)
   else console.log(line)
+
+  const { orderId, error, message, ...rest } = safeFields
+  storeLog({
+    source: 'server',
+    level,
+    event,
+    message: typeof error === 'string' ? error : typeof message === 'string' ? message : null,
+    orderId: typeof orderId === 'string' ? orderId : null,
+    requestId: requestId ?? null,
+    data: { ...rest, ...(error !== undefined && typeof error !== 'string' ? { error } : {}) },
+  })
 }
 
 export const logger = {

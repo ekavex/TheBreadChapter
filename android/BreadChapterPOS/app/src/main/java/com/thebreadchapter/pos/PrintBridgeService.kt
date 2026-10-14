@@ -83,6 +83,11 @@ class PrintBridgeService : Service() {
     // writing to the same printer sockets concurrently.
     private var pollJob: Job? = null
 
+    // While the server is unreachable every poll fails; log that once a
+    // minute (or when the error changes) instead of every 1.2 seconds.
+    private var lastPollError: String? = null
+    private var lastPollErrorLoggedAt = 0L
+
     // A foreground service keeps the process alive but does NOT keep the CPU or
     // Wi-Fi awake once the screen is off - the poll loop would simply stop until
     // something woke the phone, which is how bills sat unprinted for minutes.
@@ -178,16 +183,20 @@ class PrintBridgeService : Service() {
 
             if (serverUrl.isBlank() || token.isBlank() || (kitchenMac.isBlank() && beverageMac.isBlank())) {
                 updateNotification("⚙ Settings missing - configure in Settings")
-                AppLogManager.log("Bridge waiting for configuration...")
+                AppLogManager.debug("bridge.not_configured", "Bridge waiting for configuration (server URL, token or printer missing)")
                 delay(5000.milliseconds)
                 continue
             }
 
             try {
-                AppLogManager.log("Polling for jobs ($station)...")
+                AppLogManager.debug("bridge.poll", "Polling for jobs ($station)...")
                 val jobs = fetchPendingJobs(serverUrl, station, token)
+                if (lastPollError != null) {
+                    AppLogManager.info("bridge.poll_recovered", "Server reachable again")
+                    lastPollError = null
+                }
                 if (jobs.length() > 0) {
-                    AppLogManager.log("Found ${jobs.length()} pending jobs")
+                    AppLogManager.info("bridge.jobs_received", "Received ${jobs.length()} print job(s)")
                     updateNotification("Processing ${jobs.length()} job(s)…")
                     processJobsPerPrinter(jobs, serverUrl, token, kitchenMac, beverageMac)
                     updateNotification("✓ Bridge active · listening: $station")
@@ -197,7 +206,14 @@ class PrintBridgeService : Service() {
             } catch (e: Exception) {
                 val msg = "Poll error: ${e.message}"
                 Log.e(TAG, msg)
-                AppLogManager.log("⚠ $msg")
+                val now = System.currentTimeMillis()
+                if (msg != lastPollError || now - lastPollErrorLoggedAt > 60_000) {
+                    AppLogManager.warn("bridge.poll_error", msg)
+                    lastPollError = msg
+                    lastPollErrorLoggedAt = now
+                } else {
+                    AppLogManager.debug("bridge.poll_error", msg)
+                }
                 updateNotification("⚠ Server unreachable - retrying…")
             }
 
@@ -215,18 +231,11 @@ class PrintBridgeService : Service() {
         if (!resp.isSuccessful) {
             val code = resp.code
             val body = resp.body?.string() ?: ""
-            AppLogManager.log("⚠ API Error $code for $station")
-            if (body.isNotBlank()) {
-                Log.e(TAG, "Server error body: $body")
-                try {
-                    val json = JSONObject(body)
-                    val err = json.optString("error", "Unknown error")
-                    AppLogManager.log("Server message: $err")
-                } catch (_: Exception) {
-                    AppLogManager.log("Raw error: ${body.take(100)}")
-                }
-            }
-            throw IOException("Server returned $code")
+            Log.e(TAG, "Server error body: $body")
+            // The poll loop logs this (throttled) with the server's message.
+            val serverMessage = runCatching { JSONObject(body).optString("error", "") }.getOrNull()
+                ?.takeIf { it.isNotBlank() } ?: body.take(100)
+            throw IOException("Server returned $code${if (serverMessage.isNotBlank()) ": $serverMessage" else ""}")
         }
         
         val body = resp.body?.string() ?: "[]"
@@ -263,7 +272,7 @@ class PrintBridgeService : Service() {
                 lastError = e
             }
             if (attempt < CONFIRM_BACKOFF_MS.size) {
-                AppLogManager.log("⚠ Confirm for $jobId failed (${lastError?.message}), retrying…")
+                AppLogManager.warn("print.confirm_retry", "Confirm for job $jobId failed (${lastError?.message}), retrying…")
                 Thread.sleep(CONFIRM_BACKOFF_MS[attempt])
             }
         }
@@ -326,19 +335,22 @@ class PrintBridgeService : Service() {
         // Human-readable order number (e.g. ORD-0042). Absent from older servers.
         val orderNumber = job.optStringOrNull("orderNumber")
 
+        val logOrderId = job.optStringOrNull("orderId")
+        val what = "${if (jobType == "bill_qr") "Bill" else "KOT"} for table $tableLabel (job $jobId)"
+
         val targetMac = targetMacFor(station, kitchenMac, beverageMac)
         if (targetMac == null) {
-            AppLogManager.log("⚠ Job $jobId station '$station' unknown, skipping")
+            AppLogManager.error("print.unknown_station", "$what: station '$station' unknown, skipped", logOrderId)
             return true
         }
 
         if (targetMac.isBlank()) {
-            AppLogManager.log("⚠ Job $jobId: No MAC for station '$station', skipped")
+            AppLogManager.error("print.no_printer", "$what: no printer set for '$station' in Settings, skipped", logOrderId)
             return true
         }
 
         try {
-            AppLogManager.log("Printing $jobId ($station / $jobType) to $targetMac")
+            AppLogManager.info("print.start", "Printing $what on $station ($targetMac)", logOrderId)
 
             val payload = if (jobType == "bill_qr") {
                 val upiUrl        = job.optString("upiUrl", "")
@@ -392,7 +404,7 @@ class PrintBridgeService : Service() {
                     // Part of the bill may already be on paper. Resending risks a
                     // second bill, so confirm it and let staff reprint if it came
                     // out incomplete (it's flagged on the admin Printing page).
-                    AppLogManager.log("⚠ Bill $jobId: ${e.message} - NOT resending; reprint if the bill is incomplete")
+                    AppLogManager.warn("print.partial", "$what: ${e.message} - NOT resending; reprint if the bill is incomplete", logOrderId)
                     markJobDone(serverUrl, jobId, token, detail = "Connection dropped after ${e.bytesSent} of ${e.totalBytes} bytes - check the printout and reprint if incomplete")
                     return true
                 }
@@ -401,15 +413,13 @@ class PrintBridgeService : Service() {
                 throw e
             }
             markJobDone(serverUrl, jobId, token)
-            AppLogManager.log("✓ Printed $jobId for table $tableLabel")
+            AppLogManager.info("print.done", "Printed $what", logOrderId)
             return true
         } catch (e: PrinterUnreachableException) {
-            AppLogManager.log("✖ Failed job $jobId: ${e.message}")
+            AppLogManager.error("print.printer_unreachable", "$what not printed: ${e.message}", logOrderId)
             return false
         } catch (e: Exception) {
-            val err = "Failed job $jobId: ${e.message}"
-            Log.e(TAG, err)
-            AppLogManager.log("✖ $err")
+            AppLogManager.error("print.failed", "$what not printed: ${e.message}", logOrderId, e)
             return true
         }
     }

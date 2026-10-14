@@ -117,6 +117,10 @@ class MainActivity : AppCompatActivity() {
             ) {
                 if (request.isForMainFrame) {
                     val targetUrl = request.url.toString()
+                    AppLogManager.warn(
+                        "webview.load_error",
+                        "Could not load ${request.url.path ?: targetUrl}: ${error.description} (code ${error.errorCode})",
+                    )
                     view.loadData(
                         """<html><body style='font-family:sans-serif;padding:40px;text-align:center;'>
                             <h2 style='color:#333'>Cannot reach server</h2>

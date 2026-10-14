@@ -74,6 +74,55 @@ export async function runMigrations(): Promise<void> {
       '012_print_job_claimed_at',
       `ALTER TABLE kot_tickets ADD COLUMN IF NOT EXISTS claimed_at timestamptz;`,
     ],
+    [
+      '013_app_logs',
+      `
+        CREATE TABLE IF NOT EXISTS app_logs (
+            id          bigint GENERATED ALWAYS AS IDENTITY,
+            logged_at   timestamp with time zone NOT NULL,
+            received_at timestamp with time zone DEFAULT now() NOT NULL,
+            source      text NOT NULL,
+            level       text NOT NULL,
+            event       text NOT NULL,
+            message     text,
+            order_id    uuid,
+            device_id   text,
+            app_version text,
+            request_id  text,
+            data        jsonb,
+            CONSTRAINT app_logs_pkey PRIMARY KEY (id),
+            CONSTRAINT app_logs_source_check CHECK (source = ANY (ARRAY['server'::text, 'device'::text, 'browser'::text])),
+            CONSTRAINT app_logs_level_check CHECK (level = ANY (ARRAY['debug'::text, 'info'::text, 'warn'::text, 'error'::text]))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_app_logs_logged_at ON app_logs USING btree (logged_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_app_logs_received_at ON app_logs USING btree (received_at);
+        CREATE INDEX IF NOT EXISTS idx_app_logs_problems ON app_logs USING btree (logged_at DESC)
+            WHERE (level = ANY (ARRAY['warn'::text, 'error'::text]));
+        CREATE INDEX IF NOT EXISTS idx_app_logs_order ON app_logs USING btree (order_id, logged_at)
+            WHERE (order_id IS NOT NULL);
+        CREATE INDEX IF NOT EXISTS idx_app_logs_device ON app_logs USING btree (device_id, logged_at DESC)
+            WHERE (device_id IS NOT NULL);
+
+        -- Developer-friendly view: cafe-local time and the order number.
+        CREATE OR REPLACE VIEW app_logs_view AS
+        SELECT
+            (l.logged_at AT TIME ZONE 'Asia/Kolkata') AS ist_time,
+            l.source,
+            l.level,
+            l.event,
+            l.message,
+            o.order_number,
+            l.device_id,
+            l.app_version,
+            l.request_id,
+            l.data,
+            l.order_id,
+            l.id
+        FROM app_logs l
+        LEFT JOIN orders o ON o.id = l.order_id;
+      `,
+    ],
   ]
 
   try {
